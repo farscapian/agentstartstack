@@ -43,7 +43,7 @@ Worktrees are matched by `origin` URL so repos cannot cross-contaminate. Among m
 |------|----------------|
 | iotstack | `iotstack` / `iotstack.sh` running |
 | printstack | `printstack` / `printstack.sh` running |
-| wrtstack / openwrt | `wrtstack (build|flash)` running (add to `~/.bash_aliases` when adopted) |
+| wrtstack / openwrt | `wrtstack (build|flash)` running |
 
 To add a guard for a new project, extend `_nut_guard_active_sessions` in `~/.bash_aliases` (see Source below).
 
