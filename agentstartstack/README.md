@@ -1,13 +1,13 @@
-# ai-guidance (agentstartstack)
+# agentstartstack (generic guidance)
 
-Generic agent guidance shared across mini-projects via the `agentstartstack` git submodule.
+Generic agent guidance shared across mini-projects via the `.agentstartstack` git submodule.
 
 ## How host projects use this
 
 | Location | Content |
 |----------|---------|
-| `agentstartstack/ai-guidance/` | **This directory** -- workflow, nut, conventions, security, etc. |
-| `ai-guidance/` (project root) | Project-specific topics: CLI, architecture, gotchas, devices |
+| `.agentstartstack/agentstartstack/` | **This directory** -- workflow, nut, conventions, security, etc. |
+| `agentstartstack/` (project root) | Project-specific topics: CLI, architecture, gotchas, devices |
 
 Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for any git or session question.
 
@@ -34,10 +34,10 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 | CI / commit hygiene | `workflow.md`, `code-quality.md`, `testing.md` |
 | Human Sync handoff | `nut.md`, `workflow.md` |
 
-Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `ai-guidance/` per its `CLAUDE.md` index.
+Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `agentstartstack/` per its `CLAUDE.md` index.
 
 ## Maintenance
 
-- Generic changes: edit here, commit in `agentstartstack`, bump submodule in host projects.
-- Project changes: edit host `ai-guidance/` only.
-- New generic topic file: update `agentstartstack/CLAUDE.md` index and host project `CLAUDE.md` if agents should load it by default.
+- Generic changes: edit here, commit in `.agentstartstack` submodule, bump in host projects.
+- Project changes: edit host `agentstartstack/` only.
+- New generic topic file: update `.agentstartstack/CLAUDE.md` index and host project `CLAUDE.md` if agents should load it by default.

@@ -11,8 +11,8 @@ Substitute `<project>` = `PROJECT_NAME` and `<display>` = `DISPLAY_NAME` from `.
 | Primary repo (CLI + daily use) | `~/Sync/mini_projects/<project>` on branch `main` |
 | Grok/Cursor session clones | `~/.grok/worktrees/mini-projects-<project>/<session-id>/` |
 | Claude Code session clones | `~/.claude/worktrees/mini-projects-<project>/<session-id>/` |
-| Generic agent guidance | `<repo>/agentstartstack/ai-guidance/` |
-| Project agent guidance | `<repo>/ai-guidance/` |
+| Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
+| Project agent guidance | `<repo>/agentstartstack/` |
 
 Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does.
 
@@ -122,7 +122,7 @@ If anything matches: commit in the session clone, tell the human sync is pending
 
 #### Before hardware operations
 
-Never compete with the human for the same hardware (USB serial, SD card, block device) while their CLI session is active. Check `ACTIVE_GUARD_PGREP` and project `ai-guidance/` for device-specific rules.
+Never compete with the human for the same hardware (USB serial, SD card, block device) while their CLI session is active. Check `ACTIVE_GUARD_PGREP` and project `agentstartstack/` for device-specific rules.
 
 **When in doubt:** ask the human or wait for their running command to finish.
 
@@ -132,9 +132,9 @@ When the human runs the project CLI from Sync, **watch logs proactively** -- do 
 
 | Pattern | Where to configure |
 |---------|-------------------|
-| Session registry file (TSV) | Project `ai-guidance/workflow.md` or `cli.md` (e.g. iotstack `sessions.watch`) |
-| Terminal milestones | Project `ai-guidance/` |
-| `--create-log` session logs | Project `ai-guidance/cli.md` |
+| Session registry file (TSV) | Project `agentstartstack/workflow.md` or `cli.md` (e.g. iotstack `sessions.watch`) |
+| Terminal milestones | Project `agentstartstack/` |
+| `--create-log` session logs | Project `agentstartstack/cli.md` |
 
 Generic rules:
 - Tail registry or log files; report milestones and errors in chat
@@ -155,7 +155,7 @@ Generic rules:
 
 **During any agent session**
 - Agent edits and commits only in the session clone; never in Sync
-- Load generic guidance from `agentstartstack/ai-guidance/` and project guidance from `ai-guidance/`
+- Load generic guidance from `agentstartstack/agentstartstack/` and project guidance from `agentstartstack/`
 - When the human runs CLI on Sync, watch logs per project docs
 
 **After agent work**

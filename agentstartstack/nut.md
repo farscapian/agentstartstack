@@ -2,7 +2,7 @@
 
 Human-side helper for the AI git workflow step **Sync** (agent session clone -> canonical Sync repo). Agents commit in the worktree; the human runs `nut` to land the newest commit on Sync, reviews, then `git push origin main`.
 
-**Canonical install:** `~/.bash_aliases` (not tracked in this repo). The copy below is documentation of record -- update `ai-guidance/nut.md` in agentstartstack when the function changes.
+**Canonical install:** `~/.bash_aliases` (not tracked in this repo). The copy below is documentation of record -- update `agentstartstack/nut.md` in agentstartstack when the function changes.
 
 ## Why "nut"
 

@@ -54,6 +54,7 @@ REPO_ROOT="$(resolve_repo_root "${1:-}")"
 
 agentstartstack_load_config "$REPO_ROOT" || err "Missing .agentstartstack.env (run add-to-project.sh)"
 agentstartstack_apply_defaults || exit 1
+agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 
 if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$SYNC_REPO")" ]]; then
   warn "Current directory is the Sync canonical repo, not a Grok session clone."
@@ -86,12 +87,12 @@ fi
 
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"
-WORKFLOW_MD="${REPO_ROOT}/agentstartstack/ai-guidance/workflow.md"
+WORKFLOW_MD="${REPO_ROOT}/${GENERIC_GUIDANCE_DIR}/workflow.md"
 WORKFLOW_FILE_URL="file://${WORKFLOW_MD}"
 
 ok "Synced to ${BRANCH} @ ${COMMIT}"
 printf '[INFO] Workflow guide: '
-print_hyperlink "$WORKFLOW_FILE_URL" "agentstartstack/ai-guidance/workflow.md"
+print_hyperlink "$WORKFLOW_FILE_URL" "${GENERIC_GUIDANCE_DIR}/workflow.md"
 printf '\n'
 echo ""
 
@@ -112,8 +113,8 @@ AI GIT WORKFLOW (authorized)
   2. Handoff       -- human runs nut (never git push origin from agents)
 
 GUIDANCE LOCATIONS
-  Generic:  agentstartstack/ai-guidance/  (workflow, nut, conventions, security)
-  Project:  ai-guidance/                  (CLI, architecture, gotchas)
+  Generic:  ${GENERIC_GUIDANCE_DIR}/  (workflow, nut, conventions, security)
+  Project:  ${PROJECT_GUIDANCE_DIR}/   (CLI, architecture, gotchas)
 
 FIRST MESSAGE (copy/paste template below)
   - Say you ran init_grok_session.sh (session sync complete).
@@ -121,11 +122,11 @@ FIRST MESSAGE (copy/paste template below)
   - Name 1-3 guidance files to read (not all of them, not CLAUDE.md in full).
 
 WHAT TO READ (pick 1-3)
-  Git / session / handoff     -> agentstartstack/ai-guidance/workflow.md, nut.md
-  New shell script            -> agentstartstack/ai-guidance/conventions.md, code-quality.md
-  Secrets / env               -> agentstartstack/ai-guidance/security.md
-  Terminal copy/paste         -> agentstartstack/ai-guidance/terminal.md
-  Project-specific tasks      -> ai-guidance/<topic>.md per CLAUDE.md index
+  Git / session / handoff     -> ${GENERIC_GUIDANCE_DIR}/workflow.md, nut.md
+  New shell script            -> ${GENERIC_GUIDANCE_DIR}/conventions.md, code-quality.md
+  Secrets / env               -> ${GENERIC_GUIDANCE_DIR}/security.md
+  Terminal copy/paste         -> ${GENERIC_GUIDANCE_DIR}/terminal.md
+  Project-specific tasks      -> ${PROJECT_GUIDANCE_DIR}/<topic>.md per CLAUDE.md index
 
   CLAUDE.md is an index only. Do not ask the agent to read all guidance files.
 
@@ -140,7 +141,7 @@ DO NOT
   - nut while CLI is running: ${GUARD_TIP}
 
 WHEN HUMAN SAYS "sync" or "nut"
-  nut ${PROJECT_NAME}    # see agentstartstack/ai-guidance/nut.md
+  nut ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/nut.md
 
 ================================================================================
 Suggested first message to paste into the agent:
@@ -148,7 +149,7 @@ Suggested first message to paste into the agent:
 New session. init_grok_session.sh complete (session sync) -- on main at ${COMMIT}.
 
 Task: <your task in one sentence>
-Read: agentstartstack/ai-guidance/workflow.md, ai-guidance/<pick-one-or-two>.md
+Read: ${GENERIC_GUIDANCE_DIR}/workflow.md, ${PROJECT_GUIDANCE_DIR}/<pick-one-or-two>.md
 Constraints: <hardware, files not to touch>
 EOF
 

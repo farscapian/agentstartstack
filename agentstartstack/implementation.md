@@ -1,6 +1,6 @@
 # Implementation Details
 
-Common shell patterns used across mini-projects. Project-specific logging paths and CLI behavior belong in host `ai-guidance/`.
+Common shell patterns used across mini-projects. Project-specific logging paths and CLI behavior belong in host `agentstartstack/`.
 
 ### Env file loading pattern
 

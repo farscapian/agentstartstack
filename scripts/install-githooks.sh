@@ -7,14 +7,17 @@ GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   exit 1
 }
 
-if [[ -f "${GIT_ROOT}/agentstartstack/.githooks/pre-commit" ]]; then
-  # Host project with agentstartstack submodule
+if [[ -f "${GIT_ROOT}/.agentstartstack/.githooks/pre-commit" ]]; then
+  chmod +x \
+    "${GIT_ROOT}/.githooks/pre-commit" \
+    "${GIT_ROOT}/scripts/shellcheck-staged.sh" \
+    "${GIT_ROOT}/.agentstartstack/scripts/shellcheck-staged.sh"
+elif [[ -f "${GIT_ROOT}/agentstartstack/.githooks/pre-commit" ]]; then
   chmod +x \
     "${GIT_ROOT}/.githooks/pre-commit" \
     "${GIT_ROOT}/scripts/shellcheck-staged.sh" \
     "${GIT_ROOT}/agentstartstack/scripts/shellcheck-staged.sh"
 else
-  # agentstartstack repo itself
   chmod +x \
     "${GIT_ROOT}/.githooks/pre-commit" \
     "${GIT_ROOT}/scripts/shellcheck-staged.sh"

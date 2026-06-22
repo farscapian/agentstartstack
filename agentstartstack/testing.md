@@ -1,6 +1,6 @@
 # Testing
 
-Generic pre-handoff checklist. Host projects extend this in their own `ai-guidance/testing.md` with hardware-specific steps.
+Generic pre-handoff checklist. Host projects extend this in their own `agentstartstack/testing.md` with hardware-specific steps.
 
 ## Before human approval or nut
 

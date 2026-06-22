@@ -56,3 +56,26 @@ agentstartstack_apply_defaults() {
 
   return 0
 }
+
+# Set GENERIC_GUIDANCE_DIR and PROJECT_GUIDANCE_DIR from host repo layout.
+agentstartstack_resolve_guidance_paths() {
+  local root="${1:-${AGENTSTARTSTACK_HOST_ROOT:-}}"
+
+  [[ -n "$root" ]] || return 1
+
+  if [[ -d "${root}/.agentstartstack/agentstartstack" ]]; then
+    GENERIC_GUIDANCE_DIR=".agentstartstack/agentstartstack"
+    PROJECT_GUIDANCE_DIR="agentstartstack"
+  elif [[ -d "${root}/agentstartstack/agentstartstack" ]]; then
+    GENERIC_GUIDANCE_DIR="agentstartstack/agentstartstack"
+    PROJECT_GUIDANCE_DIR="agentstartstack"
+  elif [[ -d "${root}/agentstartstack" ]]; then
+    GENERIC_GUIDANCE_DIR="agentstartstack"
+    PROJECT_GUIDANCE_DIR="agentstartstack"
+  else
+    echo "[ERR]  No agentstartstack guidance directory found under: $root" >&2
+    return 1
+  fi
+
+  return 0
+}

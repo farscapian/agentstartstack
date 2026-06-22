@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Wire agentstartstack into a host project: wrappers, config, stubs.
 #
-# Run from host project root after: git submodule add ... agentstartstack
+# Run from host project root after:
+#   git submodule add git@github.com:farscapian/agentstartstack.git .agentstartstack
 set -euo pipefail
 
 info() { printf '[INFO] %s\n' "$*"; }
@@ -10,14 +11,15 @@ warn() { printf '[WARN] %s\n' "$*" >&2; }
 
 AGENTSTARTSTACK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_ROOT="$(cd "${AGENTSTARTSTACK_ROOT}/.." && pwd)"
+SUBMODULE_DIR=".agentstartstack"
 
 if [[ ! -d "${HOST_ROOT}/.git" ]]; then
   echo "[ERR]  Host project root must be a git repo: ${HOST_ROOT}" >&2
   exit 1
 fi
 
-if [[ "$(readlink -f "$AGENTSTARTSTACK_ROOT")" != "$(readlink -f "${HOST_ROOT}/agentstartstack")" ]]; then
-  echo "[ERR]  Run from host project with agentstartstack submodule at ./agentstartstack" >&2
+if [[ "$(readlink -f "$AGENTSTARTSTACK_ROOT")" != "$(readlink -f "${HOST_ROOT}/${SUBMODULE_DIR}")" ]]; then
+  echo "[ERR]  Run from host project with agentstartstack submodule at ./${SUBMODULE_DIR}" >&2
   exit 1
 fi
 
@@ -46,7 +48,7 @@ if [[ -f "$ENV_FILE" ]]; then
   warn ".agentstartstack.env already exists -- skipping"
 else
   cat >"$ENV_FILE" <<EOF
-# Agent session workflow identity (see agentstartstack/ai-guidance/submodule-integration.md)
+# Agent session workflow identity (see .agentstartstack/agentstartstack/submodule-integration.md)
 PROJECT_NAME=${PROJECT_NAME}
 DISPLAY_NAME=${DISPLAY_NAME}
 SYNC_REPO=${SYNC_REPO}
@@ -60,10 +62,10 @@ fi
 
 # -- Wrapper scripts ----------------------------------------------------------
 
-write_wrapper "${HOST_ROOT}/scripts/init_grok_session.sh" "agentstartstack/scripts/init_grok_session.sh"
-write_wrapper "${HOST_ROOT}/scripts/init_claude_session.sh" "agentstartstack/scripts/init_claude_session.sh"
-write_wrapper "${HOST_ROOT}/scripts/install-githooks.sh" "agentstartstack/scripts/install-githooks.sh"
-write_wrapper "${HOST_ROOT}/scripts/shellcheck-staged.sh" "agentstartstack/scripts/shellcheck-staged.sh"
+write_wrapper "${HOST_ROOT}/scripts/init_grok_session.sh" "${SUBMODULE_DIR}/scripts/init_grok_session.sh"
+write_wrapper "${HOST_ROOT}/scripts/init_claude_session.sh" "${SUBMODULE_DIR}/scripts/init_claude_session.sh"
+write_wrapper "${HOST_ROOT}/scripts/install-githooks.sh" "${SUBMODULE_DIR}/scripts/install-githooks.sh"
+write_wrapper "${HOST_ROOT}/scripts/shellcheck-staged.sh" "${SUBMODULE_DIR}/scripts/shellcheck-staged.sh"
 ok "Created scripts/*.sh wrappers"
 
 # -- .githooks ----------------------------------------------------------------
@@ -72,15 +74,15 @@ mkdir -p "${HOST_ROOT}/.githooks"
 write_wrapper "${HOST_ROOT}/.githooks/pre-commit" "scripts/shellcheck-staged.sh"
 ok "Created .githooks/pre-commit"
 
-# -- Project ai-guidance stub -------------------------------------------------
+# -- Project agentstartstack stub ---------------------------------------------
 
-GUIDANCE_DIR="${HOST_ROOT}/ai-guidance"
+GUIDANCE_DIR="${HOST_ROOT}/agentstartstack"
 if [[ -d "$GUIDANCE_DIR" && -f "${GUIDANCE_DIR}/README.md" ]]; then
-  warn "ai-guidance/ already exists -- skipping stub"
+  warn "agentstartstack/ already exists -- skipping stub"
 else
   mkdir -p "$GUIDANCE_DIR"
-  cp "${AGENTSTARTSTACK_ROOT}/templates/ai-guidance-README.md" "${GUIDANCE_DIR}/README.md"
-  ok "Created ai-guidance/README.md stub"
+  cp "${AGENTSTARTSTACK_ROOT}/templates/agentstartstack-README.md" "${GUIDANCE_DIR}/README.md"
+  ok "Created agentstartstack/README.md stub"
 fi
 
 # -- CLAUDE.md stub -----------------------------------------------------------
@@ -110,5 +112,5 @@ fi
 
 echo ""
 ok "agentstartstack wired into ${HOST_ROOT}"
-info "Next: edit .agentstartstack.env, CLAUDE.md, and ai-guidance/"
-info "Then: git add agentstartstack .agentstartstack.env scripts .githooks ai-guidance CLAUDE.md"
+info "Next: edit .agentstartstack.env, CLAUDE.md, and agentstartstack/"
+info "Then: git add .agentstartstack .agentstartstack.env scripts .githooks agentstartstack CLAUDE.md"

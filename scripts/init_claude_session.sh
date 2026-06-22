@@ -53,6 +53,7 @@ REPO_ROOT="$(resolve_repo_root "${1:-}")"
 
 agentstartstack_load_config "$REPO_ROOT" || err "Missing .agentstartstack.env (run add-to-project.sh)"
 agentstartstack_apply_defaults || exit 1
+agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 
 if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$SYNC_REPO")" ]]; then
   warn "Current directory is the Sync canonical repo, not a Claude Code session clone."
@@ -85,12 +86,12 @@ fi
 
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"
-WORKFLOW_MD="${REPO_ROOT}/agentstartstack/ai-guidance/workflow.md"
+WORKFLOW_MD="${REPO_ROOT}/${GENERIC_GUIDANCE_DIR}/workflow.md"
 WORKFLOW_FILE_URL="file://${WORKFLOW_MD}"
 
 ok "Synced to ${BRANCH} @ ${COMMIT}"
 printf '[INFO] Workflow guide: '
-print_hyperlink "$WORKFLOW_FILE_URL" "agentstartstack/ai-guidance/workflow.md"
+print_hyperlink "$WORKFLOW_FILE_URL" "${GENERIC_GUIDANCE_DIR}/workflow.md"
 printf '\n'
 echo ""
 
@@ -115,8 +116,8 @@ IMPORTANT: Claude Code always edits files in the session clone (${CLAUDE_PARENT}
   -- do NOT edit files under Sync.
 
 GUIDANCE LOCATIONS
-  Generic:  agentstartstack/ai-guidance/
-  Project:  ai-guidance/
+  Generic:  ${GENERIC_GUIDANCE_DIR}/
+  Project:  ${PROJECT_GUIDANCE_DIR}/
 
 FIRST MESSAGE (copy/paste template below)
   - Say you ran init_claude_session.sh (session sync complete).
@@ -129,7 +130,7 @@ DO NOT
   - nut while CLI is running: ${GUARD_TIP}
 
 WHEN HUMAN SAYS "sync" or "nut"
-  nut ${PROJECT_NAME}    # see agentstartstack/ai-guidance/nut.md
+  nut ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/nut.md
 
 ================================================================================
 Suggested first message to paste into the agent:
@@ -137,7 +138,7 @@ Suggested first message to paste into the agent:
 New session. init_claude_session.sh complete (session sync) -- on main at ${COMMIT}.
 
 Task: <your task in one sentence>
-Read: agentstartstack/ai-guidance/workflow.md, ai-guidance/<pick-one-or-two>.md
+Read: ${GENERIC_GUIDANCE_DIR}/workflow.md, ${PROJECT_GUIDANCE_DIR}/<pick-one-or-two>.md
 Constraints: <hardware, files not to touch>
 EOF
 

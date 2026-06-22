@@ -53,5 +53,5 @@ Common patterns across mini-projects:
 | Track in git | Never track |
 |--------------|-------------|
 | `*.env.example`, scripts, templates | `*.env` (except examples), `cloud-init/*` output |
-| `ai-guidance/`, `agentstartstack/` submodule pointer | Large binaries (`*.img`, `*.img.xz`) |
+| `agentstartstack/`, `agentstartstack/` submodule pointer | Large binaries (`*.img`, `*.img.xz`) |
 | Public config, package lists | Backup archives with secrets (`backups/**/*.tar.gz`) |
