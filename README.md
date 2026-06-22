@@ -44,7 +44,7 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 ## Agent session workflow (summary)
 
 1. **Session sync** -- human runs `scripts/init_grok_session.sh` or `scripts/init_claude_session.sh` from the project (thin wrappers call into `.agentstartstack/scripts/`).
-2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never Sync.
+2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo.
 3. **Handoff** -- human runs `nut` (or `nutup`) from `~/.bash_aliases`; agents never `git push origin`.
 
 Full details: [`agentstartstack/workflow.md`](agentstartstack/workflow.md) and [`agentstartstack/nut.md`](agentstartstack/nut.md).

@@ -35,4 +35,4 @@ Run against real hardware or infrastructure when the change affects:
 When committing before full integration test, note in the commit message:
 - What was tested (unit / compile / hardware / none)
 - Which paths are untested (e.g. TLS, nightly reprovision, edge-case devices)
-- Any dependency on human running CLI from Sync
+- Any dependency on human running CLI from the canonical local repo

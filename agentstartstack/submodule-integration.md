@@ -47,7 +47,7 @@ Required variables (created from template by `add-to-project.sh`):
 |----------|---------|---------|
 | `PROJECT_NAME` | `wrtstack` | Directory name under `~/Sync/mini_projects/` and worktree parent `mini-projects-<name>` |
 | `DISPLAY_NAME` | `wrtstack` | Lowercase branding in init script tips |
-| `SYNC_REPO` | `~/Sync/mini_projects/wrtstack` | Canonical Sync path |
+| `SYNC_REPO` | `~/Sync/mini_projects/wrtstack` | Canonical local repo path |
 | `ORIGIN_URL` | `git@github.com:farscapian/wrtstack.git` | For clone instructions in init output |
 | `ACTIVE_GUARD_PGREP` | `wrtstack (build\|flash)` | Optional regex for nut safety checks in agent tips |
 
@@ -63,14 +63,14 @@ See `templates/CLAUDE.md.project-stub` in this repo.
 
 ## Git receive configuration
 
-On the Sync canonical repo (one-time per project):
+On the canonical local repo (one-time per project):
 
 ```bash
 cd ~/Sync/mini_projects/<project>
 git config receive.denyCurrentBranch updateInstead
 ```
 
-This lets `nut` push from agent worktrees directly into Sync's working tree.
+This lets `nut` local-sync from session clones directly into the canonical local repo working tree.
 
 ## Updating agentstartstack
 
@@ -97,4 +97,4 @@ Optional: keep project `scripts/init_*.sh` as one-line wrappers for backward com
 
 ## nut guard for new projects
 
-Add a case to `_nut_guard_active_sessions` in `~/.bash_aliases` (documented in `nut.md`). Use `PROJECT_NAME` / Sync directory name for the case path.
+Add a case to `_nut_guard_active_sessions` in `~/.bash_aliases` (documented in `nut.md`). Use `PROJECT_NAME` / canonical local repo directory name for the case path.

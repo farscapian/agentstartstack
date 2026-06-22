@@ -1,6 +1,6 @@
-# nut -- agent worktree to Sync
+# nut -- local-sync with canonical local repo
 
-Human-side helper for the AI git workflow step **Sync** (agent session clone -> canonical Sync repo). Agents commit in the worktree; the human runs `nut` to land the newest commit on Sync, reviews, then `git push origin main`.
+Human-side helper for the AI git workflow step **local-sync** (session clone -> canonical local repo via the `local-sync` remote). Agents commit in the session clone; the human runs `nut` to local-sync with the canonical local repo, reviews, then `git push origin main`.
 
 **Canonical install:** `~/.bash_aliases` (not tracked in this repo). The copy below is documentation of record -- update `agentstartstack/nut.md` in agentstartstack when the function changes.
 
@@ -8,40 +8,42 @@ Human-side helper for the AI git workflow step **Sync** (agent session clone -> 
 
 Backronym: **N**ewest commit **U**ntil **T**ransferred.
 
-Pushes the latest commit from the matching agent worktree (Claude or Grok) into the canonical Sync tree at `~/Sync/mini_projects/<repo>`. Short to type, works for every mini-project.
+Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`SYNC_REPO` in host `.agentstartstack.env`; default `~/Sync/mini_projects/<repo>`). Short to type, works for every mini-project.
 
 Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `nut push`.
 
 ## Usage
 
 ```bash
-nut                 # infer repo from pwd (Sync tree or agent worktree)
+nut                 # local-sync with canonical local repo (infer from pwd)
 nut iotstack        # explicit repo name, any pwd
-nutup               # nut, then git push origin main
-nutup iotstack      # nut for iotstack, then push
+nutup               # local-sync, then git push origin main
+nutup iotstack      # local-sync for iotstack, then push
 nutupyall           # nutup agentstartstack, refresh consumer submodules
 nut --help
 nutup --help
 nutupyall --help
 ```
 
-**`nutup`** -- full human handoff: land the newest agent commit on Sync, then publish to `origin/main`. Agents never run `nutup` themselves.
+**`nut`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
 
-**`nutupyall`** -- template publish plus submodule refresh. Run only from `~/Sync/mini_projects/agentstartstack` (not a worktree, not another repo). Runs `nutup` for agentstartstack, then finds every Sync repo whose `.gitmodules` references `farscapian/agentstartstack` and runs `git submodule update --init --recursive --remote .agentstartstack`. Consumer working trees pick up the new template; host repos still need a committed submodule bump to record the SHA on `origin/main`.
+**`nutup`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `nutup` themselves.
+
+**`nutupyall`** -- template publish plus submodule refresh. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then finds every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack` and runs `git submodule update --init --recursive --remote .agentstartstack`. Consumer working trees pick up the new template; host repos still need a committed submodule bump to record the SHA on `origin/main`.
 
 **Conventions**
 
 | Item | Path |
 |------|------|
-| Sync canonical | `~/Sync/mini_projects/<name>` (fallback: `~/Sync/<name>`) |
-| Agent worktrees | `~/.claude/worktrees/mini-projects-<name>/*` |
+| Canonical local repo | `SYNC_REPO` in `.agentstartstack.env` (default: `~/Sync/mini_projects/<name>`) |
+| Session clones | `~/.claude/worktrees/mini-projects-<name>/*` |
 | | `~/.grok/worktrees/mini-projects-<name>/*` |
 
-Worktrees are matched by `origin` URL so repos cannot cross-contaminate. Among matches, the worktree with the newest commit on `main` wins.
+Session clones are matched by `origin` URL so repos cannot cross-contaminate. Among matches, the clone with the newest commit on `main` wins.
 
 ## Guards
 
-`nut` refuses to run while long-running Sync-side tools are active (pushing updates the Sync working tree via `receive.denyCurrentBranch = updateInstead`):
+`nut` refuses to run while long-running tools are active on the canonical local repo (local-sync updates its working tree via `receive.denyCurrentBranch = updateInstead`):
 
 | Repo | Blocks while |
 |------|----------------|
@@ -54,12 +56,12 @@ To add a guard for a new project, extend `_nut_guard_active_sessions` in `~/.bas
 ## Workflow
 
 1. Agent commits in session clone
-2. Human reviews (optional): `nut` lands agent commit on Sync
-3. Human publishes: `git push origin main` from Sync, or combine: `nutup`
+2. Human reviews (optional): `nut` local-syncs with the canonical local repo
+3. Human publishes: `git push origin main` from the canonical local repo, or combine: `nutup`
 
 Agents never run `nut` or `nutup` unless the human explicitly asks.
 
-See [workflow.md](workflow.md) for session sync, agent clone paths, and full git policy.
+See [workflow.md](workflow.md) for session align, agent clone paths, and full git policy.
 
 ## Source (`~/.bash_aliases`)
 
@@ -72,9 +74,9 @@ unset -f land s2s s2ps s2is push 2>/dev/null
 # nut / nutup -- Newest commit Until Transferred
 #
 # Usage:
-#   nut              # agent worktree -> Sync
-#   nutup            # nut, then git push origin main
-#   nutup iotstack   # explicit repo + push
+#   nut              # local-sync with canonical local repo
+#   nutup            # local-sync, then git push origin main
+#   nutup iotstack   # explicit repo + local-sync + push
 #   nutupyall        # nutup agentstartstack, refresh consumer submodules
 
 _nut_sync_root() {
@@ -149,7 +151,7 @@ _nut_push() {
   _nut_guard_active_sessions "$sync_target" || return 1
 
   origin_target=$(git -C "$sync_target" remote get-url origin 2>/dev/null) || {
-    echo "nut: Sync repo has no origin remote: $sync_target" >&2
+    echo "nut: canonical local repo has no origin remote: $sync_target" >&2
     return 1
   }
 
@@ -172,7 +174,7 @@ _nut_push() {
   done
 
   if [[ -z "$best_dir" ]]; then
-    echo "nut: no agent worktree for ${repo_name}" >&2
+    echo "nut: no session clone for ${repo_name}" >&2
     return 1
   fi
 
@@ -194,7 +196,7 @@ _nut_resolve_sync_target() {
 
   if [[ -n "$repo_arg" ]]; then
     sync_target=$(_nut_sync_root "$repo_arg") || {
-      echo "nut: no Sync repo found for: ${repo_arg}" >&2
+      echo "nut: no canonical local repo found for: ${repo_arg}" >&2
       return 1
     }
   else
@@ -206,7 +208,7 @@ _nut_resolve_sync_target() {
 
     if [[ "$here" == *"/.grok/worktrees/"* || "$here" == *"/.claude/worktrees/"* ]]; then
       sync_target=$(_nut_sync_target_from_worktree "$here") || {
-        echo "nut: cannot resolve Sync target from: $here" >&2
+        echo "nut: cannot resolve canonical local repo from: $here" >&2
         return 1
       }
     else
@@ -225,16 +227,16 @@ nut()
     cat <<'EOF'
 nut -- Newest commit Until Transferred
 
-Push the latest agent-worktree commit to the canonical Sync repo.
+Perform local-sync with the canonical local repo (session clone -> local-sync remote).
 
   nut                 infer repo from pwd
   nut <name>          e.g. nut printstack, nut iotstack, nut wrtstack
-  nutup               nut, then git push origin main
-  nutup <name>        nut for <name>, then push
+  nutup               local-sync, then git push origin main
+  nutup <name>        local-sync for <name>, then push
   nutupyall           nutup agentstartstack, refresh .agentstartstack submodules
 
-Sync root:   ~/Sync/mini_projects/<name>  (or ~/Sync/<name>)
-Worktrees:   ~/.claude/worktrees/mini-projects-<name>/*
+Canonical:   ~/Sync/mini_projects/<name>  (or ~/Sync/<name>; see SYNC_REPO)
+Session:     ~/.claude/worktrees/mini-projects-<name>/*
              ~/.grok/worktrees/mini-projects-<name>/*
 EOF
     return 0
@@ -251,7 +253,7 @@ nutup()
 
   if [[ "$repo_arg" == "-h" || "$repo_arg" == "--help" ]]; then
     cat <<'EOF'
-nutup -- nut, then git push origin main
+nutup -- local-sync with canonical local repo, then git push origin main
 
   nutup               infer repo from pwd
   nutup <name>        e.g. nutup printstack, nutup wrtstack
@@ -276,12 +278,12 @@ _nutupyall_assert_here() {
   here=$(readlink -f "$here")
 
   sync_root=$(_nut_sync_root agentstartstack) || {
-    echo "nutupyall: agentstartstack Sync repo not found" >&2
+    echo "nutupyall: agentstartstack canonical local repo not found" >&2
     return 1
   }
 
   if [[ "$here" != "$sync_root" ]]; then
-    echo "nutupyall: run only from agentstartstack Sync repo: ${sync_root}" >&2
+    echo "nutupyall: run only from agentstartstack canonical local repo: ${sync_root}" >&2
     return 1
   fi
 }
@@ -308,9 +310,9 @@ nutupyall()
 {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-nutupyall -- nutup agentstartstack, refresh .agentstartstack in consumer repos
+nutupyall -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
 
-Run only from ~/Sync/mini_projects/agentstartstack (Sync tree, not a worktree).
+Run only from the agentstartstack canonical local repo (not a session clone).
 
   nutupyall
   nutupyall --help

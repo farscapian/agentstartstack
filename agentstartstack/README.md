@@ -32,7 +32,7 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 | Secrets / env files | `security.md`, `conventions.md` |
 | Cursor terminal / copy-paste | `terminal.md` |
 | CI / commit hygiene | `workflow.md`, `code-quality.md`, `testing.md` |
-| Human Sync handoff | `nut.md`, `workflow.md` |
+| Human local-sync handoff | `nut.md`, `workflow.md` |
 
 Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `agentstartstack/` per its `CLAUDE.md` index.
 

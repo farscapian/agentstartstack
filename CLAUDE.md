@@ -8,7 +8,7 @@ Host projects that include this repo as a submodule should use their own root `C
 
 - Branding: always lowercase `agentstartstack`
 - Text: ASCII-only in docs, logs, help, and code comments
-- Agents work in session clones, NOT in Sync (see `agentstartstack/workflow.md`)
+- Agents work in session clones, NOT in the canonical local repo (see `agentstartstack/workflow.md`)
 - New Grok session: run host project's `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/`)
 - New Claude Code session: run host project's `scripts/init_claude_session.sh`
 - After changes: commit in session clone; human runs `nut` then `git push origin main` (or `nutup`). NEVER `git push origin` from agents (see `agentstartstack/nut.md`)
