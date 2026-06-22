@@ -43,7 +43,7 @@ Worktrees are matched by `origin` URL so repos cannot cross-contaminate. Among m
 |------|----------------|
 | iotstack | `iotstack` / `iotstack.sh` running |
 | printstack | `printstack` / `printstack.sh` running |
-| wrtstack / openwrt | `wrtstack (build|flash)` running |
+| wrtstack | `wrtstack (build|flash)` running |
 
 To add a guard for a new project, extend `_nut_guard_active_sessions` in `~/.bash_aliases` (see Source below).
 
@@ -120,7 +120,7 @@ _nut_guard_active_sessions() {
         return 1
       fi
       ;;
-    */mini_projects/openwrt|*/Sync/openwrt|*/mini_projects/wrtstack|*/Sync/wrtstack)
+    */mini_projects/wrtstack|*/Sync/wrtstack)
       if pgrep -af 'wrtstack (build|flash)' >/dev/null 2>&1; then
         echo "nut: wrtstack is running -- wait for it to finish" >&2
         return 1
@@ -223,7 +223,7 @@ nut -- Newest commit Until Transferred
 Push the latest agent-worktree commit to the canonical Sync repo.
 
   nut                 infer repo from pwd
-  nut <name>          e.g. nut printstack, nut iotstack, nut openwrt
+  nut <name>          e.g. nut printstack, nut iotstack, nut wrtstack
   nutup               nut, then git push origin main
   nutup <name>        nut for <name>, then push
 
@@ -248,7 +248,7 @@ nutup()
 nutup -- nut, then git push origin main
 
   nutup               infer repo from pwd
-  nutup <name>        e.g. nutup printstack, nutup openwrt
+  nutup <name>        e.g. nutup printstack, nutup wrtstack
 EOF
     return 0
   fi

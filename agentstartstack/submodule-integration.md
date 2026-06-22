@@ -45,9 +45,9 @@ Required variables (created from template by `add-to-project.sh`):
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `PROJECT_NAME` | `openwrt` | Directory name under `~/Sync/mini_projects/` and worktree parent `mini-projects-<name>` |
+| `PROJECT_NAME` | `wrtstack` | Directory name under `~/Sync/mini_projects/` and worktree parent `mini-projects-<name>` |
 | `DISPLAY_NAME` | `wrtstack` | Lowercase branding in init script tips |
-| `SYNC_REPO` | `~/Sync/mini_projects/openwrt` | Canonical Sync path |
+| `SYNC_REPO` | `~/Sync/mini_projects/wrtstack` | Canonical Sync path |
 | `ORIGIN_URL` | `git@github.com:farscapian/wrtstack.git` | For clone instructions in init output |
 | `ACTIVE_GUARD_PGREP` | `wrtstack (build\|flash)` | Optional regex for nut safety checks in agent tips |
 
