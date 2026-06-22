@@ -19,11 +19,15 @@ nut                 # infer repo from pwd (Sync tree or agent worktree)
 nut iotstack        # explicit repo name, any pwd
 nutup               # nut, then git push origin main
 nutup iotstack      # nut for iotstack, then push
+nutupyall           # nutup agentstartstack, refresh consumer submodules
 nut --help
 nutup --help
+nutupyall --help
 ```
 
 **`nutup`** -- full human handoff: land the newest agent commit on Sync, then publish to `origin/main`. Agents never run `nutup` themselves.
+
+**`nutupyall`** -- template publish plus submodule refresh. Run only from `~/Sync/mini_projects/agentstartstack` (not a worktree, not another repo). Runs `nutup` for agentstartstack, then finds every Sync repo whose `.gitmodules` references `farscapian/agentstartstack` and runs `git submodule update --init --recursive --remote .agentstartstack`. Consumer working trees pick up the new template; host repos still need a committed submodule bump to record the SHA on `origin/main`.
 
 **Conventions**
 
@@ -71,6 +75,7 @@ unset -f land s2s s2ps s2is push 2>/dev/null
 #   nut              # agent worktree -> Sync
 #   nutup            # nut, then git push origin main
 #   nutup iotstack   # explicit repo + push
+#   nutupyall        # nutup agentstartstack, refresh consumer submodules
 
 _nut_sync_root() {
   local repo_name="$1"
@@ -115,7 +120,7 @@ _nut_guard_active_sessions() {
       fi
       ;;
     */mini_projects/printstack|*/Sync/printstack)
-      if pgrep -af 'printstack\.sh|printstack (flash|refresh)' >/dev/null 2>&1; then
+      if pgrep -af '(printstack\.sh|/printstack) ' >/dev/null 2>&1; then
         echo "nut: printstack is running -- wait for it to finish" >&2
         return 1
       fi
@@ -226,6 +231,7 @@ Push the latest agent-worktree commit to the canonical Sync repo.
   nut <name>          e.g. nut printstack, nut iotstack, nut wrtstack
   nutup               nut, then git push origin main
   nutup <name>        nut for <name>, then push
+  nutupyall           nutup agentstartstack, refresh .agentstartstack submodules
 
 Sync root:   ~/Sync/mini_projects/<name>  (or ~/Sync/<name>)
 Worktrees:   ~/.claude/worktrees/mini-projects-<name>/*
@@ -258,5 +264,74 @@ EOF
   _nut_push "$sync_target" || return 1
   echo "nutup: ${sync_target} -> origin main"
   git -C "$sync_target" push origin main
+}
+
+_nutupyall_assert_here() {
+  local here sync_root
+
+  here=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "nutupyall: not in a git repo" >&2
+    return 1
+  }
+  here=$(readlink -f "$here")
+
+  sync_root=$(_nut_sync_root agentstartstack) || {
+    echo "nutupyall: agentstartstack Sync repo not found" >&2
+    return 1
+  }
+
+  if [[ "$here" != "$sync_root" ]]; then
+    echo "nutupyall: run only from agentstartstack Sync repo: ${sync_root}" >&2
+    return 1
+  fi
+}
+
+_nutupyall_consumer_roots() {
+  local search_root candidate gitmodules
+
+  for search_root in "${HOME}/Sync/mini_projects" "${HOME}/Sync"; do
+    [[ -d "$search_root" ]] || continue
+    for candidate in "$search_root"/*/; do
+      candidate=$(readlink -f "${candidate%/}")
+      [[ -d "${candidate}/.git" ]] || continue
+      [[ "$(basename "$candidate")" == "agentstartstack" ]] && continue
+      gitmodules="${candidate}/.gitmodules"
+      [[ -f "$gitmodules" ]] || continue
+      if grep -q 'farscapian/agentstartstack' "$gitmodules" 2>/dev/null; then
+        printf '%s\n' "$candidate"
+      fi
+    done
+  done
+}
+
+nutupyall()
+{
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+nutupyall -- nutup agentstartstack, refresh .agentstartstack in consumer repos
+
+Run only from ~/Sync/mini_projects/agentstartstack (Sync tree, not a worktree).
+
+  nutupyall
+  nutupyall --help
+EOF
+    return 0
+  fi
+
+  if [[ -n "${1:-}" ]]; then
+    echo "nutupyall: takes no arguments (try: nutupyall --help)" >&2
+    return 1
+  fi
+
+  _nutupyall_assert_here || return 1
+
+  nutup || return 1
+
+  local host
+  while IFS= read -r host; do
+    [[ -n "$host" ]] || continue
+    echo "nutupyall: ${host} -- submodule update --init --recursive --remote .agentstartstack"
+    git -C "$host" submodule update --init --recursive --remote .agentstartstack || return 1
+  done < <(_nutupyall_consumer_roots | sort -u)
 }
 ```
