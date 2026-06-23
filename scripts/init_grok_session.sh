@@ -71,6 +71,19 @@ info "Canonical:     $SYNC_REPO"
 info "Project:       ${DISPLAY_NAME} (${PROJECT_NAME})"
 echo ""
 
+# Re-running init re-aligns via a hard reset + clean, which discards uncommitted
+# work. If the session clone is dirty, confirm before destroying it (a fresh
+# clone is clean, so first-run init never prompts).
+if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+  warn "Session clone has uncommitted changes; re-aligning will HARD RESET and discard them:"
+  git status --short >&2
+  read -r -p "Discard and re-align? [y/N] " confirm </dev/tty
+  if [[ "${confirm,,}" != "y" && "${confirm,,}" != "yes" ]]; then
+    info "Aborted; clone left as-is."
+    exit 0
+  fi
+fi
+
 info "Session align: fetching local-sync/main and resetting..."
 if git remote get-url local-sync &>/dev/null; then
   git remote set-url local-sync "$SYNC_REPO"
@@ -98,6 +111,29 @@ if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
   warn "  Before your next commit: git submodule update --init --recursive --remote .agentstartstack && git add .agentstartstack && rm .agentstartstack-bump"
 fi
+
+# Install a pre-commit guard that blocks commits while a .agentstartstack-bump
+# watch file is pending, then chains to the repo's shellcheck hook. Lives under
+# .git/ so it survives reset --hard + clean -fd and never dirties the tree.
+GUARD_DIR="${REPO_ROOT}/.git/agentstartstack-hooks"
+mkdir -p "$GUARD_DIR"
+cat > "${GUARD_DIR}/pre-commit" <<'HOOK'
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+if [[ -f "${ROOT}/.agentstartstack-bump" ]]; then
+  echo "pre-commit: .agentstartstack-bump is pending in this clone -- apply it first:" >&2
+  echo "  git submodule update --init --recursive --remote .agentstartstack" >&2
+  echo "  git add .agentstartstack && rm .agentstartstack-bump" >&2
+  exit 1
+fi
+if [[ -x "${ROOT}/.githooks/pre-commit" ]]; then
+  exec "${ROOT}/.githooks/pre-commit"
+fi
+HOOK
+chmod +x "${GUARD_DIR}/pre-commit"
+git config core.hooksPath .git/agentstartstack-hooks
+info "Pre-commit guard active (blocks commits while .agentstartstack-bump pending; chains to shellcheck)."
 
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"

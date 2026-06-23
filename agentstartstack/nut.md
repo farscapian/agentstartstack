@@ -419,6 +419,12 @@ EOF
 
   nutup || return 1
 
+  # Authoritative bump target = agentstartstack canonical HEAD (just pushed by
+  # nutup). The in-flight branch must advertise this, not the consumer's stale
+  # (and possibly dirty) submodule working-tree HEAD.
+  local as_sha
+  as_sha=$(git rev-parse --short HEAD) || return 1
+
   local host name busy iclone ireason sub_sha clone n_flag
   local bumped=0 flagged=0 current=0 failed=0
   while IFS= read -r host; do
@@ -427,7 +433,7 @@ EOF
 
     busy=$(_nutupyall_busy_sessions "$name")
     if [[ -n "$busy" ]]; then
-      sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
+      sub_sha="$as_sha"
       n_flag=0
       while IFS= read -r clone; do
         [[ -n "$clone" ]] || continue

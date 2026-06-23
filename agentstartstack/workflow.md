@@ -55,6 +55,8 @@ Authorized workflow for agent sessions. Two steps: **session align** at start, *
 
 Align the session clone with the canonical local repo. Run once per session (or after the human edits the canonical local repo and pushes).
 
+**Idempotency / re-running.** The init scripts are convergent -- re-running lands the clone in the same aligned state -- but the align step is a **hard reset** (`git reset --hard local-sync/main` + `git clean -fd`), which **discards uncommitted work and untracked files** (gitignored files such as `.agentstartstack-bump` survive). The scripts therefore detect a dirty working tree on re-run and prompt before discarding it (a fresh first-run clone is clean, so it never prompts). To merely pick up a pending bump in an active session, do **not** re-run init -- apply the watch file directly (see [The .agentstartstack-bump watch file](#the-agentstartstack-bump-watch-file)).
+
 **Grok/Cursor:** host `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/init_grok_session.sh`).
 
 ```bash
@@ -152,6 +154,8 @@ rm .agentstartstack-bump
 ```
 
 Include the bump in the commit you were about to make (or commit it on its own first). The bump then reaches the canonical local repo through your normal `nut` -- a fast-forward, no divergence. Other clones of the same consumer find the canonical already current on their next session align and simply clear their own flag (the submodule update is a no-op). The init scripts also print a reminder at session align if the flag is present.
+
+**Enforcement (pre-commit guard).** The init scripts install a pre-commit hook in the session clone (under `.git/agentstartstack-hooks/`, with `core.hooksPath` pointed at it) that **refuses any commit while `.agentstartstack-bump` is present**, printing the apply-then-remove commands. After applying the bump and removing the flag, commits proceed. The guard then chains to the repo's tracked `.githooks/pre-commit`, so shellcheck and any other checks still run. The guard lives under `.git/` so it survives `reset --hard` + `git clean -fd`; running `install-githooks.sh` afterward repoints `core.hooksPath` back to `.githooks` (shellcheck only) -- re-run the init script to restore the guard.
 
 Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by `nutupyall` and removed by you when you apply the bump.
 
