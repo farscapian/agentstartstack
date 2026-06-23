@@ -6,9 +6,14 @@ Human-side helper for the AI git workflow step **local-sync** (session clone -> 
 
 ## Why "nut"
 
-Backronym: **N**ewest commit **U**ntil **T**ransferred.
+Canonical backronym: **N**ewest commit **U**ntil **T**ransferred.
 
 Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`SYNC_REPO` in host `.agentstartstack.env`; default `~/Sync/mini_projects/<repo>`). Short to type, works for every mini-project.
+
+Alt backronyms (HEAD is the tip of the current branch, so the puns write themselves):
+
+- `nut` -- **N**udge **U**ntil **T**ip: advance the branch until the newest commit lands on HEAD.
+- `nutup` -- **N**udge **U**ntil **T**ip's **U**p, then **P**ush: get HEAD current locally, then push it upstream -- the exact two-step local-sync-then-publish semantics.
 
 Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `nut push`.
 
