@@ -34,7 +34,12 @@ nutupyall --help
 
 **`nutup`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `nutup` themselves.
 
-**`nutupyall`** -- template publish plus submodule refresh. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then finds every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack` and runs `git submodule update --init --recursive --remote .agentstartstack`. Consumer working trees pick up the new template; host repos still need a committed submodule bump to record the SHA on `origin/main`.
+**`nutupyall`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
+
+- **If a session clone for that consumer is busy** -- uncommitted changes, or commits ahead of `local-sync/main` -- the bump is **deferred** and a `waiting on <session>` line is logged. Auto-committing while an agent is mid-work would diverge the clone and turn its next `nut` into a non-fast-forward. Re-run `nutupyall` after that session hands off (`nut`).
+- **Otherwise** -- `git submodule update --init --recursive --remote .agentstartstack`; if `.agentstartstack` actually moved, **auto-commit** the bump (`Bump .agentstartstack to <sha>`) and `git push origin main`. Unchanged consumers are reported as "already current".
+
+The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / deferred / failed`. Because the bump is committed, consumer session clones pick it up on their next session align -- no agent action required.
 
 **Conventions**
 
@@ -311,6 +316,39 @@ _nutupyall_consumer_roots() {
   done
 }
 
+# Echo busy session clones for a consumer, one per line: "<clone><TAB><reason>".
+# Busy = uncommitted changes, or commits ahead of local-sync/main (agent work in
+# flight). nutupyall defers a consumer's auto-bump while any of its clones is
+# busy, so committing + pushing the bump cannot diverge the clone (its next nut
+# would otherwise be a non-fast-forward and clobber the agent mid-work).
+_nutupyall_busy_sessions() {
+  local name="$1" clone status_out ahead reason
+
+  for clone in \
+      "${HOME}/.claude/worktrees/mini-projects-${name}/"*/ \
+      "${HOME}/.grok/worktrees/mini-projects-${name}/"*/; do
+    [[ -d "${clone}.git" ]] || continue
+    clone=$(readlink -f "${clone%/}")
+
+    status_out=$(git -C "$clone" status --porcelain 2>/dev/null)
+
+    ahead=0
+    if git -C "$clone" remote get-url local-sync >/dev/null 2>&1; then
+      git -C "$clone" fetch -q local-sync main 2>/dev/null
+      ahead=$(git -C "$clone" rev-list --count local-sync/main..HEAD 2>/dev/null || echo 0)
+    fi
+
+    reason=""
+    [[ -n "$status_out" ]] && reason="uncommitted changes"
+    if [[ "$ahead" -gt 0 ]]; then
+      [[ -n "$reason" ]] && reason="${reason}, "
+      reason="${reason}${ahead} commit(s) ahead of canonical"
+    fi
+
+    [[ -n "$reason" ]] && printf '%s\t%s\n' "$clone" "$reason"
+  done
+}
+
 nutupyall()
 {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -318,6 +356,12 @@ nutupyall()
 nutupyall -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
 
 Run only from the agentstartstack canonical local repo (not a session clone).
+
+For each consumer repo, the .agentstartstack bump is auto-committed and pushed
+to origin -- UNLESS an agent session clone for that consumer is busy (uncommitted
+changes or commits ahead of canonical), in which case the bump is deferred and a
+"waiting on <session>" line is logged. Re-run nutupyall after the session hands
+off (nut).
 
   nutupyall
   nutupyall --help
@@ -334,11 +378,52 @@ EOF
 
   nutup || return 1
 
-  local host
+  local host name busy bclone breason sub_sha
+  local bumped=0 deferred=0 current=0 failed=0
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
-    echo "nutupyall: ${host} -- submodule update --init --recursive --remote .agentstartstack"
-    git -C "$host" submodule update --init --recursive --remote .agentstartstack || return 1
+    name=$(basename "$host")
+
+    busy=$(_nutupyall_busy_sessions "$name")
+    if [[ -n "$busy" ]]; then
+      echo "nutupyall: ${name} -- WAITING on active agent session(s); deferring bump:" >&2
+      while IFS=$'\t' read -r bclone breason; do
+        [[ -n "$bclone" ]] && echo "nutupyall:   busy: ${bclone} (${breason})" >&2
+      done <<< "$busy"
+      echo "nutupyall:   re-run nutupyall after the session hands off (nut)" >&2
+      deferred=$((deferred + 1))
+      continue
+    fi
+
+    echo "nutupyall: ${name} -- submodule update --remote .agentstartstack"
+    if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
+      echo "nutupyall:   ERROR updating submodule in ${name}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+
+    if [[ -z "$(git -C "$host" status --porcelain -- .agentstartstack 2>/dev/null)" ]]; then
+      echo "nutupyall:   ${name} already current"
+      current=$((current + 1))
+      continue
+    fi
+
+    sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
+    echo "nutupyall:   committing bump to ${sub_sha} in ${name}"
+    if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
+      echo "nutupyall:   ERROR committing bump in ${name}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    if ! git -C "$host" push origin main; then
+      echo "nutupyall:   WARN committed bump but origin push failed in ${name}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+    bumped=$((bumped + 1))
   done < <(_nutupyall_consumer_roots | sort -u)
+
+  echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${deferred} deferred (busy), ${failed} failed"
+  [[ "$failed" -eq 0 ]]
 }
 ```
