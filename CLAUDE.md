@@ -4,6 +4,8 @@ Shared agent guidance template. **Load topic files from `agentstartstack/` inste
 
 Host projects that include this repo as a submodule should use their own root `CLAUDE.md` as the primary index (generic + project-specific topics). This file documents the template repo itself.
 
+**Do NOT run the init scripts (`scripts/init_claude_session.sh`, `scripts/init_grok_session.sh`) in this template repo.** They require a `.agentstartstack.env` at the repo root, which exists only in host projects -- the template intentionally has none, so the scripts will exit with `Missing .agentstartstack.env`. Init/session-align is a host-project step; when working on the template directly, skip it.
+
 ## Quick rules
 
 - Branding: always lowercase `agentstartstack`
