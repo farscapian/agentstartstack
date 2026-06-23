@@ -133,6 +133,28 @@ Never compete with the human for the same hardware (USB serial, SD card, block d
 
 **When in doubt:** ask the human or wait for their running command to finish.
 
+### 4. The `.agentstartstack-bump` watch file
+
+When the human runs `nutupyall` (see [nut.md](nut.md)) and a consumer has an in-flight session clone, `nutupyall` cannot auto-commit the `.agentstartstack` submodule bump in that consumer's canonical repo -- doing so would turn the clone's next `nut` into a non-fast-forward. Instead it drops a watch file at the **root of every session clone** for that consumer:
+
+```
+.agentstartstack-bump
+```
+
+The file is gitignored via `.git/info/exclude`, so it never shows in `git status`, is never committed, and survives `reset --hard` + `git clean -fd`. Its presence means: *a newer agentstartstack is published; pull it into this clone.*
+
+**Agent obligation (mandatory):** any time you are about to make a commit you initiated, first check for `.agentstartstack-bump` at the clone root. If it exists:
+
+```bash
+git submodule update --init --recursive --remote .agentstartstack
+git add .agentstartstack
+rm .agentstartstack-bump
+```
+
+Include the bump in the commit you were about to make (or commit it on its own first). The bump then reaches the canonical local repo through your normal `nut` -- a fast-forward, no divergence. Other clones of the same consumer find the canonical already current on their next session align and simply clear their own flag (the submodule update is a no-op). The init scripts also print a reminder at session align if the flag is present.
+
+Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by `nutupyall` and removed by you when you apply the bump.
+
 ## Watching live CLI runs (agents)
 
 When the human runs the project CLI from the canonical local repo, **watch logs proactively** -- do not wait for them to paste output.

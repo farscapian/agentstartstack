@@ -36,10 +36,10 @@ nutupyall --help
 
 **`nutupyall`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
 
-- **If a session clone for that consumer is busy** -- uncommitted changes, or commits ahead of `local-sync/main` -- the bump is **deferred** and a `waiting on <session>` line is logged. Auto-committing while an agent is mid-work would diverge the clone and turn its next `nut` into a non-fast-forward. Re-run `nutupyall` after that session hands off (`nut`).
-- **Otherwise** -- `git submodule update --init --recursive --remote .agentstartstack`; if `.agentstartstack` actually moved, **auto-commit** the bump (`Bump .agentstartstack to <sha>`) and `git push origin main`. Unchanged consumers are reported as "already current".
+- **No in-flight session clone** -- `git submodule update --init --recursive --remote .agentstartstack`; if `.agentstartstack` actually moved, **auto-commit** the bump (`Bump .agentstartstack to <sha>`) and `git push origin main`. Unchanged consumers are reported as "already current". Clean clones pick the bump up on their next session align.
+- **In-flight session clone(s)** -- uncommitted changes, or commits ahead of `local-sync/main`. Auto-committing the canonical bump would turn an in-flight clone's next `nut` into a non-fast-forward, so canonical is left untouched. Instead `nutupyall` drops a gitignored **`.agentstartstack-bump` watch file** in every clone of that consumer (see [The .agentstartstack-bump watch file](workflow.md#the-agentstartstack-bump-watch-file)). The bump then **rides along**: the agent applies the submodule update on its next commit, and the bump reaches canonical via that agent's normal `nut` (a fast-forward). Other clones find canonical already current on their next align and just clear the flag.
 
-The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / deferred / failed`. Because the bump is committed, consumer session clones pick it up on their next session align -- no agent action required.
+The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / flagged (in-flight) / failed`.
 
 **Conventions**
 
@@ -321,14 +321,27 @@ _nutupyall_consumer_roots() {
 # flight). nutupyall defers a consumer's auto-bump while any of its clones is
 # busy, so committing + pushing the bump cannot diverge the clone (its next nut
 # would otherwise be a non-fast-forward and clobber the agent mid-work).
-_nutupyall_busy_sessions() {
-  local name="$1" clone status_out ahead reason
-
+# List all session clones for a consumer (one absolute path per line).
+_nutupyall_session_clones() {
+  local name="$1" clone
   for clone in \
       "${HOME}/.claude/worktrees/mini-projects-${name}/"*/ \
       "${HOME}/.grok/worktrees/mini-projects-${name}/"*/; do
     [[ -d "${clone}.git" ]] || continue
-    clone=$(readlink -f "${clone%/}")
+    readlink -f "${clone%/}"
+  done
+}
+
+# Echo in-flight session clones for a consumer, one per line: "<clone><TAB><reason>".
+# In-flight = uncommitted changes, or commits ahead of local-sync/main. An
+# in-flight clone would turn into a non-fast-forward on its next nut if canonical
+# advanced, so nutupyall does not auto-commit a consumer's bump while any of its
+# clones is in-flight -- it drops a watch file instead (see _nutupyall_flag_clone).
+_nutupyall_busy_sessions() {
+  local name="$1" clone status_out ahead reason
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
 
     status_out=$(git -C "$clone" status --porcelain 2>/dev/null)
 
@@ -346,7 +359,33 @@ _nutupyall_busy_sessions() {
     fi
 
     [[ -n "$reason" ]] && printf '%s\t%s\n' "$clone" "$reason"
-  done
+  done < <(_nutupyall_session_clones "$name")
+}
+
+# Drop a gitignored watch file in a session clone telling its agent to pull the
+# pending .agentstartstack bump into the clone before its next commit. The file
+# lives at the clone root and is excluded via .git/info/exclude, so it never
+# shows in git status, is never committed, and survives reset --hard + clean -fd.
+_nutupyall_flag_clone() {
+  local clone="$1" sha="$2"
+  local exclude="${clone}/.git/info/exclude"
+  local flag="${clone}/.agentstartstack-bump"
+
+  mkdir -p "${clone}/.git/info"
+  grep -qxF '/.agentstartstack-bump' "$exclude" 2>/dev/null \
+    || printf '/.agentstartstack-bump\n' >> "$exclude"
+
+  cat > "$flag" <<EOF
+agentstartstack bump pending -> ${sha}
+
+Before your next commit, bring this bump into this session clone:
+  git submodule update --init --recursive --remote .agentstartstack
+  git add .agentstartstack
+Include it in your commit (or commit it on its own), then remove this file:
+  rm .agentstartstack-bump
+
+Written by nutupyall at $(date -Is).
+EOF
 }
 
 nutupyall()
@@ -357,11 +396,13 @@ nutupyall -- local-sync and push agentstartstack, refresh .agentstartstack in co
 
 Run only from the agentstartstack canonical local repo (not a session clone).
 
-For each consumer repo, the .agentstartstack bump is auto-committed and pushed
-to origin -- UNLESS an agent session clone for that consumer is busy (uncommitted
-changes or commits ahead of canonical), in which case the bump is deferred and a
-"waiting on <session>" line is logged. Re-run nutupyall after the session hands
-off (nut).
+For each consumer repo:
+  - No in-flight session clone -> auto-commit the .agentstartstack bump in the
+    consumer canonical and push origin main. Clean clones pick it up on align.
+  - In-flight session clone(s) (uncommitted changes or ahead of canonical) ->
+    do NOT touch canonical (would non-fast-forward an agent's nut). Instead drop
+    a gitignored .agentstartstack-bump watch file in every clone; the bump rides
+    along on the agent's next commit and reaches canonical via nut.
 
   nutupyall
   nutupyall --help
@@ -378,20 +419,26 @@ EOF
 
   nutup || return 1
 
-  local host name busy bclone breason sub_sha
-  local bumped=0 deferred=0 current=0 failed=0
+  local host name busy iclone ireason sub_sha clone n_flag
+  local bumped=0 flagged=0 current=0 failed=0
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
     name=$(basename "$host")
 
     busy=$(_nutupyall_busy_sessions "$name")
     if [[ -n "$busy" ]]; then
-      echo "nutupyall: ${name} -- WAITING on active agent session(s); deferring bump:" >&2
-      while IFS=$'\t' read -r bclone breason; do
-        [[ -n "$bclone" ]] && echo "nutupyall:   busy: ${bclone} (${breason})" >&2
+      sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
+      n_flag=0
+      while IFS= read -r clone; do
+        [[ -n "$clone" ]] || continue
+        _nutupyall_flag_clone "$clone" "$sub_sha"
+        n_flag=$((n_flag + 1))
+      done < <(_nutupyall_session_clones "$name")
+      echo "nutupyall: ${name} -- in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}, rides along on next agent commit/nut" >&2
+      while IFS=$'\t' read -r iclone ireason; do
+        [[ -n "$iclone" ]] && echo "nutupyall:   in-flight: ${iclone} (${ireason})" >&2
       done <<< "$busy"
-      echo "nutupyall:   re-run nutupyall after the session hands off (nut)" >&2
-      deferred=$((deferred + 1))
+      flagged=$((flagged + 1))
       continue
     fi
 
@@ -423,7 +470,7 @@ EOF
     bumped=$((bumped + 1))
   done < <(_nutupyall_consumer_roots | sort -u)
 
-  echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${deferred} deferred (busy), ${failed} failed"
+  echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${failed} failed"
   [[ "$failed" -eq 0 ]]
 }
 ```

@@ -93,6 +93,12 @@ if git remote get-url origin &>/dev/null; then
   git remote set-url --push origin DISABLED
 fi
 
+# Surface a pending agentstartstack bump dropped by nutupyall (see workflow.md).
+if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
+  warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
+  warn "  Before your next commit: git submodule update --init --recursive --remote .agentstartstack && git add .agentstartstack && rm .agentstartstack-bump"
+fi
+
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"
 WORKFLOW_MD="${REPO_ROOT}/${GENERIC_GUIDANCE_DIR}/workflow.md"
