@@ -81,7 +81,14 @@ git fetch local-sync main
 git reset --hard local-sync/main
 git clean -fd
 git submodule update --init --recursive
+
+# Harden origin to fetch-only -- agents hand off via local-sync and never push to
+# origin. Disabling the push URL makes that structural; the fetch URL stays intact
+# so nut still matches this clone to the canonical local repo by origin URL.
+git remote set-url --push origin DISABLED
 ```
+
+Session clones have a fetch-only `origin`: `git remote get-url origin` still returns the canonical origin URL (so `nut` can match the clone), but `git push origin ...` fails with `DISABLED`. Handoff is always local-sync (`nut`) from the clone; the push to `origin` happens only from the canonical local repo (`nutup`). The init scripts apply this automatically.
 
 ### 2. local-sync (when human asks)
 

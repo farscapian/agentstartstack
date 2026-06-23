@@ -84,6 +84,14 @@ if [[ -f .gitmodules ]]; then
   git submodule update --init --recursive
 fi
 
+# Harden origin to fetch-only: agents hand off via the local-sync remote and must
+# never push to origin. Disabling the push URL makes that structural, not just
+# policy. The fetch URL stays intact so nut can still match this clone to the
+# canonical local repo by origin URL.
+if git remote get-url origin &>/dev/null; then
+  git remote set-url --push origin DISABLED
+fi
+
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"
 WORKFLOW_MD="${REPO_ROOT}/${GENERIC_GUIDANCE_DIR}/workflow.md"
