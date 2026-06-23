@@ -159,15 +159,36 @@ When the human runs `nutupyall` (see [nut.md](nut.md)) and a consumer has an in-
 
 The file is gitignored via `.git/info/exclude`, so it never shows in `git status`, is never committed, and survives `reset --hard` + `git clean -fd`. Its presence means: *a newer agentstartstack is published; pull it into this clone.*
 
-**Agent obligation (mandatory):** any time you are about to make a commit you initiated, first check for `.agentstartstack-bump` at the clone root. If it exists:
+**Agent obligation (mandatory):** any time you are about to make a commit you initiated, first check for `.agentstartstack-bump` at the clone root. If it exists, **do not just bump the pointer** -- read what changed in the producer and reconcile this consumer's own copy with it:
 
 ```bash
+# 1. Record the SHA you are moving FROM, then advance the submodule.
+OLD=$(git -C .agentstartstack rev-parse HEAD)
 git submodule update --init --recursive --remote .agentstartstack
-git add .agentstartstack
+NEW=$(git -C .agentstartstack rev-parse HEAD)
+
+# 2. READ the producer commits you are adopting -- messages and diffs.
+git -C .agentstartstack log --oneline "$OLD..$NEW"
+git -C .agentstartstack diff "$OLD..$NEW"
+```
+
+**3. Reconcile this consumer with those changes.** The submodule update only moves the producer content under `.agentstartstack/`. Anything in *this* repo that mirrors, wraps, or depends on the template can drift and must be brought into line with what you just read -- for example:
+
+- thin wrapper scripts (`scripts/init_*.sh`, `scripts/install-githooks.sh`) if the template changed their contract;
+- the host `.githooks/pre-commit` and hook wiring if hook behavior changed;
+- the root `CLAUDE.md` / project guidance if topics, conventions, or file paths moved or were renamed;
+- any host config or copied snippets the template now expects to differ.
+
+If a producer commit only changes internal template files with no host-facing contract change, no host edits are needed -- but you still must read the commits to confirm that.
+
+```bash
+# 4. Commit the bump together with any host reconciliation, then drop the flag.
+git add .agentstartstack            # plus any host files you reconciled
+git commit                          # or include in the commit you were making
 rm .agentstartstack-bump
 ```
 
-Include the bump in the commit you were about to make (or commit it on its own first). The bump then reaches the canonical local repo through your normal `nut` -- a fast-forward, no divergence. Other clones of the same consumer find the canonical already current on their next session align and simply clear their own flag (the submodule update is a no-op). The init scripts also print a reminder at session align if the flag is present.
+The bump (and your reconciliation) then reaches the canonical local repo through your normal `nut` -- a fast-forward, no divergence. Other clones of the same consumer find the canonical already current on their next session align and simply clear their own flag (the submodule update is a no-op). The init scripts also print a reminder at session align if the flag is present.
 
 **Enforcement (pre-commit guard).** The init scripts install a pre-commit hook in the session clone (under `.git/agentstartstack-hooks/`, with `core.hooksPath` pointed at it) that **refuses any commit while `.agentstartstack-bump` is present**, printing the apply-then-remove commands. After applying the bump and removing the flag, commits proceed. The guard then chains to the repo's tracked `.githooks/pre-commit`, so shellcheck and any other checks still run. The guard lives under `.git/` so it survives `reset --hard` + `git clean -fd`.
 
@@ -177,22 +198,15 @@ Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by
 
 #### Acting on the bump delta (mandatory)
 
-Pulling the submodule is only half the job. The bump may carry changes that require follow-up work in the consumer repo -- regenerating a file, re-running a tool, updating a tracked copy.
+Step 2 of the obligation above has you read every producer commit in `$OLD..$NEW`. Beyond inferring host reconciliation, watch for **explicit** instructions: a producer commit may carry a `CONSUMER-ACTION:` line naming a required follow-up (re-run a tool, regenerate a file) that you must perform verbatim.
 
-**The delta is usually more than one commit.** The human may run `nutup` several times upstream before this consumer ever updates its submodule, so the range you just pulled can contain many commits, each carrying its own follow-up action (or none). **After `git submodule update ... --remote .agentstartstack`, walk every commit in the delta from oldest to newest and act on each before committing:**
+**The delta is usually more than one commit** -- the human may run `nutup` several times upstream before this consumer updates -- so walk the commits oldest-first and honor *each* one's `CONSUMER-ACTION`. An action published three `nutup`s ago still sits in its own older commit and is still your obligation; it is not always in the newest commit.
 
 ```bash
-# Range = old submodule SHA .. new submodule SHA (git prints both on update).
-git -C .agentstartstack log --oneline --reverse <old-sha>..<new-sha>
-git -C .agentstartstack log --reverse --format='%H%n%B%n----' <old-sha>..<new-sha>  # full bodies, oldest first
+git -C .agentstartstack log --reverse --format='%H%n%B%n----' "$OLD..$NEW"  # full messages, oldest first
 ```
 
-For **each** commit in the range, oldest first, two obligations in order:
-
-1. **Explicit instructions win.** If the commit message carries a required action (a `CONSUMER-ACTION:` line, "run X after pulling", "regenerate Y"), perform exactly that. These are authored upstream, one per originating commit, precisely so you do not have to guess. Do not assume the action lives only in the newest commit -- an action published three `nutup`s ago still sits in its own older commit and is still your obligation.
-2. **Otherwise infer from the change.** If a commit gives no explicit instruction, infer whether it implies a step in this repo. Examples: a fixed `ascii-only-sanitize.py` means re-run the sanitizer from the repo root and fold any doc fixups into your commit; a new lint rule means re-run the linter; a renamed helper means update local call sites. If nothing applies, that commit needs nothing.
-
-Process the actions in commit order. Fold the submodule bump and every resulting follow-up edit into the same consumer commit so `nut` carries them together.
+For each commit, in order: perform its `CONSUMER-ACTION` exactly if present; otherwise the reconciliation in step 3 applies (or the commit needs nothing). Fold every follow-up into the same consumer commit as the bump.
 
 #### Producer side: write the instructions into the commit (mandatory)
 

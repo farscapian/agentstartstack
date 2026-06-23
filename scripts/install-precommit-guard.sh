@@ -24,9 +24,9 @@ cat > "${GUARD_DIR}/pre-commit" <<'HOOK'
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 if [[ -f "${ROOT}/.agentstartstack-bump" ]]; then
-  echo "pre-commit: .agentstartstack-bump is pending in this clone -- apply it first:" >&2
-  echo "  git submodule update --init --recursive --remote .agentstartstack" >&2
-  echo "  git add .agentstartstack && rm .agentstartstack-bump" >&2
+  echo "pre-commit: .agentstartstack-bump is pending -- read the producer commits and" >&2
+  echo "reconcile this consumer, then commit and remove the flag. See workflow.md:" >&2
+  echo "the '.agentstartstack-bump watch file' section." >&2
   exit 1
 fi
 # Chain to the repo's tracked hook (shellcheck etc.) if present.

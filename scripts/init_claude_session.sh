@@ -108,7 +108,8 @@ fi
 # Surface a pending agentstartstack bump dropped by nutupyall (see workflow.md).
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
-  warn "  Before your next commit: git submodule update --init --recursive --remote .agentstartstack && git add .agentstartstack && rm .agentstartstack-bump"
+  warn "  Read the producer commits and reconcile this consumer before committing"
+  warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
 fi
 
 # Install the pre-commit guard (blocks commits while .agentstartstack-bump is
