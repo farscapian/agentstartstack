@@ -112,27 +112,10 @@ if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "  Before your next commit: git submodule update --init --recursive --remote .agentstartstack && git add .agentstartstack && rm .agentstartstack-bump"
 fi
 
-# Install a pre-commit guard that blocks commits while a .agentstartstack-bump
-# watch file is pending, then chains to the repo's shellcheck hook. Lives under
-# .git/ so it survives reset --hard + clean -fd and never dirties the tree.
-GUARD_DIR="${REPO_ROOT}/.git/agentstartstack-hooks"
-mkdir -p "$GUARD_DIR"
-cat > "${GUARD_DIR}/pre-commit" <<'HOOK'
-#!/usr/bin/env bash
-set -euo pipefail
-ROOT="$(git rev-parse --show-toplevel)"
-if [[ -f "${ROOT}/.agentstartstack-bump" ]]; then
-  echo "pre-commit: .agentstartstack-bump is pending in this clone -- apply it first:" >&2
-  echo "  git submodule update --init --recursive --remote .agentstartstack" >&2
-  echo "  git add .agentstartstack && rm .agentstartstack-bump" >&2
-  exit 1
-fi
-if [[ -x "${ROOT}/.githooks/pre-commit" ]]; then
-  exec "${ROOT}/.githooks/pre-commit"
-fi
-HOOK
-chmod +x "${GUARD_DIR}/pre-commit"
-git config core.hooksPath .git/agentstartstack-hooks
+# Install the pre-commit guard (blocks commits while .agentstartstack-bump is
+# pending; chains to shellcheck). Shared with install-githooks.sh so the two
+# converge -- running either installs the same guard.
+"${SCRIPT_DIR}/install-precommit-guard.sh" "$REPO_ROOT"
 info "Pre-commit guard active (blocks commits while .agentstartstack-bump pending; chains to shellcheck)."
 
 COMMIT="$(git log -1 --oneline)"
