@@ -113,3 +113,98 @@ agentstartstack_pending_reconcile() {
   fi
   return 1
 }
+
+# True if commit $2 in repo $1 carries a CONSUMER-ACTION: line in its message.
+agentstartstack_commit_has_consumer_action() {
+  local repo="$1" sha="$2"
+  git -C "$repo" log -1 --format='%B' "$sha" 2>/dev/null \
+    | grep -q '^[[:space:]]*CONSUMER-ACTION:'
+}
+
+# Echo the newest (latest) producer commit in $2 that carries CONSUMER-ACTION:.
+# $1 = path to .agentstartstack checkout; $2 = git revision range (e.g. OLD..NEW).
+agentstartstack_latest_action_commit_in_range() {
+  local sub="$1" range="$2" sha last=""
+
+  [[ -n "$range" ]] || return 1
+  while IFS= read -r sha; do
+    [[ -n "$sha" ]] || continue
+    if agentstartstack_commit_has_consumer_action "$sub" "$sha"; then
+      last="$sha"
+    fi
+  done < <(git -C "$sub" log --reverse --format='%H' "$range" 2>/dev/null)
+
+  [[ -n "$last" ]] && printf '%s\n' "$last"
+}
+
+# Read the consumer's CONSUMER-ACTION watermark (full SHA) from repo root.
+# Echoes nothing and returns 1 when missing or invalid.
+agentstartstack_read_action_seen() {
+  local root="${1:-${AGENTSTARTSTACK_HOST_ROOT:-}}"
+  local seen_file="${root}/.agentstartstack-action-seen" seen
+
+  [[ -f "$seen_file" ]] || return 1
+  seen=$(tr -d '[:space:]' < "$seen_file")
+  [[ "$seen" =~ ^[0-9a-f]{40}$ ]] || return 1
+  printf '%s\n' "$seen"
+}
+
+# After reconciling OLD..NEW, record the latest action-bearing producer commit.
+# No-op when the delta has no CONSUMER-ACTION commits. Returns 0 either way.
+agentstartstack_record_action_seen_from_delta() {
+  local root="$1" old="$2" new="$3"
+  local sub="${root}/.agentstartstack" latest
+
+  [[ -e "${sub}/.git" ]] || return 1
+  latest=$(agentstartstack_latest_action_commit_in_range "$sub" "${old}..${new}") || true
+  [[ -n "$latest" ]] || return 0
+
+  printf '%s\n' "$latest" > "${root}/.agentstartstack-action-seen"
+  return 0
+}
+
+# Backstop: submodule pointer is current but CONSUMER-ACTION(s) after the recorded
+# watermark were never performed (e.g. a pre-action-aware blind bump). Echoes
+# "OLD..NEW" for the pending action delta and returns 0; returns 1 otherwise.
+agentstartstack_pending_consumer_actions() {
+  local root="${1:-${AGENTSTARTSTACK_HOST_ROOT:-}}"
+  local sub="${root}/.agentstartstack" head seen seen_file range start
+
+  [[ -e "${sub}/.git" ]] || return 1
+  head=$(git -C "$sub" rev-parse HEAD 2>/dev/null) || return 1
+
+  seen=""
+  if seen_file=$(agentstartstack_read_action_seen "$root" 2>/dev/null); then
+    seen="$seen_file"
+  fi
+
+  if [[ -n "$seen" ]]; then
+    if ! git -C "$sub" cat-file -e "${seen}^{commit}" 2>/dev/null; then
+      seen=""
+    elif [[ "$seen" == "$head" ]]; then
+      return 1
+    elif ! git -C "$sub" merge-base --is-ancestor "$seen" "$head" 2>/dev/null; then
+      seen=""
+    else
+      range="${seen}..${head}"
+    fi
+  fi
+
+  if [[ -z "$seen" ]]; then
+    start=$(git -C "$sub" rev-list --max-parents=0 HEAD 2>/dev/null | head -1) || return 1
+    [[ -n "$start" ]] || return 1
+    if [[ "$start" == "$head" ]]; then
+      range="$head"
+    else
+      range="${start}..${head}"
+    fi
+  fi
+
+  if ! git -C "$sub" log --format='%B' "$range" 2>/dev/null \
+        | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
+    return 1
+  fi
+
+  printf '%s\n' "$range"
+  return 0
+}

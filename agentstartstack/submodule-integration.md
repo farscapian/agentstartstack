@@ -10,6 +10,7 @@ How to wire `agentstartstack` into a host project (e.g. `wrtstack`, `iotstack`, 
 |   `--- agentstartstack/          # generic guidance (this directory)
 |--- docs/                         # project-specific agent docs
 |--- .agentstartstack.env          # project identity for init scripts
+|--- .agentstartstack-action-seen  # CONSUMER-ACTION watermark (tracked; see workflow.md)
 |--- CLAUDE.md                     # combined index (generic + project)
 |--- scripts/
 |   |--- init_grok_session.sh      # thin wrapper -> .agentstartstack

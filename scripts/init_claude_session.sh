@@ -120,6 +120,12 @@ elif RECONCILE_RANGE=$(agentstartstack_pending_reconcile "$REPO_ROOT"); then
   warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then bump:"
   warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
   warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
+elif ACTION_RANGE=$(agentstartstack_pending_consumer_actions "$REPO_ROOT"); then
+  warn "Unapplied CONSUMER-ACTION(s) -- submodule pointer is current but watermark lags: ${ACTION_RANGE}"
+  warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then update:"
+  warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${ACTION_RANGE}"
+  warn "    .agentstartstack/scripts/record-consumer-action-seen.sh <OLD> <NEW>"
+  warn "  (see agentstartstack/workflow.md: 'CONSUMER-ACTION watermark')."
 fi
 
 # Install the pre-commit guard (blocks commits while .agentstartstack-bump is

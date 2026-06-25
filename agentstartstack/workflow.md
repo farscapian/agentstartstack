@@ -13,6 +13,7 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Claude Code session clones | `~/.claude/worktrees/<project>/<session-id>/` |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
 | Project agent guidance | `<repo>/docs/` |
+| CONSUMER-ACTION watermark | `<repo>/.agentstartstack-action-seen` (tracked; consumer only) |
 
 Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. The `<project>` path component above is only a convention -- `nut` matches a clone to its canonical repo by **git origin URL**, searching the dirs in `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`), so the worktree directory name is not significant.
 
@@ -194,8 +195,10 @@ git -C .agentstartstack diff "$OLD..$NEW"
 If a producer commit only changes internal template files with no host-facing contract change, no host edits are needed -- but you still must read the commits to confirm that.
 
 ```bash
-# 4. Commit the bump together with any host reconciliation, then drop the flag.
-git add .agentstartstack            # plus any host files you reconciled
+# 4. Record the CONSUMER-ACTION watermark when the delta had actions (see below).
+# 5. Commit the bump together with any host reconciliation, then drop the flag.
+.agentstartstack/scripts/record-consumer-action-seen.sh "$OLD" "$NEW"
+git add .agentstartstack .agentstartstack-action-seen   # plus any host files you reconciled
 git commit                          # or include in the commit you were making
 rm .agentstartstack-bump
 ```
@@ -219,6 +222,30 @@ git -C .agentstartstack log --reverse --format='%H%n%B%n----' "$OLD..$NEW"  # fu
 ```
 
 For each commit, in order: perform its `CONSUMER-ACTION` exactly if present; otherwise the reconciliation in step 3 applies (or the commit needs nothing). Fold every follow-up into the same consumer commit as the bump.
+
+#### CONSUMER-ACTION watermark (mandatory)
+
+A consumer repo **SHALL** record the latest `agentstartstack` submodule commit it has **seen and acted on** whose message carries a `CONSUMER-ACTION:` line. Persist it as a **tracked** one-line file at the consumer repo root:
+
+```
+.agentstartstack-action-seen
+```
+
+The file holds a single full 40-character git SHA (no prefix). It is the watermark for which explicit producer actions are already done -- not the submodule pointer itself. A consumer can be current on `.agentstartstack` at `HEAD` and still owe actions if the watermark lags; conversely, an action-free bump does not advance the watermark.
+
+**When to update (mandatory):** immediately after you perform every `CONSUMER-ACTION` in the delta you just reconciled (`$OLD..$NEW`), set the watermark to the **newest** producer commit in that delta that carries `CONSUMER-ACTION:` (not merely `$NEW` when the tip commit is action-free). Commit `.agentstartstack-action-seen` in the **same consumer commit** as the submodule bump and any host reconciliation.
+
+```bash
+# After steps 1-3 above and every CONSUMER-ACTION in the delta is done:
+.agentstartstack/scripts/record-consumer-action-seen.sh "$OLD" "$NEW"
+git add .agentstartstack-action-seen   # plus .agentstartstack and any host files
+```
+
+If `$OLD..$NEW` is action-free, leave the watermark unchanged (the script is a no-op). Do not hand-edit the SHA except during the one-time stale-consumer catch-up below.
+
+**Init backstop.** `init_*_session.sh` calls `agentstartstack_pending_consumer_actions`: when the submodule pointer is already current but any `CONSUMER-ACTION` in `(watermark..HEAD]` remains unperformed, session align prints the pending range and points here. This catches consumers that advanced the pointer without reconciling (for example a pre-action-aware blind auto-bump).
+
+**No watermark yet.** Pre-protocol consumers may lack the file. After you finish the [one-time stale catch-up](#remediating-a-stale-consumer-one-time), create `.agentstartstack-action-seen` at the latest historical `CONSUMER-ACTION` commit you applied (same commit command as above, using that catch-up delta's `$OLD`/`$NEW`).
 
 #### Producer side: write the instructions into the commit (mandatory)
 
@@ -253,9 +280,16 @@ A consumer bumped **before** the action-aware fix may have had `CONSUMER-ACTION`
    git -C .agentstartstack log --reverse --format='%H %s%n%b' | grep -B1 '^[[:space:]]*CONSUMER-ACTION:'
    ```
 2. In practice: re-run `.agentstartstack/scripts/ascii-only-sanitize.py` over the repo; re-run `.agentstartstack/scripts/install-shell-aliases.sh` then `source ~/.bashrc`; in `.agentstartstack.env` rename `SYNC_REPO`->`CANONICAL_LOCAL_REPO` and `CLAUDE_PARENT`/`GROK_PARENT`->`AGENT_SESSION_CLONE_PARENT` if set; migrate a project `agentstartstack/` docs dir to `docs/`.
-3. Commit the reconciliation.
+3. Record the watermark for every historical action you just performed, then commit the reconciliation:
+   ```bash
+   OLD=$(git -C .agentstartstack rev-list --max-parents=0 HEAD)
+   NEW=$(git -C .agentstartstack rev-parse HEAD)
+   .agentstartstack/scripts/record-consumer-action-seen.sh "$OLD" "$NEW"
+   git add .agentstartstack-action-seen   # plus any host files you reconciled
+   git commit -m "Reconcile agentstartstack CONSUMER-ACTION backlog"
+   ```
 
-New bumps are protected by the action-aware path plus the init backstop; this catch-up is only for the pre-fix gap.
+New bumps are protected by the action-aware path, the watermark, and the init backstops; this catch-up is only for the pre-fix gap.
 
 ## Watching live CLI runs (agents)
 
