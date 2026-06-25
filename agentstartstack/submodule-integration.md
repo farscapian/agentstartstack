@@ -8,7 +8,7 @@ How to wire `agentstartstack` into a host project (e.g. `wrtstack`, `iotstack`, 
 <host-project>/
 |--- .agentstartstack/             # git submodule (this repo)
 |   `--- agentstartstack/          # generic guidance (this directory)
-|--- agentstartstack/              # project-specific agent docs
+|--- docs/                         # project-specific agent docs
 |--- .agentstartstack.env          # project identity for init scripts
 |--- CLAUDE.md                     # combined index (generic + project)
 |--- scripts/
@@ -18,6 +18,8 @@ How to wire `agentstartstack` into a host project (e.g. `wrtstack`, `iotstack`, 
 |   `--- shellcheck-staged.sh
 `--- .githooks/pre-commit
 ```
+
+**Rule -- project docs live in `docs/`, not `agentstartstack/`.** A host project's own project-specific agent documentation SHALL live in `docs/` at the repo root (i.e. `CANONICAL_LOCAL_REPO/docs`). Do **not** name it `agentstartstack/`: that name belongs to the template and the `.agentstartstack` submodule, and reusing it for project docs confuses contributors about what is generic vs project-specific. During initialization the init scripts resolve project guidance to `docs/` (falling back to a legacy `agentstartstack/` only until a consumer migrates).
 
 ## Add to an existing project
 
@@ -33,9 +35,9 @@ git submodule add git@github.com:farscapian/agentstartstack.git .agentstartstack
 # Customize
 $EDITOR .agentstartstack.env
 $EDITOR CLAUDE.md
-$EDITOR agentstartstack/README.md
+$EDITOR docs/README.md
 
-git add .agentstartstack .agentstartstack.env CLAUDE.md agentstartstack scripts .githooks
+git add .agentstartstack .agentstartstack.env CLAUDE.md docs scripts .githooks
 git commit -m "Add agentstartstack submodule and AI guidance"
 ```
 
@@ -56,7 +58,7 @@ Required variables (created from template by `add-to-project.sh`):
 Host `CLAUDE.md` should:
 1. State project purpose in a short intro
 2. Link generic workflow: `.agentstartstack/agentstartstack/workflow.md`, `nut.md`
-3. Index project-specific files under `agentstartstack/`
+3. Index project-specific files under `docs/`
 4. Repeat quick rules: session clones, never push origin, lowercase branding
 
 See `templates/CLAUDE.md.project-stub` in this repo.
@@ -86,12 +88,12 @@ Re-run `./scripts/install-githooks.sh` in session clones after hook script chang
 
 ## Migrating existing projects (iotstack, printstack)
 
-These repos have inline `agentstartstack/` with mixed generic + project content. Migration path:
+These repos have an inline `agentstartstack/` dir mixing generic + project content -- and that name now collides with the convention. Migration path:
 
 1. Add `.agentstartstack` submodule
-2. Run `add-to-project.sh` (creates wrappers; keeps existing `agentstartstack/` for project docs)
-3. Trim duplicated generic sections from project `agentstartstack/workflow.md` and `nut.md`; link to `.agentstartstack/agentstartstack/` instead
-4. Update `CLAUDE.md` to index both trees
+2. Run `add-to-project.sh` (creates wrappers and a `docs/` stub)
+3. Move project-specific content from the old `agentstartstack/` into `docs/`, dropping duplicated generic sections (link to `.agentstartstack/agentstartstack/` instead); then remove the old `agentstartstack/` dir
+4. Update `CLAUDE.md` to index both trees (`.agentstartstack/agentstartstack/` generic, `docs/` project)
 
 Optional: keep project `scripts/init_*.sh` as one-line wrappers for backward compatibility.
 

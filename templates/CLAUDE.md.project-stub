@@ -28,9 +28,9 @@
 
 | File | Load when |
 |------|-----------|
-| [agentstartstack/README.md](agentstartstack/README.md) | Project guidance index |
+| [docs/README.md](docs/README.md) | Project guidance index |
 
-Add project-specific topic files under `agentstartstack/` and extend this table.
+Add project-specific topic files under `docs/` and extend this table.
 
 ## Project purpose
 

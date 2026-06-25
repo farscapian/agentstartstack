@@ -64,18 +64,27 @@ agentstartstack_resolve_guidance_paths() {
 
   [[ -n "$root" ]] || return 1
 
+  # Generic guidance: the submodule's docs (consumer) or this template's own.
   if [[ -d "${root}/.agentstartstack/agentstartstack" ]]; then
     GENERIC_GUIDANCE_DIR=".agentstartstack/agentstartstack"
-    PROJECT_GUIDANCE_DIR="agentstartstack"
   elif [[ -d "${root}/agentstartstack/agentstartstack" ]]; then
     GENERIC_GUIDANCE_DIR="agentstartstack/agentstartstack"
-    PROJECT_GUIDANCE_DIR="agentstartstack"
   elif [[ -d "${root}/agentstartstack" ]]; then
     GENERIC_GUIDANCE_DIR="agentstartstack"
-    PROJECT_GUIDANCE_DIR="agentstartstack"
   else
     echo "[ERR]  No agentstartstack guidance directory found under: $root" >&2
     return 1
+  fi
+
+  # Project-specific guidance SHALL live in docs/ (CANONICAL_LOCAL_REPO/docs).
+  # The legacy name was agentstartstack/, which collides with the template and
+  # confuses contributors; fall back to it only for not-yet-migrated consumers.
+  if [[ -d "${root}/docs" ]]; then
+    PROJECT_GUIDANCE_DIR="docs"
+  elif [[ "$GENERIC_GUIDANCE_DIR" != "agentstartstack" && -d "${root}/agentstartstack" ]]; then
+    PROJECT_GUIDANCE_DIR="agentstartstack"
+  else
+    PROJECT_GUIDANCE_DIR="docs"
   fi
 
   return 0

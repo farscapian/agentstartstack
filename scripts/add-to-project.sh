@@ -74,15 +74,17 @@ mkdir -p "${HOST_ROOT}/.githooks"
 write_wrapper "${HOST_ROOT}/.githooks/pre-commit" "scripts/shellcheck-staged.sh"
 ok "Created .githooks/pre-commit"
 
-# -- Project agentstartstack stub ---------------------------------------------
+# -- Project docs stub --------------------------------------------------------
+# Project-specific agent docs live in docs/, NOT a dir named agentstartstack/
+# (that name collides with the template/submodule and confuses contributors).
 
-GUIDANCE_DIR="${HOST_ROOT}/agentstartstack"
+GUIDANCE_DIR="${HOST_ROOT}/docs"
 if [[ -d "$GUIDANCE_DIR" && -f "${GUIDANCE_DIR}/README.md" ]]; then
-  warn "agentstartstack/ already exists -- skipping stub"
+  warn "docs/ already exists -- skipping stub"
 else
   mkdir -p "$GUIDANCE_DIR"
-  cp "${AGENTSTARTSTACK_ROOT}/templates/agentstartstack-README.md" "${GUIDANCE_DIR}/README.md"
-  ok "Created agentstartstack/README.md stub"
+  cp "${AGENTSTARTSTACK_ROOT}/templates/docs-README.md" "${GUIDANCE_DIR}/README.md"
+  ok "Created docs/README.md stub"
 fi
 
 # -- CLAUDE.md stub -----------------------------------------------------------
@@ -112,5 +114,5 @@ fi
 
 echo ""
 ok "agentstartstack wired into ${HOST_ROOT}"
-info "Next: edit .agentstartstack.env, CLAUDE.md, and agentstartstack/"
-info "Then: git add .agentstartstack .agentstartstack.env scripts .githooks agentstartstack CLAUDE.md"
+info "Next: edit .agentstartstack.env, CLAUDE.md, and docs/"
+info "Then: git add .agentstartstack .agentstartstack.env scripts .githooks docs CLAUDE.md"

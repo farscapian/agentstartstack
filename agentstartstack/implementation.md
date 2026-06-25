@@ -1,6 +1,6 @@
 # Implementation Details
 
-Common shell patterns used across projects. Project-specific logging paths and CLI behavior belong in host `agentstartstack/`.
+Common shell patterns used across projects. Project-specific logging paths and CLI behavior belong in host `docs/`.
 
 ### Env file loading pattern
 

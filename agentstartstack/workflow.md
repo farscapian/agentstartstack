@@ -12,7 +12,7 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Grok/Cursor session clones | `~/.grok/worktrees/<project>/<session-id>/` |
 | Claude Code session clones | `~/.claude/worktrees/<project>/<session-id>/` |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
-| Project agent guidance | `<repo>/agentstartstack/` |
+| Project agent guidance | `<repo>/docs/` |
 
 Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. The `<project>` path component above is only a convention -- `nut` matches a clone to its canonical repo by **git origin URL**, searching the dirs in `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`), so the worktree directory name is not significant.
 
@@ -157,7 +157,7 @@ If anything matches: commit in the session clone, tell the human local-sync is p
 
 #### Before hardware operations
 
-Never compete with the human for the same hardware (USB serial, SD card, block device) while their CLI session is active. Check `ACTIVE_GUARD_PGREP` and project `agentstartstack/` for device-specific rules.
+Never compete with the human for the same hardware (USB serial, SD card, block device) while their CLI session is active. Check `ACTIVE_GUARD_PGREP` and project `docs/` for device-specific rules.
 
 **When in doubt:** ask the human or wait for their running command to finish.
 
@@ -262,7 +262,7 @@ Generic rules:
 
 **During any agent session**
 - Agent edits and commits only in the session clone; never in the canonical local repo
-- Load generic guidance from `agentstartstack/agentstartstack/` and project guidance from `agentstartstack/`
+- Load generic guidance from `agentstartstack/agentstartstack/` and project guidance from `docs/`
 - When the human runs CLI on the canonical local repo, watch logs per project docs
 
 **After agent work**

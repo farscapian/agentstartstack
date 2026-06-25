@@ -7,7 +7,7 @@ Generic agent guidance shared across projects via the `.agentstartstack` git sub
 | Location | Content |
 |----------|---------|
 | `.agentstartstack/agentstartstack/` | **This directory** -- workflow, nut, conventions, security, etc. |
-| `agentstartstack/` (project root) | Project-specific topics: CLI, architecture, gotchas, devices |
+| `docs/` (project root) | Project-specific topics: CLI, architecture, gotchas, devices |
 
 Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for any git or session question.
 
@@ -34,10 +34,10 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 | CI / commit hygiene | `workflow.md`, `code-quality.md`, `testing.md` |
 | Human local-sync handoff | `nut.md`, `workflow.md` |
 
-Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `agentstartstack/` per its `CLAUDE.md` index.
+Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `docs/` per its `CLAUDE.md` index.
 
 ## Maintenance
 
 - Generic changes: edit here, commit in `.agentstartstack` submodule, bump in host projects.
-- Project changes: edit host `agentstartstack/` only.
+- Project changes: edit host `docs/` only.
 - New generic topic file: update `.agentstartstack/CLAUDE.md` index and host project `CLAUDE.md` if agents should load it by default.

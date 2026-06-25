@@ -8,7 +8,7 @@ Shared AI agent guidance and workflow tooling for projects. Add this repo as a *
 |---------------------|---------|
 | `agentstartstack/` | Generic agent docs: workflow, nut, conventions, security, terminal tips, etc. |
 | `scripts/` | Parameterized `init_grok_session.sh`, `init_claude_session.sh`, git hooks |
-| `templates/` | Stubs for wiring a new project (`.agentstartstack.env`, `CLAUDE.md`, project `agentstartstack/`) |
+| `templates/` | Stubs for wiring a new project (`.agentstartstack.env`, `CLAUDE.md`, project `docs/`) |
 
 When mounted as a submodule in a host project:
 
@@ -16,7 +16,7 @@ When mounted as a submodule in a host project:
 |-----------|---------|
 | `.agentstartstack/` | This repo (submodule) |
 | `.agentstartstack/agentstartstack/` | Generic guidance |
-| `agentstartstack/` | Project-specific guidance |
+| `docs/` | Project-specific guidance |
 
 ## Quick start (new project)
 
@@ -56,5 +56,5 @@ Always lowercase **agentstartstack** in docs and messages (never Agent Start Sta
 ## Maintenance
 
 - Generic workflow changes belong here; bump the submodule in host projects when updated.
-- Project-specific gotchas, CLI, architecture stay in each host project's `agentstartstack/`.
+- Project-specific gotchas, CLI, architecture stay in each host project's `docs/`.
 - When `nut` behavior changes, edit `scripts/lib/nut-aliases.sh` (the single source of truth) and re-run `scripts/install-shell-aliases.sh` (the init scripts also run it). Do not hand-edit `~/.bash_aliases`.
