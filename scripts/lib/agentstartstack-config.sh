@@ -29,7 +29,7 @@ agentstartstack_load_config() {
 agentstartstack_apply_defaults() {
   PROJECT_NAME="${PROJECT_NAME:-}"
   DISPLAY_NAME="${DISPLAY_NAME:-$PROJECT_NAME}"
-  SYNC_REPO="${SYNC_REPO:-}"
+  CANONICAL_LOCAL_REPO="${CANONICAL_LOCAL_REPO:-}"
   ORIGIN_URL="${ORIGIN_URL:-}"
   ACTIVE_GUARD_PGREP="${ACTIVE_GUARD_PGREP:-}"
 
@@ -40,13 +40,13 @@ agentstartstack_apply_defaults() {
 
   # Default the canonical repo to the host project root (where .agentstartstack.env
   # lives) -- no assumption about where the human keeps their checkouts. Override
-  # by setting SYNC_REPO in .agentstartstack.env.
-  if [[ -z "$SYNC_REPO" ]]; then
-    SYNC_REPO="${AGENTSTARTSTACK_HOST_ROOT:-}"
+  # by setting CANONICAL_LOCAL_REPO in .agentstartstack.env.
+  if [[ -z "$CANONICAL_LOCAL_REPO" ]]; then
+    CANONICAL_LOCAL_REPO="${AGENTSTARTSTACK_HOST_ROOT:-}"
   fi
 
-  SYNC_REPO="$(cd "$SYNC_REPO" 2>/dev/null && pwd)" || {
-    echo "[ERR]  SYNC_REPO not found: ${SYNC_REPO:-<unset>}" >&2
+  CANONICAL_LOCAL_REPO="$(cd "$CANONICAL_LOCAL_REPO" 2>/dev/null && pwd)" || {
+    echo "[ERR]  CANONICAL_LOCAL_REPO not found: ${CANONICAL_LOCAL_REPO:-<unset>}" >&2
     return 1
   }
 

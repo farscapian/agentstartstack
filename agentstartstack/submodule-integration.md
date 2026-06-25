@@ -47,7 +47,7 @@ Required variables (created from template by `add-to-project.sh`):
 |----------|---------|---------|
 | `PROJECT_NAME` | `wrtstack` | Repo directory name; also the worktree parent `mini-projects-<name>` |
 | `DISPLAY_NAME` | `wrtstack` | Lowercase branding in init script tips |
-| `SYNC_REPO` | (defaults to repo root) | Canonical local repo path; set only if the checkout lives elsewhere |
+| `CANONICAL_LOCAL_REPO` | (defaults to repo root) | Canonical local repo path; set only if the checkout lives elsewhere |
 | `ORIGIN_URL` | `git@github.com:farscapian/wrtstack.git` | For clone instructions in init output |
 | `ACTIVE_GUARD_PGREP` | `wrtstack (build\|flash)` | Optional regex for nut safety checks in agent tips |
 

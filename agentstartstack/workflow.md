@@ -4,11 +4,11 @@ Generic AI agent git workflow for mini-projects. Host projects configure identit
 
 ## Canonical paths
 
-Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<canonical>` = `SYNC_REPO` from `.agentstartstack.env`.
+Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<canonical>` = `CANONICAL_LOCAL_REPO` from `.agentstartstack.env`.
 
 | Role | Path |
 |------|------|
-| Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`SYNC_REPO`; defaults to the repo root) |
+| Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`CANONICAL_LOCAL_REPO`; defaults to the repo root) |
 | Grok/Cursor session clones | `~/.grok/worktrees/mini-projects-<project>/<session-id>/` |
 | Claude Code session clones | `~/.claude/worktrees/mini-projects-<project>/<session-id>/` |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |

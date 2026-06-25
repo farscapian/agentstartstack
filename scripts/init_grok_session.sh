@@ -56,7 +56,7 @@ agentstartstack_load_config "$REPO_ROOT" || err "Missing .agentstartstack.env (r
 agentstartstack_apply_defaults || exit 1
 agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 
-if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$SYNC_REPO")" ]]; then
+if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$CANONICAL_LOCAL_REPO")" ]]; then
   warn "Current directory is the canonical local repo, not a Grok session clone."
   warn "Init is intended for ${GROK_PARENT}/<session-id>/"
   read -r -p "Continue anyway? [y/N] " confirm </dev/tty
@@ -67,7 +67,7 @@ cd "$REPO_ROOT"
 git rev-parse --is-inside-work-tree &>/dev/null || err "Not a git work tree: $REPO_ROOT"
 
 info "Session clone: $REPO_ROOT"
-info "Canonical:     $SYNC_REPO"
+info "Canonical:     $CANONICAL_LOCAL_REPO"
 info "Project:       ${DISPLAY_NAME} (${PROJECT_NAME})"
 echo ""
 
@@ -86,9 +86,9 @@ fi
 
 info "Session align: fetching local-sync/main and resetting..."
 if git remote get-url local-sync &>/dev/null; then
-  git remote set-url local-sync "$SYNC_REPO"
+  git remote set-url local-sync "$CANONICAL_LOCAL_REPO"
 else
-  git remote add local-sync "$SYNC_REPO"
+  git remote add local-sync "$CANONICAL_LOCAL_REPO"
 fi
 
 git fetch local-sync main
@@ -198,7 +198,7 @@ EOF
 
 echo ""
 info "Grok session directories: ${GROK_PARENT}/"
-info "Canonical local repo:     ${SYNC_REPO}/"
+info "Canonical local repo:     ${CANONICAL_LOCAL_REPO}/"
 if [[ -n "$ORIGIN_URL" ]]; then
   info "Origin:                   ${ORIGIN_URL}"
 fi

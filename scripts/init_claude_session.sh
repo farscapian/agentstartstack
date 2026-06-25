@@ -55,7 +55,7 @@ agentstartstack_load_config "$REPO_ROOT" || err "Missing .agentstartstack.env (r
 agentstartstack_apply_defaults || exit 1
 agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 
-if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$SYNC_REPO")" ]]; then
+if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$CANONICAL_LOCAL_REPO")" ]]; then
   warn "Current directory is the canonical local repo, not a Claude Code session clone."
   warn "Init is intended for ${CLAUDE_PARENT}/<session-id>/"
   read -r -p "Continue anyway? [y/N] " confirm </dev/tty
@@ -66,7 +66,7 @@ cd "$REPO_ROOT"
 git rev-parse --is-inside-work-tree &>/dev/null || err "Not a git work tree: $REPO_ROOT"
 
 info "Session clone: $REPO_ROOT"
-info "Canonical:     $SYNC_REPO"
+info "Canonical:     $CANONICAL_LOCAL_REPO"
 info "Project:       ${DISPLAY_NAME} (${PROJECT_NAME})"
 echo ""
 
@@ -85,9 +85,9 @@ fi
 
 info "Session align: fetching local-sync/main and resetting..."
 if git remote get-url local-sync &>/dev/null; then
-  git remote set-url local-sync "$SYNC_REPO"
+  git remote set-url local-sync "$CANONICAL_LOCAL_REPO"
 else
-  git remote add local-sync "$SYNC_REPO"
+  git remote add local-sync "$CANONICAL_LOCAL_REPO"
 fi
 
 git fetch local-sync main
@@ -155,7 +155,7 @@ AI GIT WORKFLOW (authorized)
   2. Handoff       -- human runs nut (never git push origin from agents)
 
 IMPORTANT: Claude Code always edits files in the session clone (${CLAUDE_PARENT}/...)
-  using absolute paths. VS Code opens at ${SYNC_REPO} for the human's reference only
+  using absolute paths. VS Code opens at ${CANONICAL_LOCAL_REPO} for the human's reference only
   -- do NOT edit files under the canonical local repo.
 
 GUIDANCE LOCATIONS
@@ -168,7 +168,7 @@ FIRST MESSAGE (copy/paste template below)
   - Name 1-3 guidance files to read (not all of them).
 
 DO NOT
-  - Edit files under ${SYNC_REPO} -- work only in the session clone.
+  - Edit files under ${CANONICAL_LOCAL_REPO} -- work only in the session clone.
   - Push to origin (git push origin main) -- HUMAN ONLY.
   - nut while CLI is running: ${GUARD_TIP}
 
@@ -187,7 +187,7 @@ EOF
 
 echo ""
 info "Claude Code session directories: ${CLAUDE_PARENT}/"
-info "Canonical local repo:            ${SYNC_REPO}/"
+info "Canonical local repo:            ${CANONICAL_LOCAL_REPO}/"
 if [[ -n "$ORIGIN_URL" ]]; then
   info "Origin:                          ${ORIGIN_URL}"
 fi

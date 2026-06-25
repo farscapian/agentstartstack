@@ -26,7 +26,7 @@ fi
 PROJECT_NAME="$(basename "$HOST_ROOT")"
 DISPLAY_NAME="${DISPLAY_NAME:-$PROJECT_NAME}"
 ORIGIN_URL="$(git -C "$HOST_ROOT" remote get-url origin 2>/dev/null || true)"
-SYNC_REPO="${HOST_ROOT}"
+CANONICAL_LOCAL_REPO="${HOST_ROOT}"
 
 write_wrapper() {
   local dest="$1"
@@ -51,7 +51,7 @@ else
 # Agent session workflow identity (see .agentstartstack/agentstartstack/submodule-integration.md)
 PROJECT_NAME=${PROJECT_NAME}
 DISPLAY_NAME=${DISPLAY_NAME}
-SYNC_REPO=${SYNC_REPO}
+CANONICAL_LOCAL_REPO=${CANONICAL_LOCAL_REPO}
 ORIGIN_URL=${ORIGIN_URL}
 
 # Optional: pgrep pattern while CLI is running (blocks nut)
@@ -95,7 +95,7 @@ else
   sed \
     -e "s|@DISPLAY_NAME@|${DISPLAY_NAME}|g" \
     -e "s|@PROJECT_NAME@|${PROJECT_NAME}|g" \
-    -e "s|@SYNC_REPO@|${SYNC_REPO}|g" \
+    -e "s|@CANONICAL_LOCAL_REPO@|${CANONICAL_LOCAL_REPO}|g" \
     -e "s|@ORIGIN_URL@|${ORIGIN_URL}|g" \
     "${AGENTSTARTSTACK_ROOT}/templates/CLAUDE.md.project-stub" >"$CLAUDE_FILE"
   ok "Created CLAUDE.md"

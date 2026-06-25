@@ -8,7 +8,7 @@ Human-side helper for the AI git workflow step **local-sync** (session clone -> 
 
 Canonical backronym: **N**ewest commit **U**ntil **T**ransferred.
 
-Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`SYNC_REPO` in host `.agentstartstack.env`; defaults to the repo root). Short to type, works for every mini-project. Name-based lookup (`nut <name>`, `nutupyall`) searches `AGENTSTARTSTACK_PROJECT_ROOTS` -- colon-separated directories that hold your checkouts as `<root>/<name>` -- which the installer seeds from your layout.
+Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`CANONICAL_LOCAL_REPO` in host `.agentstartstack.env`; defaults to the repo root). Short to type, works for every mini-project. Name-based lookup (`nut <name>`, `nutupyall`) searches `AGENTSTARTSTACK_PROJECT_ROOTS` -- colon-separated directories that hold your checkouts as `<root>/<name>` -- which the installer seeds from your layout.
 
 Alt backronyms (HEAD is the tip of the current branch, so the puns write themselves):
 
@@ -45,7 +45,7 @@ The loop is per-consumer resilient: one failure (update, commit, or push) is log
 
 | Item | Path |
 |------|------|
-| Canonical local repo | `SYNC_REPO` in `.agentstartstack.env` (defaults to the repo root) |
+| Canonical local repo | `CANONICAL_LOCAL_REPO` in `.agentstartstack.env` (defaults to the repo root) |
 | Project-roots search | `AGENTSTARTSTACK_PROJECT_ROOTS` (colon-separated dirs holding `<name>/`) |
 | Session clones | `~/.claude/worktrees/mini-projects-<name>/*` |
 | | `~/.grok/worktrees/mini-projects-<name>/*` |
