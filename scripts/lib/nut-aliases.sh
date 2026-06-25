@@ -41,6 +41,7 @@ _nut_sync_root() {
   return 1
 }
 
+# Resolve canonical local repo from a session clone path.
 _nut_sync_target_from_worktree() {
   local wt="$1" parent_base
 
@@ -58,6 +59,7 @@ _nut_sync_target_from_worktree() {
   return 1
 }
 
+# Block while long-running repo tools are active on the canonical local repo.
 _nut_guard_active_sessions() {
   local sync_target="$1"
 
@@ -221,6 +223,7 @@ EOF
 # Alias: nutitup -- same as nutup (args pass through)
 alias nutitup='nutup'
 
+# Run only from agentstartstack canonical local repo; nutup template, refresh consumers.
 _nutupyall_assert_here() {
   local here sync_root
 
@@ -325,11 +328,14 @@ _nutupyall_flag_clone() {
   cat > "$flag" <<EOF
 agentstartstack bump pending -> ${sha}
 
-Before your next commit, bring this bump into this session clone:
+Do NOT just bump the pointer. Read the producer commits you are adopting and
+reconcile this consumer's own copy (wrappers, hooks, docs, config) with them,
+then commit and remove this file. Full procedure:
+  agentstartstack/workflow.md -> "The .agentstartstack-bump watch file"
+
+Quick start:
   git submodule update --init --recursive --remote .agentstartstack
-  git add .agentstartstack
-Include it in your commit (or commit it on its own), then remove this file:
-  rm .agentstartstack-bump
+  git add .agentstartstack && rm .agentstartstack-bump
 
 Written by nutupyall at $(date -Is).
 EOF
