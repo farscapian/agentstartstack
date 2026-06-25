@@ -33,6 +33,20 @@ Session clones are isolated full git clones (not linked `git worktree` entries).
 
 **Agent write access:** treat the open session clone as agent-owned for the session. Avoid parallel human edits in that directory.
 
+### Generic vs project-specific: where a change originates
+
+Before editing, decide whether a change is **project-specific** or **generic** (useful to every project that consumes this template -- shared tooling, agent guidance, conventions, git-workflow scripts, the sanitizer, hook installers, etc.).
+
+**A consumer-side agent must not hand-edit a generic item into the host project.** Doing so forks it: the fix lives in one consumer, drifts from the template, and never reaches the others. Instead, **advise the human to make the change in the `agentstartstack` template repo**, where it becomes canonical and flows to every consumer via the next submodule bump (see [The .agentstartstack-bump watch file](#the-agentstartstack-bump-watch-file)).
+
+When you spot a generic improvement while working in a consumer project:
+
+1. Name it and state plainly that it is project-non-specific and should originate upstream in `agentstartstack`, not be patched locally.
+2. Do **not** apply it in the consumer repo (a local doc symptom of the upstream gap can wait for the corrected tool to flow down and sweep it).
+3. Let the human carry it upstream; it returns through the normal bump, and its commit message tells you what to run (see [Acting on the bump delta](#acting-on-the-bump-delta-mandatory)).
+
+Rule of thumb: if the change would help the next project too, it belongs in the template. Flag it; do not fork it.
+
 **Human manual edits:** use the canonical local repo. Edit, test with the project CLI, commit, `git push origin main`. Then align any active agent clone:
 
 ```bash
@@ -160,6 +174,38 @@ Include the bump in the commit you were about to make (or commit it on its own f
 The guard is installed by `scripts/install-precommit-guard.sh`, which **both** the init scripts **and** `install-githooks.sh` call. So running either installs the same guard -- they cannot diverge, and re-running `install-githooks.sh` re-asserts the guard rather than dropping it. Agents do not need to remember to re-run anything.
 
 Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by `nutupyall` and removed by you when you apply the bump.
+
+#### Acting on the bump delta (mandatory)
+
+Pulling the submodule is only half the job. The bump may carry changes that require follow-up work in the consumer repo -- regenerating a file, re-running a tool, updating a tracked copy.
+
+**The delta is usually more than one commit.** The human may run `nutup` several times upstream before this consumer ever updates its submodule, so the range you just pulled can contain many commits, each carrying its own follow-up action (or none). **After `git submodule update ... --remote .agentstartstack`, walk every commit in the delta from oldest to newest and act on each before committing:**
+
+```bash
+# Range = old submodule SHA .. new submodule SHA (git prints both on update).
+git -C .agentstartstack log --oneline --reverse <old-sha>..<new-sha>
+git -C .agentstartstack log --reverse --format='%H%n%B%n----' <old-sha>..<new-sha>  # full bodies, oldest first
+```
+
+For **each** commit in the range, oldest first, two obligations in order:
+
+1. **Explicit instructions win.** If the commit message carries a required action (a `CONSUMER-ACTION:` line, "run X after pulling", "regenerate Y"), perform exactly that. These are authored upstream, one per originating commit, precisely so you do not have to guess. Do not assume the action lives only in the newest commit -- an action published three `nutup`s ago still sits in its own older commit and is still your obligation.
+2. **Otherwise infer from the change.** If a commit gives no explicit instruction, infer whether it implies a step in this repo. Examples: a fixed `ascii-only-sanitize.py` means re-run the sanitizer from the repo root and fold any doc fixups into your commit; a new lint rule means re-run the linter; a renamed helper means update local call sites. If nothing applies, that commit needs nothing.
+
+Process the actions in commit order. Fold the submodule bump and every resulting follow-up edit into the same consumer commit so `nut` carries them together.
+
+#### Producer side: write the instructions into the commit (mandatory)
+
+When you commit a change **to the template repo** that downstream consumers must act on after they pull it, say so in the commit message -- the commit is the only channel that travels with the bump. Add an explicit, imperative line so consumer agents do not have to reverse-engineer intent:
+
+```
+CONSUMER-ACTION: run scripts/ascii-only-sanitize.py from the repo root and
+commit any resulting doc fixups alongside the submodule bump.
+```
+
+**Put the line in the same commit that introduces the change -- not in a later "summary" commit.** A consumer may not update its submodule until several `nutup`s later, and it reads every commit in the delta oldest-first; an action only reaches it if it rides the commit that actually made the change. One commit, one self-contained action. If a single commit needs multiple steps, list multiple `CONSUMER-ACTION:` lines in it.
+
+Keep each line specific (exact command, exact follow-up). If a template change is self-contained and needs nothing downstream, no line is needed -- absence of a `CONSUMER-ACTION:` line means "bump and go" for that commit. Right before a `nut`/`nutup` that publishes such a change, confirm the action line rode the correct commit (the one carrying the change), since that is the commit consumers will read it from.
 
 ## Watching live CLI runs (agents)
 
