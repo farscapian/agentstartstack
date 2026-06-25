@@ -22,7 +22,7 @@ How to wire `agentstartstack` into a host project (e.g. `wrtstack`, `iotstack`, 
 ## Add to an existing project
 
 ```bash
-cd ~/Sync/mini_projects/<project>
+cd /path/to/<project>   # wherever you cloned it
 
 # Add submodule (first time)
 git submodule add git@github.com:farscapian/agentstartstack.git .agentstartstack
@@ -45,9 +45,9 @@ Required variables (created from template by `add-to-project.sh`):
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `PROJECT_NAME` | `wrtstack` | Directory name under `~/Sync/mini_projects/` and worktree parent `mini-projects-<name>` |
+| `PROJECT_NAME` | `wrtstack` | Repo directory name; also the worktree parent `mini-projects-<name>` |
 | `DISPLAY_NAME` | `wrtstack` | Lowercase branding in init script tips |
-| `SYNC_REPO` | `~/Sync/mini_projects/wrtstack` | Canonical local repo path |
+| `SYNC_REPO` | (defaults to repo root) | Canonical local repo path; set only if the checkout lives elsewhere |
 | `ORIGIN_URL` | `git@github.com:farscapian/wrtstack.git` | For clone instructions in init output |
 | `ACTIVE_GUARD_PGREP` | `wrtstack (build\|flash)` | Optional regex for nut safety checks in agent tips |
 
@@ -66,7 +66,7 @@ See `templates/CLAUDE.md.project-stub` in this repo.
 On the canonical local repo (one-time per project):
 
 ```bash
-cd ~/Sync/mini_projects/<project>
+cd /path/to/<project>   # wherever you cloned it
 git config receive.denyCurrentBranch updateInstead
 ```
 
@@ -75,7 +75,7 @@ This lets `nut` local-sync from session clones directly into the canonical local
 ## Updating agentstartstack
 
 ```bash
-cd ~/Sync/mini_projects/<project>
+cd /path/to/<project>   # wherever you cloned it
 cd .agentstartstack && git pull origin main && cd ..
 git add .agentstartstack
 git commit -m "Bump agentstartstack submodule"

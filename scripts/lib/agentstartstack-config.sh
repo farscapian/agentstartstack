@@ -38,12 +38,11 @@ agentstartstack_apply_defaults() {
     return 1
   fi
 
+  # Default the canonical repo to the host project root (where .agentstartstack.env
+  # lives) -- no assumption about where the human keeps their checkouts. Override
+  # by setting SYNC_REPO in .agentstartstack.env.
   if [[ -z "$SYNC_REPO" ]]; then
-    if [[ -d "${HOME}/Sync/mini_projects/${PROJECT_NAME}/.git" ]]; then
-      SYNC_REPO="${HOME}/Sync/mini_projects/${PROJECT_NAME}"
-    elif [[ -d "${HOME}/Sync/${PROJECT_NAME}/.git" ]]; then
-      SYNC_REPO="${HOME}/Sync/${PROJECT_NAME}"
-    fi
+    SYNC_REPO="${AGENTSTARTSTACK_HOST_ROOT:-}"
   fi
 
   SYNC_REPO="$(cd "$SYNC_REPO" 2>/dev/null && pwd)" || {

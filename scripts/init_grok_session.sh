@@ -118,6 +118,15 @@ fi
 "${SCRIPT_DIR}/install-precommit-guard.sh" "$REPO_ROOT"
 info "Pre-commit guard active (blocks commits while .agentstartstack-bump pending; chains to shellcheck)."
 
+# Refresh the human-side nut/nutup shell aliases from the canonical
+# lib/nut-aliases.sh (idempotent managed block in ~/.bash_aliases). Machine-global
+# and config-free; non-fatal so a shell-config quirk cannot abort session align.
+if "${SCRIPT_DIR}/install-shell-aliases.sh"; then
+  info "Shell aliases (nut/nutup) refreshed; run 'source ~/.bashrc' if they changed."
+else
+  warn "Shell alias install skipped (non-fatal)."
+fi
+
 COMMIT="$(git log -1 --oneline)"
 BRANCH="$(git branch --show-current)"
 WORKFLOW_MD="${REPO_ROOT}/${GENERIC_GUIDANCE_DIR}/workflow.md"

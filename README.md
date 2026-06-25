@@ -57,4 +57,4 @@ Always lowercase **agentstartstack** in docs and messages (never Agent Start Sta
 
 - Generic workflow changes belong here; bump the submodule in host projects when updated.
 - Project-specific gotchas, CLI, architecture stay in each host project's `agentstartstack/`.
-- When `nut` behavior changes, update `agentstartstack/nut.md` and `~/.bash_aliases` on the management machine.
+- When `nut` behavior changes, edit `scripts/lib/nut-aliases.sh` (the single source of truth) and re-run `scripts/install-shell-aliases.sh` (the init scripts also run it). Do not hand-edit `~/.bash_aliases`.

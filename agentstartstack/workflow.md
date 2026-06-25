@@ -8,7 +8,7 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 
 | Role | Path |
 |------|------|
-| Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (default: `~/Sync/mini_projects/<project>`) |
+| Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`SYNC_REPO`; defaults to the repo root) |
 | Grok/Cursor session clones | `~/.grok/worktrees/mini-projects-<project>/<session-id>/` |
 | Claude Code session clones | `~/.claude/worktrees/mini-projects-<project>/<session-id>/` |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
