@@ -106,6 +106,18 @@ git remote set-url --push origin DISABLED
 
 Session clones have a fetch-only `origin`: `git remote get-url origin` still returns the canonical origin URL (so `nut` can match the clone), but `git push origin ...` fails with `DISABLED`. Handoff is always local-sync (`nut`) from the clone; the push to `origin` happens only from the canonical local repo (`nutup`). The init scripts apply this automatically.
 
+#### Re-align before committing (mandatory)
+
+The align above runs at session start, but the canonical local repo can advance afterward (a human edit, another session's `nut`). Stacking new commits on a stale base is what turns a later `nut` into a rejected non-fast-forward. So **before you add any commit in the session clone, fast-forward it to canonical:**
+
+```bash
+# From the session clone, before you start committing:
+git fetch local-sync main
+git merge --ff-only local-sync/main   # fast-forward the clone up to canonical
+```
+
+If `--ff-only` fails, the clone and canonical have **diverged** (the clone holds commits canonical lacks, or both moved). STOP -- do not commit on top. Reconcile first (rebase your clone commits onto `local-sync/main`, or ask the human), then continue.
+
 ### 2. local-sync (when human asks)
 
 Perform local-sync from the session clone to the canonical local repo. The human reviews and pushes to origin. **Agents never push to origin.**
