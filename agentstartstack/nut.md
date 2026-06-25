@@ -22,7 +22,9 @@ Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `nut push`.
 ```bash
 nut                 # local-sync with canonical local repo (infer from pwd)
 nut iotstack        # explicit repo name, any pwd
+nut -f              # local-sync only from a post-last-nut session clone
 nutup               # local-sync, then git push origin main
+nutup -f            # as nut -f, then push
 nutup iotstack      # local-sync for iotstack, then push
 nutupyall           # nutup agentstartstack, refresh consumer submodules
 nut --help
@@ -33,6 +35,8 @@ nutupyall --help
 **`nut`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
 
 **`nutup`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `nutup` themselves.
+
+**`-f` / `--force`** -- among session clones for the repo, ignore any initialized **before** the last successful `nut` (tracked in the canonical repo as `.git/agentstartstack-nut-last`). Among the remaining clones, pick the one with the newest commit on `main` -- same rule as default `nut`, but stale pre-nut sessions cannot win. `init_*_session.sh` stamps each align as `.git/agentstartstack-session-init` in the clone. Use when you started a fresh session after the previous nut and an older session clone still exists on disk.
 
 **`nutupyall`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
 
@@ -50,7 +54,7 @@ The loop is per-consumer resilient: one failure (update, commit, or push) is log
 | Session clones | `~/.claude/worktrees/<name>/*` |
 | | `~/.grok/worktrees/<name>/*` |
 
-Session clones are matched by `origin` URL so repos cannot cross-contaminate. Among matches, the clone with the newest commit on `main` wins.
+Session clones are matched by `origin` URL so repos cannot cross-contaminate. Among matches, the clone with the newest commit on `main` wins. With `-f` / `--force`, clones whose session-init stamp is not after the canonical last-nut stamp are excluded first.
 
 ## Guards
 

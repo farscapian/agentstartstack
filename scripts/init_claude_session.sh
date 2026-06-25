@@ -97,6 +97,9 @@ if [[ -f .gitmodules ]]; then
   git submodule update --init --recursive
 fi
 
+# Stamp session align time so nut -f can prefer this clone over older sessions.
+date +%s > "${REPO_ROOT}/.git/agentstartstack-session-init"
+
 # Harden origin to fetch-only: agents hand off via the local-sync remote and must
 # never push to origin. Disabling the push URL makes that structural, not just
 # policy. The fetch URL stays intact so nut can still match this clone to the

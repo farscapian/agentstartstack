@@ -21,9 +21,15 @@ export AGENT_SESSION_CLONE_PARENT
 #
 # Usage:
 #   nut              # local-sync with canonical local repo
+#   nut -f           # local-sync from a session clone initialized after last nut
 #   nutup            # local-sync, then git push origin main
+#   nutup -f         # as nut -f, then push
 #   nutup iotstack   # explicit repo + local-sync + push
 #   nutupyall        # nutup agentstartstack, refresh consumer submodules
+#
+# Timestamp markers (machine-local, under .git/):
+#   canonical:  .git/agentstartstack-nut-last      (unix time; set after each nut)
+#   session:    .git/agentstartstack-session-init  (unix time; set by init_*_session.sh)
 
 # Locate a canonical repo named "$1" under any of AGENTSTARTSTACK_PROJECT_ROOTS
 # (colon-separated dirs that hold repo checkouts as <root>/<name>). No location
@@ -125,9 +131,57 @@ _nut_guard_active_sessions() {
   return 0
 }
 
+# Unix time when init_*_session.sh last aligned this clone (or .git mtime fallback).
+_nut_session_init_time() {
+  local clone="$1" marker="${clone}/.git/agentstartstack-session-init"
+
+  if [[ -f "$marker" ]]; then
+    tr -d '[:space:]' < "$marker"
+    return 0
+  fi
+
+  stat -c %Y "${clone}/.git" 2>/dev/null || echo 0
+}
+
+# Parse nut/nutup args: optional -f/--force, optional repo name, -h/--help.
+# Sets _NUT_PARSE_FORCE (0|1) and _NUT_PARSE_REPO (name or empty).
+_nut_parse_args() {
+  _NUT_PARSE_FORCE=0
+  _NUT_PARSE_REPO=""
+  _NUT_PARSE_HELP=0
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--force)
+        _NUT_PARSE_FORCE=1
+        ;;
+      -h|--help)
+        _NUT_PARSE_HELP=1
+        return 0
+        ;;
+      -*)
+        echo "nut: unknown option: $1 (try: nut --help)" >&2
+        return 1
+        ;;
+      *)
+        if [[ -n "$_NUT_PARSE_REPO" ]]; then
+          echo "nut: unexpected argument: $1 (try: nut --help)" >&2
+          return 1
+        fi
+        _NUT_PARSE_REPO="$1"
+        ;;
+    esac
+    shift
+  done
+
+  return 0
+}
+
 _nut_push() {
   local sync_target="$1"
+  local force="${2:-0}"
   local origin_target best_dir="" best_time=0 candidate t commit repo_name
+  local nut_last=0 init_time skipped=0
 
   sync_target=$(readlink -f "$sync_target")
   [[ -d "${sync_target}/.git" ]] || {
@@ -144,8 +198,22 @@ _nut_push() {
 
   repo_name=$(basename "$sync_target")
 
+  if [[ -f "${sync_target}/.git/agentstartstack-nut-last" ]]; then
+    nut_last=$(tr -d '[:space:]' < "${sync_target}/.git/agentstartstack-nut-last")
+    [[ "$nut_last" =~ ^[0-9]+$ ]] || nut_last=0
+  fi
+
   while IFS= read -r candidate; do
     [[ -n "$candidate" ]] || continue
+
+    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+      init_time=$(_nut_session_init_time "$candidate")
+      if [[ "$init_time" -le "$nut_last" ]]; then
+        skipped=$((skipped + 1))
+        continue
+      fi
+    fi
+
     t=$(git -C "$candidate" log -1 --format=%ct 2>/dev/null) || continue
     if [[ "$t" -gt "$best_time" ]]; then
       best_time=$t
@@ -154,8 +222,20 @@ _nut_push() {
   done < <(_agentstartstack_clones_for_origin "$origin_target")
 
   if [[ -z "$best_dir" ]]; then
-    echo "nut: no session clone for ${repo_name}" >&2
+    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+      echo "nut: --force: no session clone initialized after the last nut for ${repo_name}" >&2
+      echo "nut:   last nut: $(date -d "@${nut_last}" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -r "$nut_last" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "@${nut_last}")" >&2
+      if [[ "$skipped" -gt 0 ]]; then
+        echo "nut:   ignored ${skipped} older session clone(s); align a new session (init_*_session.sh) or omit --force" >&2
+      fi
+    else
+      echo "nut: no session clone for ${repo_name}" >&2
+    fi
     return 1
+  fi
+
+  if [[ "$force" == 1 && "$skipped" -gt 0 ]]; then
+    echo "nut: --force: ignored ${skipped} session clone(s) initialized before last nut" >&2
   fi
 
   if git -C "$best_dir" remote get-url local-sync >/dev/null 2>&1; then
@@ -168,6 +248,8 @@ _nut_push() {
   echo "nut: ${commit}"
   echo "nut: ${best_dir} -> ${sync_target}"
   git -C "$best_dir" push local-sync main
+
+  date +%s > "${sync_target}/.git/agentstartstack-nut-last"
 }
 
 _nut_resolve_sync_target() {
@@ -209,9 +291,9 @@ _nut_resolve_sync_target() {
 
 nut()
 {
-  local repo_arg="${1:-}"
+  _nut_parse_args "$@" || return 1
 
-  if [[ "$repo_arg" == "-h" || "$repo_arg" == "--help" ]]; then
+  if [[ "$_NUT_PARSE_HELP" == 1 ]]; then
     cat <<'EOF'
 nut -- Newest commit Until Transferred
 
@@ -219,39 +301,50 @@ Perform local-sync with the canonical local repo (session clone -> local-sync re
 
   nut                 infer repo from pwd
   nut <name>          e.g. nut printstack, nut iotstack, nut wrtstack
+  nut -f              only session clones initialized after the last nut
   nutup               local-sync, then git push origin main
+  nutup -f            as nut -f, then push
   nutup <name>        local-sync for <name>, then push
   nutupyall           nutup agentstartstack, refresh .agentstartstack submodules
 
 Repo roots:  $AGENTSTARTSTACK_PROJECT_ROOTS (colon-separated dirs holding <name>/)
 Session:     clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
              (matched to a canonical repo by git origin URL, any dir name)
+
+-f, --force  Ignore session clones initialized before the last nut; among the
+             remaining clones, pick the one with the newest commit on main.
+             Use after starting a fresh session (init_*_session.sh) so an older
+             stale clone cannot win.
 EOF
     return 0
   fi
 
   local sync_target
-  sync_target=$(_nut_resolve_sync_target "$repo_arg") || return 1
-  _nut_push "$sync_target"
+  sync_target=$(_nut_resolve_sync_target "$_NUT_PARSE_REPO") || return 1
+  _nut_push "$sync_target" "$_NUT_PARSE_FORCE"
 }
 
 nutup()
 {
-  local repo_arg="${1:-}"
+  _nut_parse_args "$@" || return 1
 
-  if [[ "$repo_arg" == "-h" || "$repo_arg" == "--help" ]]; then
+  if [[ "$_NUT_PARSE_HELP" == 1 ]]; then
     cat <<'EOF'
 nutup -- local-sync with canonical local repo, then git push origin main
 
   nutup               infer repo from pwd
   nutup <name>        e.g. nutup printstack, nutup wrtstack
+  nutup -f            only session clones initialized after the last nut, then push
+
+-f, --force  See nut --help. Prefer this when handing off from a session started
+             after the previous nut so older session clones are not selected.
 EOF
     return 0
   fi
 
   local sync_target
-  sync_target=$(_nut_resolve_sync_target "$repo_arg") || return 1
-  _nut_push "$sync_target" || return 1
+  sync_target=$(_nut_resolve_sync_target "$_NUT_PARSE_REPO") || return 1
+  _nut_push "$sync_target" "$_NUT_PARSE_FORCE" || return 1
   echo "nutup: ${sync_target} -> origin main"
   git -C "$sync_target" push origin main
 }
