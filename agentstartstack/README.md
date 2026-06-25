@@ -1,6 +1,6 @@
 # agentstartstack (generic guidance)
 
-Generic agent guidance shared across mini-projects via the `.agentstartstack` git submodule.
+Generic agent guidance shared across projects via the `.agentstartstack` git submodule.
 
 ## How host projects use this
 

@@ -48,7 +48,7 @@ See [security.md](security.md).
 
 ## Generated and ignored files
 
-Common patterns across mini-projects:
+Common patterns across projects:
 
 | Track in git | Never track |
 |--------------|-------------|

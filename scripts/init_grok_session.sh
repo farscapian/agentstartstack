@@ -58,7 +58,7 @@ agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guida
 
 if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$CANONICAL_LOCAL_REPO")" ]]; then
   warn "Current directory is the canonical local repo, not a Grok session clone."
-  warn "Init is intended for ${GROK_PARENT}/<session-id>/"
+  warn "Init is intended for a session clone under one of: ${AGENT_SESSION_CLONE_PARENT}"
   read -r -p "Continue anyway? [y/N] " confirm </dev/tty
   [[ "${confirm,,}" == "y" || "${confirm,,}" == "yes" ]] || exit 0
 fi
@@ -197,7 +197,7 @@ Constraints: <hardware, files not to touch>
 EOF
 
 echo ""
-info "Grok session directories: ${GROK_PARENT}/"
+info "Grok session clones:      under ${AGENT_SESSION_CLONE_PARENT}"
 info "Canonical local repo:     ${CANONICAL_LOCAL_REPO}/"
 if [[ -n "$ORIGIN_URL" ]]; then
   info "Origin:                   ${ORIGIN_URL}"

@@ -57,7 +57,7 @@ agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guida
 
 if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$CANONICAL_LOCAL_REPO")" ]]; then
   warn "Current directory is the canonical local repo, not a Claude Code session clone."
-  warn "Init is intended for ${CLAUDE_PARENT}/<session-id>/"
+  warn "Init is intended for a session clone under one of: ${AGENT_SESSION_CLONE_PARENT}"
   read -r -p "Continue anyway? [y/N] " confirm </dev/tty
   [[ "${confirm,,}" == "y" || "${confirm,,}" == "yes" ]] || exit 0
 fi
@@ -154,7 +154,7 @@ AI GIT WORKFLOW (authorized)
   1. Session align -- init_claude_session.sh once per session (you just ran this)
   2. Handoff       -- human runs nut (never git push origin from agents)
 
-IMPORTANT: Claude Code always edits files in the session clone (${CLAUDE_PARENT}/...)
+IMPORTANT: Claude Code always edits files in the session clone (under ${AGENT_SESSION_CLONE_PARENT})
   using absolute paths. VS Code opens at ${CANONICAL_LOCAL_REPO} for the human's reference only
   -- do NOT edit files under the canonical local repo.
 
@@ -186,7 +186,7 @@ Constraints: <hardware, files not to touch>
 EOF
 
 echo ""
-info "Claude Code session directories: ${CLAUDE_PARENT}/"
+info "Claude Code session clones:      under ${AGENT_SESSION_CLONE_PARENT}"
 info "Canonical local repo:            ${CANONICAL_LOCAL_REPO}/"
 if [[ -n "$ORIGIN_URL" ]]; then
   info "Origin:                          ${ORIGIN_URL}"

@@ -45,7 +45,7 @@ Required variables (created from template by `add-to-project.sh`):
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `PROJECT_NAME` | `wrtstack` | Repo directory name; also the worktree parent `mini-projects-<name>` |
+| `PROJECT_NAME` | `wrtstack` | Repo directory name; used for `nut <name>` lookups and init messaging |
 | `DISPLAY_NAME` | `wrtstack` | Lowercase branding in init script tips |
 | `CANONICAL_LOCAL_REPO` | (defaults to repo root) | Canonical local repo path; set only if the checkout lives elsewhere |
 | `ORIGIN_URL` | `git@github.com:farscapian/wrtstack.git` | For clone instructions in init output |

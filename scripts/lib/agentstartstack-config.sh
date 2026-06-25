@@ -50,8 +50,10 @@ agentstartstack_apply_defaults() {
     return 1
   }
 
-  GROK_PARENT="${GROK_PARENT:-${HOME}/.grok/worktrees/mini-projects-${PROJECT_NAME}}"
-  CLAUDE_PARENT="${CLAUDE_PARENT:-${HOME}/.claude/worktrees/mini-projects-${PROJECT_NAME}}"
+  # Colon-separated parent dirs under which agent session clones live. Single
+  # source of truth for both the init scripts and nut's clone discovery (which
+  # matches clones by git origin URL -- no project-specific subdir naming assumed).
+  AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 
   return 0
 }

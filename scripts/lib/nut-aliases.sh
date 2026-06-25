@@ -11,6 +11,12 @@
 # Retired names -- clear if still loaded in this shell.
 unset -f land s2s s2ps s2is push 2>/dev/null
 
+# Colon-separated parent dirs under which agent session clones live (Claude, Grok).
+# nut discovers clones within these by git origin URL -- no directory-naming scheme
+# is assumed. Override by exporting AGENT_SESSION_CLONE_PARENT before sourcing.
+: "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+export AGENT_SESSION_CLONE_PARENT
+
 # nut / nutup -- Newest commit Until Transferred
 #
 # Usage:
@@ -41,20 +47,50 @@ _nut_sync_root() {
   return 1
 }
 
+# Echo absolute paths of session clones whose origin URL == $1, one per line.
+# Searches the dirs in AGENT_SESSION_CLONE_PARENT without assuming any naming
+# scheme -- clones are identified by git origin URL, so this works regardless of
+# how the harness names the worktree dir.
+_agentstartstack_clones_for_origin() {
+  local want="$1" parents base candidate got
+  [[ -n "$want" ]] || return 0
+  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  local IFS=:
+  for base in $parents; do
+    [[ -n "$base" ]] || continue
+    [[ -d "$base" ]] || continue
+    for candidate in "$base"/*/ "$base"/*/*/; do
+      [[ -d "${candidate}.git" ]] || continue
+      candidate=$(readlink -f "${candidate%/}")
+      got=$(git -C "$candidate" remote get-url origin 2>/dev/null) || continue
+      [[ "$got" == "$want" ]] && printf '%s\n' "$candidate"
+    done
+  done
+}
+
 # Resolve canonical local repo from a session clone path.
 _nut_sync_target_from_worktree() {
-  local wt="$1" parent_base
+  local wt="$1" origin roots root candidate got
 
   if git -C "$wt" remote get-url local-sync &>/dev/null 2>&1; then
     readlink -f "$(git -C "$wt" remote get-url local-sync)"
     return 0
   fi
 
-  parent_base=$(basename "$(dirname "$wt")")
-  if [[ "$parent_base" =~ ^mini-projects-(.+)$ ]]; then
-    _nut_sync_root "${BASH_REMATCH[1]}"
-    return $?
-  fi
+  # Fallback (no local-sync remote): match this clone's origin URL against the
+  # canonical repos under AGENTSTARTSTACK_PROJECT_ROOTS -- no path-name assumption.
+  origin=$(git -C "$wt" remote get-url origin 2>/dev/null) || return 1
+  roots="${AGENTSTARTSTACK_PROJECT_ROOTS:-}"
+  [[ -n "$roots" ]] || return 1
+  local IFS=:
+  for root in $roots; do
+    [[ -n "$root" ]] || continue
+    for candidate in "$root"/*/; do
+      [[ -d "${candidate}.git" ]] || continue
+      got=$(git -C "$candidate" remote get-url origin 2>/dev/null) || continue
+      [[ "$got" == "$origin" ]] && { readlink -f "${candidate%/}"; return 0; }
+    done
+  done
 
   return 1
 }
@@ -91,7 +127,7 @@ _nut_guard_active_sessions() {
 
 _nut_push() {
   local sync_target="$1"
-  local origin_target best_dir="" best_time=0 candidate t origin_wt commit repo_name
+  local origin_target best_dir="" best_time=0 candidate t commit repo_name
 
   sync_target=$(readlink -f "$sync_target")
   [[ -d "${sync_target}/.git" ]] || {
@@ -108,21 +144,14 @@ _nut_push() {
 
   repo_name=$(basename "$sync_target")
 
-  for candidate in \
-      "${HOME}/.claude/worktrees/mini-projects-${repo_name}/"*/ \
-      "${HOME}/.grok/worktrees/mini-projects-${repo_name}/"*/; do
-    [[ -d "${candidate}.git" ]] || continue
-    candidate=$(readlink -f "$candidate")
-
-    origin_wt=$(git -C "$candidate" remote get-url origin 2>/dev/null) || continue
-    [[ "$origin_wt" == "$origin_target" ]] || continue
-
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
     t=$(git -C "$candidate" log -1 --format=%ct 2>/dev/null) || continue
     if [[ "$t" -gt "$best_time" ]]; then
       best_time=$t
       best_dir=$candidate
     fi
-  done
+  done < <(_agentstartstack_clones_for_origin "$origin_target")
 
   if [[ -z "$best_dir" ]]; then
     echo "nut: no session clone for ${repo_name}" >&2
@@ -143,7 +172,7 @@ _nut_push() {
 
 _nut_resolve_sync_target() {
   local repo_arg="${1:-}"
-  local here sync_target
+  local here sync_target base in_clone
 
   if [[ -n "$repo_arg" ]]; then
     sync_target=$(_nut_sync_root "$repo_arg") || {
@@ -158,7 +187,14 @@ _nut_resolve_sync_target() {
     }
     here=$(readlink -f "$here")
 
-    if [[ "$here" == *"/.grok/worktrees/"* || "$here" == *"/.claude/worktrees/"* ]]; then
+    # Is pwd inside one of the agent session-clone parents?
+    in_clone=0
+    local IFS=:
+    for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+      [[ -n "$base" ]] || continue
+      [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
+    done
+    if [[ "$in_clone" == 1 ]]; then
       sync_target=$(_nut_sync_target_from_worktree "$here") || {
         echo "nut: cannot resolve canonical local repo from: $here" >&2
         return 1
@@ -188,8 +224,8 @@ Perform local-sync with the canonical local repo (session clone -> local-sync re
   nutupyall           nutup agentstartstack, refresh .agentstartstack submodules
 
 Repo roots:  $AGENTSTARTSTACK_PROJECT_ROOTS (colon-separated dirs holding <name>/)
-Session:     ~/.claude/worktrees/mini-projects-<name>/*
-             ~/.grok/worktrees/mini-projects-<name>/*
+Session:     clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
+             (matched to a canonical repo by git origin URL, any dir name)
 EOF
     return 0
   fi
@@ -271,15 +307,13 @@ _nutupyall_consumer_roots() {
 # flight). nutupyall defers a consumer's auto-bump while any of its clones is
 # busy, so committing + pushing the bump cannot diverge the clone (its next nut
 # would otherwise be a non-fast-forward and clobber the agent mid-work).
-# List all session clones for a consumer (one absolute path per line).
+# List all session clones for a consumer (one absolute path per line), matched by
+# git origin URL so no worktree directory-naming scheme is assumed.
 _nutupyall_session_clones() {
-  local name="$1" clone
-  for clone in \
-      "${HOME}/.claude/worktrees/mini-projects-${name}/"*/ \
-      "${HOME}/.grok/worktrees/mini-projects-${name}/"*/; do
-    [[ -d "${clone}.git" ]] || continue
-    readlink -f "${clone%/}"
-  done
+  local name="$1" canonical origin
+  canonical=$(_nut_sync_root "$name") || return 0
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || return 0
+  _agentstartstack_clones_for_origin "$origin"
 }
 
 # Echo in-flight session clones for a consumer, one per line: "<clone><TAB><reason>".

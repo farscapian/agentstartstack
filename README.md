@@ -1,6 +1,6 @@
 # agentstartstack
 
-Shared AI agent guidance and workflow tooling for mini-projects. Add this repo as a **git submodule** at `.agentstartstack/` so every new project starts with the same agent workflows, conventions, and session scripts.
+Shared AI agent guidance and workflow tooling for projects. Add this repo as a **git submodule** at `.agentstartstack/` so every new project starts with the same agent workflows, conventions, and session scripts.
 
 ## What you get
 

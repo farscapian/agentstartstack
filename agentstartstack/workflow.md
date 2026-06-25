@@ -1,6 +1,6 @@
 # Development Workflow
 
-Generic AI agent git workflow for mini-projects. Host projects configure identity via `.agentstartstack.env` at the repo root (created by `scripts/add-to-project.sh`).
+Generic AI agent git workflow for projects. Host projects configure identity via `.agentstartstack.env` at the repo root (created by `scripts/add-to-project.sh`).
 
 ## Canonical paths
 
@@ -9,12 +9,12 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Role | Path |
 |------|------|
 | Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`CANONICAL_LOCAL_REPO`; defaults to the repo root) |
-| Grok/Cursor session clones | `~/.grok/worktrees/mini-projects-<project>/<session-id>/` |
-| Claude Code session clones | `~/.claude/worktrees/mini-projects-<project>/<session-id>/` |
+| Grok/Cursor session clones | `~/.grok/worktrees/<project>/<session-id>/` |
+| Claude Code session clones | `~/.claude/worktrees/<project>/<session-id>/` |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
 | Project agent guidance | `<repo>/agentstartstack/` |
 
-Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does.
+Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. The `<project>` path component above is only a convention -- `nut` matches a clone to its canonical repo by **git origin URL**, searching the dirs in `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`), so the worktree directory name is not significant.
 
 - **Before testing fixes on the canonical local repo:** `git pull origin main` -- stale trees produce confusing output
 - **Handoff between trees:** `origin/main` -- humans push to origin; new sessions align from the canonical local repo
@@ -23,8 +23,8 @@ Session clones are isolated full git clones (not linked `git worktree` entries).
 
 | Role | Edit here | Why |
 |------|-----------|-----|
-| Grok/Cursor agent (active session) | `~/.grok/worktrees/mini-projects-<project>/<session-id>/` | Isolated workspace; commits without touching daily tree |
-| Claude Code agent (active session) | `~/.claude/worktrees/mini-projects-<project>/<session-id>/` | Same isolation; absolute paths only; VS Code at canonical local repo is reference |
+| Grok/Cursor agent (active session) | `~/.grok/worktrees/<project>/<session-id>/` | Isolated workspace; commits without touching daily tree |
+| Claude Code agent (active session) | `~/.claude/worktrees/<project>/<session-id>/` | Same isolation; absolute paths only; VS Code at canonical local repo is reference |
 | Human (manual work) | `<canonical>` | Primary local repo; CLI runs from here |
 
 **Rule of thumb:** agents write their session clone; humans write the canonical local repo. Do not edit an active session clone by hand.
@@ -51,10 +51,10 @@ Rule of thumb: if the change would help the next project too, it belongs in the 
 
 ```bash
 <canonical>/scripts/init_grok_session.sh \
-  ~/.grok/worktrees/mini-projects-<project>/<session-id>
+  ~/.grok/worktrees/<project>/<session-id>
 
 <canonical>/scripts/init_claude_session.sh \
-  ~/.claude/worktrees/mini-projects-<project>/<session-id>
+  ~/.claude/worktrees/<project>/<session-id>
 ```
 
 **Mid-session human intervention:** prefer telling the agent what to change. If you must edit git-tracked files yourself, edit the canonical local repo, push, then align the agent clone.
@@ -74,14 +74,14 @@ Align the session clone with the canonical local repo. Run once per session (or 
 **Grok/Cursor:** host `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/init_grok_session.sh`).
 
 ```bash
-cd ~/.grok/worktrees/mini-projects-<project>/<session-id>
+cd ~/.grok/worktrees/<project>/<session-id>
 <canonical>/scripts/init_grok_session.sh
 ```
 
 **Claude Code:** host `scripts/init_claude_session.sh`.
 
 ```bash
-cd ~/.claude/worktrees/mini-projects-<project>/<session-id>
+cd ~/.claude/worktrees/<project>/<session-id>
 <canonical>/scripts/init_claude_session.sh
 ```
 
@@ -256,7 +256,7 @@ Generic rules:
 3. Paste the suggested first message (task + 1-3 guidance files)
 
 **Start a Claude Code session**
-1. Clone: `git clone --recurse-submodules <ORIGIN_URL> ~/.claude/worktrees/mini-projects-<project>/<session-id>`
+1. Clone: `git clone --recurse-submodules <ORIGIN_URL> ~/.claude/worktrees/<project>/<session-id>`
 2. Run `scripts/init_claude_session.sh`
 3. VS Code stays at the canonical local repo for reference; Claude Code edits the clone only
 
@@ -276,17 +276,17 @@ Generic rules:
 ## Agent session clones
 
 ```bash
-ls -la ~/.grok/worktrees/mini-projects-<project>/
-ls -la ~/.claude/worktrees/mini-projects-<project>/
+ls -la ~/.grok/worktrees/<project>/
+ls -la ~/.claude/worktrees/<project>/
 ```
 
 Create a new Claude Code session clone:
 
 ```bash
 git clone --recurse-submodules <ORIGIN_URL> \
-  ~/.claude/worktrees/mini-projects-<project>/<session-id>
+  ~/.claude/worktrees/<project>/<session-id>
 <canonical>/scripts/init_claude_session.sh \
-  ~/.claude/worktrees/mini-projects-<project>/<session-id>
+  ~/.claude/worktrees/<project>/<session-id>
 ```
 
 ## Git hooks (shellcheck)
