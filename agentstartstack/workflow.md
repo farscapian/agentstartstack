@@ -233,6 +233,30 @@ commit any resulting doc fixups alongside the submodule bump.
 
 Keep each line specific (exact command, exact follow-up). If a template change is self-contained and needs nothing downstream, no line is needed -- absence of a `CONSUMER-ACTION:` line means "bump and go" for that commit. Right before a `nut`/`nutup` that publishes such a change, confirm the action line rode the correct commit (the one carrying the change), since that is the commit consumers will read it from.
 
+#### nutupyall is action-aware; init backstops it
+
+`nutupyall` propagates a bump to each consumer by one of two paths, and **neither blind-bumps past a `CONSUMER-ACTION`**:
+
+- **In-flight session clone** -> drops the `.agentstartstack-bump` watch file; the agent reads the delta and reconciles (per the obligation above).
+- **No in-flight clone** -> `nutupyall` reads the delta (`OLD..NEW`) it would adopt:
+  - **action-free delta** -> safe to auto-commit the bump in the consumer canonical and push (the fast path).
+  - **delta carries any `CONSUMER-ACTION:`** -> `nutupyall` does **not** auto-commit. It restores the submodule to its committed SHA and reports the consumer under "need agent (actions)". The bump waits until an agent session reconciles it; auto-committing would silently skip the actions.
+
+**Init backstop.** Independently of any watch file, `init_*_session.sh` checks at align time whether the `.agentstartstack` submodule is behind its remote (`agentstartstack_pending_reconcile`). If so it prints the pending `OLD..NEW` range and the read-and-reconcile commands, so a deferred bump is caught on the next session even with no watch file present.
+
+#### Remediating a stale consumer (one-time)
+
+A consumer bumped **before** the action-aware fix may have had `CONSUMER-ACTION`s silently skipped by the old blind auto-commit -- its submodule pointer advanced but its own copy/config never reconciled. Such a consumer is *not* "behind its remote", so the init backstop will not flag it. Remediate once, by hand:
+
+1. List every action ever published up to the current pointer and apply any not yet done (they are written to be idempotent):
+   ```bash
+   git -C .agentstartstack log --reverse --format='%H %s%n%b' | grep -B1 '^[[:space:]]*CONSUMER-ACTION:'
+   ```
+2. In practice: re-run `.agentstartstack/scripts/ascii-only-sanitize.py` over the repo; re-run `.agentstartstack/scripts/install-shell-aliases.sh` then `source ~/.bashrc`; in `.agentstartstack.env` rename `SYNC_REPO`->`CANONICAL_LOCAL_REPO` and `CLAUDE_PARENT`/`GROK_PARENT`->`AGENT_SESSION_CLONE_PARENT` if set; migrate a project `agentstartstack/` docs dir to `docs/`.
+3. Commit the reconciliation.
+
+New bumps are protected by the action-aware path plus the init backstop; this catch-up is only for the pre-fix gap.
+
 ## Watching live CLI runs (agents)
 
 When the human runs the project CLI from the canonical local repo, **watch logs proactively** -- do not wait for them to paste output.

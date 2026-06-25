@@ -107,9 +107,16 @@ if git remote get-url origin &>/dev/null; then
 fi
 
 # Surface a pending agentstartstack bump dropped by nutupyall (see workflow.md).
+# Backstop: if there is no watch file but the .agentstartstack submodule is behind
+# its remote (e.g. nutupyall deferred an action-bearing bump), surface it anyway.
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
   warn "  Read the producer commits and reconcile this consumer before committing"
+  warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
+elif RECONCILE_RANGE=$(agentstartstack_pending_reconcile "$REPO_ROOT"); then
+  warn "agentstartstack is behind its remote -- reconcile pending (no watch file): ${RECONCILE_RANGE}"
+  warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then bump:"
+  warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
   warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
 fi
 

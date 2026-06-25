@@ -384,8 +384,10 @@ nutupyall -- local-sync and push agentstartstack, refresh .agentstartstack in co
 Run only from the agentstartstack canonical local repo (not a session clone).
 
 For each consumer repo:
-  - No in-flight session clone -> auto-commit the .agentstartstack bump in the
-    consumer canonical and push origin main. Clean clones pick it up on align.
+  - No in-flight session clone -> if the delta is action-free, auto-commit the
+    .agentstartstack bump and push origin main. If the delta carries any
+    CONSUMER-ACTION, do NOT auto-commit (would skip the actions); report it under
+    "need agent (actions)" and leave it for an agent session to reconcile.
   - In-flight session clone(s) (uncommitted changes or ahead of canonical) ->
     do NOT touch canonical (would non-fast-forward an agent's nut). Instead drop
     a gitignored .agentstartstack-bump watch file in every clone; the bump rides
@@ -412,8 +414,8 @@ EOF
   local as_sha
   as_sha=$(git rev-parse --short HEAD) || return 1
 
-  local host name busy iclone ireason sub_sha clone n_flag
-  local bumped=0 flagged=0 current=0 failed=0
+  local host name busy iclone ireason sub_sha clone n_flag old_sha new_sha
+  local bumped=0 flagged=0 current=0 failed=0 needs_agent=0
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
     name=$(basename "$host")
@@ -435,6 +437,7 @@ EOF
       continue
     fi
 
+    old_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
     echo "nutupyall: ${name} -- submodule update --remote .agentstartstack"
     if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
       echo "nutupyall:   ERROR updating submodule in ${name}" >&2
@@ -448,8 +451,24 @@ EOF
       continue
     fi
 
+    new_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
+
+    # Action-aware (see workflow.md): a blind pointer bump must NOT skip the
+    # CONSUMER-ACTION clauses in the delta. If any producer commit in old..new
+    # carries one, do NOT auto-commit -- restore the submodule to its committed
+    # SHA and defer to an agent session, which reads the delta and reconciles.
+    # Only an action-free delta is safe to auto-commit here.
+    if git -C "${host}/.agentstartstack" log --format='%B' "${old_sha}..${new_sha}" 2>/dev/null \
+         | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
+      git -C "$host" submodule update --init --recursive .agentstartstack >/dev/null 2>&1
+      echo "nutupyall:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
+      echo "nutupyall:     start an agent session for ${name} so it reads the delta and reconciles." >&2
+      needs_agent=$((needs_agent + 1))
+      continue
+    fi
+
     sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
-    echo "nutupyall:   committing bump to ${sub_sha} in ${name}"
+    echo "nutupyall:   committing bump to ${sub_sha} in ${name} (action-free delta)"
     if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
       echo "nutupyall:   ERROR committing bump in ${name}" >&2
       failed=$((failed + 1))
@@ -463,6 +482,6 @@ EOF
     bumped=$((bumped + 1))
   done < <(_nutupyall_consumer_roots | sort -u)
 
-  echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${failed} failed"
+  echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${failed} failed"
   [[ "$failed" -eq 0 ]]
 }

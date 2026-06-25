@@ -89,3 +89,27 @@ agentstartstack_resolve_guidance_paths() {
 
   return 0
 }
+
+# Backstop for the bump-delta protocol: detect a pending agentstartstack reconcile
+# even when no .agentstartstack-bump watch file is present -- e.g. nutupyall
+# deferred an action-bearing bump (it does not auto-commit those). Echoes the
+# range "OLD..NEW" and returns 0 if the .agentstartstack submodule is behind its
+# remote; returns 1 (no output) otherwise, including the template repo (no
+# submodule) and offline.
+agentstartstack_pending_reconcile() {
+  local root="${1:-${AGENTSTARTSTACK_HOST_ROOT:-}}"
+  local sub head upstream
+  sub="${root}/.agentstartstack"
+
+  [[ -e "${sub}/.git" ]] || return 1
+  git -C "$sub" fetch -q origin main 2>/dev/null || return 1
+  head=$(git -C "$sub" rev-parse HEAD 2>/dev/null) || return 1
+  upstream=$(git -C "$sub" rev-parse origin/main 2>/dev/null) || return 1
+
+  [[ "$head" != "$upstream" ]] || return 1
+  if [[ -n "$(git -C "$sub" rev-list "${head}..${upstream}" 2>/dev/null)" ]]; then
+    printf '%s..%s\n' "$head" "$upstream"
+    return 0
+  fi
+  return 1
+}
