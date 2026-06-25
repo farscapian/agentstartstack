@@ -22,7 +22,7 @@ Script and hostname names may use their own historical conventions (`pi-bootstra
 
 Existing scripts may still contain Unicode box-drawing in comment headers; do not add more. Prefer `# --` for new sections.
 
-Optional maintenance utility (if present in host project): `scripts/ascii-only-sanitize.py`.
+Maintenance utility (canonical here in the template, consumed by host projects via the `.agentstartstack` submodule): `scripts/ascii-only-sanitize.py`. It rewrites common Unicode (em dash, ellipsis, section sign, smart quotes, arrows, box-drawing, etc.) to ASCII and reports any character it cannot map. Run it from a repo root after editing docs; fix the script here -- never fork a host-local copy. Its REPLACEMENTS keys are written as backslash-u escapes so the file stays ASCII and cannot sanitize its own mapping table into a no-op.
 
 ## Script output
 

@@ -6,17 +6,17 @@ How to wire `agentstartstack` into a host project (e.g. `wrtstack`, `iotstack`, 
 
 ```
 <host-project>/
-├── .agentstartstack/             # git submodule (this repo)
-│   └── agentstartstack/          # generic guidance (this directory)
-├── agentstartstack/              # project-specific agent docs
-├── .agentstartstack.env          # project identity for init scripts
-├── CLAUDE.md                     # combined index (generic + project)
-├── scripts/
-│   ├── init_grok_session.sh      # thin wrapper -> .agentstartstack
-│   ├── init_claude_session.sh
-│   ├── install-githooks.sh
-│   └── shellcheck-staged.sh
-└── .githooks/pre-commit
+|--- .agentstartstack/             # git submodule (this repo)
+|   `--- agentstartstack/          # generic guidance (this directory)
+|--- agentstartstack/              # project-specific agent docs
+|--- .agentstartstack.env          # project identity for init scripts
+|--- CLAUDE.md                     # combined index (generic + project)
+|--- scripts/
+|   |--- init_grok_session.sh      # thin wrapper -> .agentstartstack
+|   |--- init_claude_session.sh
+|   |--- install-githooks.sh
+|   `--- shellcheck-staged.sh
+`--- .githooks/pre-commit
 ```
 
 ## Add to an existing project
