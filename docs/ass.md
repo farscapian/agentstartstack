@@ -189,8 +189,8 @@ per-clone fast-forward during a session.
 ## ass status (agent session clones)
 
 `ass status` lists **agent session clones only** (newest first) — not canonical.
-Each row shows ahead/behind vs **canonical/main**, then **`-->`** (canonical pushes to
-`origin/main`), then vs **`origin/main`**. Reference
+Each row shows ahead/behind vs **canonical/main**, then vs **`origin/main`**. Session **#1**
+shows **`-->`** after **wip** (local-sync handoff to canonical). Reference
 SHAs appear in the INFO line and in the table header (not as a data row). Run from the
 canonical repo or any session clone (pwd-oriented).
 
@@ -206,7 +206,6 @@ ass status
 | **-->** (after wip) | Session **#1** local-syncs to canonical (`ass sync` handoff); blank on other rows |
 | **canonical** (group title) | First ahead/behind pair vs canonical/main |
 | **ahead / behind** | Under **canonical** — vs canonical/main (ref in INFO line) |
-| **-->** | Canonical pushes to `origin/main` (visual separator) |
 | **origin/main** (group title) | Second ahead/behind pair vs origin/main |
 | **ahead / behind** | Under **origin/main** — vs `origin/main` (ref in INFO line) |
 | **HEAD** | This clone's `main` |

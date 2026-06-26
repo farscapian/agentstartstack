@@ -12,7 +12,6 @@ Columns (each clone row):
   -->     session #1 local-syncs to canonical (ass sync); blank on other rows
   ahead   commits on this clone not on canonical main
   behind  commits on canonical main not on this clone
-  -->     canonical pushes to origin/main (visual separator)
   ahead   commits on this clone not on origin/main
   behind  commits on origin/main not on this clone
   HEAD    this clone's main
