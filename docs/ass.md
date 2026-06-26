@@ -212,7 +212,9 @@ ass prune <clone-path>    # explicit clone to archive and remove
 `ass drop <n>` archives and removes the session clone at index **`n`** from `ass list` /
 `ass status` (newest = 1). Run from the **canonical** repo. Same archive-first HARD RULE
 as `ass prune` and `ass up trim`. Dirty work is rolled into another session clone when
-one exists; refuses unlanded commits.
+one exists; refuses unlanded commits. **Refuses clones with an active grok or Claude
+session** (detected via running `grok --resume` for that workspace, or a `claude` process
+with cwd in the clone) -- quit or close the agent session first.
 
 ```bash
 ass list                  # see # column

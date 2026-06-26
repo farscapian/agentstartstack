@@ -203,6 +203,65 @@ _ass_guard_active_sessions() {
   return 0
 }
 
+# Percent-encode a path for Grok session dirs (~/.grok/sessions/<encoded>/).
+_ass_path_urlencode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1" 2>/dev/null
+}
+
+# Running Grok session UUIDs bound to this clone (one per line).
+_ass_grok_running_session_ids_for_clone() {
+  local clone="$1" encoded base entry sid
+  clone=$(readlink -f "$clone")
+  encoded=$(_ass_path_urlencode "$clone") || return 1
+  [[ -n "$encoded" ]] || return 1
+  base="${HOME}/.grok/sessions/${encoded}"
+  [[ -d "$base" ]] || return 0
+  for entry in "$base"/*; do
+    [[ -d "$entry" ]] || continue
+    sid=$(basename "$entry")
+    [[ "$sid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || continue
+    pgrep -f "^grok --resume ${sid}\$" >/dev/null 2>&1 && printf '%s\n' "$sid"
+  done
+}
+
+# True when a Claude Code process has cwd under the clone.
+_ass_claude_running_on_clone() {
+  local clone="$1" pid cwd
+  clone=$(readlink -f "$clone")
+  while IFS= read -r pid; do
+    [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || continue
+    cwd=$(readlink -f "/proc/${pid}/cwd" 2>/dev/null) || continue
+    [[ "$cwd" == "$clone" || "$cwd" == "${clone}/"* ]] && return 0
+  done < <(pgrep -x claude 2>/dev/null || true)
+  return 1
+}
+
+# When an agent session is open on clone: print detail and return 0. Else return 1.
+_ass_clone_active_agent_session_detail() {
+  local clone="$1" kind sid
+  local -a sids=()
+  clone=$(readlink -f "$clone")
+  kind=$(_ass_session_agent_kind "$clone")
+
+  if [[ "$kind" == grok || "$kind" == "?" ]]; then
+    mapfile -t sids < <(_ass_grok_running_session_ids_for_clone "$clone")
+    if [[ ${#sids[@]} -gt 0 ]]; then
+      sid="${sids[0]}"
+      printf 'grok session %s is still open -- quit or close that session first\n' "$sid"
+      return 0
+    fi
+  fi
+
+  if [[ "$kind" == claude || "$kind" == "?" ]]; then
+    if _ass_claude_running_on_clone "$clone"; then
+      printf 'claude session is still open on this clone -- quit or close that session first\n'
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 # Unix time when init_*_session.sh last aligned this clone (or .git mtime fallback).
 _ass_session_init_time() {
   local clone="$1" marker="${clone}/.git/agentstartstack-session-init"
@@ -1446,6 +1505,7 @@ the clone directory. Dirty work is rolled into another session clone when one ex
   ass drop <n>              drop session clone #n
 
 Refuses clones with commits not yet on origin/main (unlanded).
+Refuses clones with an active grok/claude session (quit the session first).
 EOF
     return 0
   fi
@@ -1486,6 +1546,15 @@ EOF
 
   _ass_info "ass drop: #${index} ${agent} @ ${head}"
   _ass_info "ass drop:   ${clone}"
+
+  if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
+    _ass_err "ass drop: cannot remove clone with an active agent session"
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && _ass_err "ass drop:   ${line}"
+    done <<<"$detail"
+    _ass_err "ass drop:   ${clone}"
+    return 1
+  fi
 
   if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
     _ass_err "ass drop: clone has unlanded commits -- cherry-pick or ass handoff first"
@@ -1661,7 +1730,7 @@ _ass_up_trim_rollover() {
 
 _ass_up_trim_archive_clone() {
   local clone="$1" archive_dir="$2" dry_run="$3"
-  local parent base harness shortsha datestamp dest tarball
+  local parent base harness shortsha datestamp dest tarball detail
 
   clone=$(readlink -f "$clone")
   parent=$(dirname "$clone")
@@ -1670,6 +1739,14 @@ _ass_up_trim_archive_clone() {
     echo "ass up trim:   ERROR ${clone} has no .git directory -- refusing" >&2
     return 1
   }
+
+  if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
+    echo "ass up trim:   ERROR active agent session on ${clone}" >&2
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && echo "ass up trim:     ${line}" >&2
+    done <<<"$detail"
+    return 1
+  fi
 
   harness=$(_ass_up_trim_harness "$clone")
   shortsha=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -1730,7 +1807,7 @@ _ass_up_trim_kept_contains() {
 
 _ass_up_trim_one() {
   local name="$1" dry_run="$2" yes="$3" no_rollover="$4" keep_latest="$5" archive_override="$6"
-  local canonical archive_dir invoked_from rollover_target
+  local canonical archive_dir invoked_from rollover_target detail
   local -a all_clones=() all_clones_list=() kept=() to_archive=()
   local clone mtime t dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
   local files conflicts subjects line skip k reason pwd_here head markers
@@ -1817,6 +1894,13 @@ _ass_up_trim_one() {
       printf 'ass up trim:   keep (%s): %s\n' "$reason" "$clone"
       continue
     fi
+    if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
+      printf 'ass up trim:   keep (active agent session): %s\n' "$clone"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && printf 'ass up trim:     %s\n' "$line"
+      done <<<"$detail"
+      continue
+    fi
     if [[ "$dry_run" == 1 ]]; then
       printf 'ass up trim:   prune (dry-run): %s\n' "$clone"
     else
@@ -1846,6 +1930,14 @@ _ass_up_trim_one() {
       echo "ass up trim:   kept (unlanded): ${clone}"
       [[ -n "$subjects" ]] && echo "ass up trim:     ${subjects}"
       kept_unlanded=$((kept_unlanded + 1))
+      continue
+    fi
+
+    if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
+      echo "ass up trim:   kept (active agent session): ${clone}"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && echo "ass up trim:     ${line}"
+      done <<<"$detail"
       continue
     fi
 
