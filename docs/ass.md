@@ -23,6 +23,7 @@ ass new --grok      # create + align a Grok session clone (canonical pwd)
 ass new --claude    # create + align a Claude session clone (canonical pwd)
 ass prune           # consolidate one session clone into the newest, then remove it
 ass status          # ahead/behind origin/main for canonical and session clones
+ass list            # session clones for canonical pwd (by origin URL)
 ass up              # local-sync, then git push origin main
 ass up -f           # as ass -f, then push
 ass up trim         # consolidate and prune stale session clones
@@ -122,6 +123,19 @@ stale clones into the survivor, and prunes the rest. Before acting, it prints **
 `y` at the prompt (not on `--dry-run`).
 
 `ass up --all` calls `ass up trim --yes` for each consumer as its final step (opt out with `ASS_UP_ALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
+
+## ass list (session clones)
+
+Lists every agent session clone for the project, discovered by **git origin URL**
+(not folder name). Run from the **canonical** repo:
+
+```bash
+ass list
+```
+
+Shows agent kind (`grok` / `claude` from `.git/agentstartstack-session-agent`), `HEAD`,
+commits **behind canonical**, and path. Newest clone first. Use `ass status` for
+ahead/behind counts vs `origin/main`.
 
 ## ass status (vs origin/main)
 

@@ -20,6 +20,7 @@ After install-shell-aliases.sh, only a thin ass() wrapper is installed.
   ass.sh up trim [options]        consolidate and prune stale session clones
   ass.sh up --all                 ass up agentstartstack, refresh consumer submodules
   ass.sh status                   ahead/behind origin/main for canonical + session clones
+  ass.sh list                     session clones for canonical pwd (by origin URL)
   ass.sh dropit <src> [dest]      copy generic work into agentstartstack session clone
 
 Global flags: -v, -q, --timestamp, --log-id=ID, --create-log (see docs/cli.md)
@@ -35,6 +36,7 @@ _ass_cli_subcommand_help() {
     trim)   ass_up_trim --help ;;
     all)    ass_up_all --help ;;
     status) ass_status --help ;;
+    list)   ass_list --help ;;
     dropit) dropit --help ;;
     ""|handoff|ass) ass --help ;;
     *)
@@ -74,6 +76,7 @@ main() {
       ;;
     dropit) shift; dropit "$@" ;;
     status) shift; ass_status "$@" ;;
+    list)   shift; ass_list "$@" ;;
     *) ass "$@" ;;
   esac
 }

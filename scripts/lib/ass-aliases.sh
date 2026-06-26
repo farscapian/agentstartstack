@@ -367,6 +367,98 @@ EOF
   return 0
 }
 
+_ass_session_agent_kind() {
+  local clone="$1" marker="${clone}/.git/agentstartstack-session-agent"
+
+  if [[ -f "$marker" ]]; then
+    tr -d '[:space:]' < "$marker"
+    return 0
+  fi
+  printf '?'
+}
+
+# ass list -- session clones for the canonical repo at pwd.
+ass_list() {
+  local -a _ass_argv clones=()
+  local canonical origin repo_name pwd_here clone
+  local i agent head behind notes
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+ass list -- session clones for the canonical repo (pwd)
+
+Run from the canonical local repo. Discovers clones by git origin URL under
+AGENT_SESSION_CLONE_PARENT (not by folder name).
+
+  ass list
+EOF
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -gt 0 ]]; then
+    _ass_err "ass list: unexpected argument: ${_ass_argv[0]} (run from canonical pwd)"
+    return 1
+  fi
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  if [[ "$pwd_here" != "$canonical" ]]; then
+    _ass_warn "ass list: pwd is not canonical -- listing clones for ${repo_name} anyway"
+    _ass_warn "ass list:   canonical: ${canonical}"
+    _ass_warn "ass list:   pwd:       ${pwd_here}"
+  fi
+
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass list: canonical has no origin remote"
+    return 1
+  }
+
+  _ass_info "ass list: ${repo_name}"
+  _ass_info "canonical: ${canonical}"
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    clones+=("$(readlink -f "$clone")")
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  if [[ ${#clones[@]} -eq 0 ]]; then
+    echo "session clones: (none)"
+    _ass_info "parent dirs: ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+    return 0
+  fi
+
+  mapfile -t clones < <(
+    for clone in "${clones[@]}"; do
+      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
+    done | sort -rn -k1,1 | awk '{print $2}'
+  )
+
+  echo ""
+  printf '%-3s %-7s %-9s %6s  %s\n' "#" "agent" "HEAD" "behind" "path"
+  printf '%-3s %-7s %-9s %6s  %s\n' "---" "-------" "---------" "------" "----"
+
+  i=1
+  for clone in "${clones[@]}"; do
+    agent=$(_ass_session_agent_kind "$clone")
+    head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+    behind=$(_ass_clone_behind_canonical "$clone" "$canonical")
+    notes=""
+    if _ass_clone_has_dirty_worktree "$clone"; then notes=" dirty"; fi
+    if [[ "$clone" == "$pwd_here" ]]; then notes="${notes} pwd"; fi
+    printf '%-3s %-7s %-9s %6s  %s%s\n' "$i" "$agent" "$head" "$behind" "$clone" "$notes"
+    i=$((i + 1))
+  done
+
+  echo ""
+  _ass_info "behind = commits on canonical main not in this clone"
+  _ass_info "see also: ass status (vs origin/main)"
+  return 0
+}
+
 _ass_print_handoff_report() {
   local sync_target="$1" origin_target="$2" repo_name="$3" selected="${4:-}"
   local pwd_here clone head behind sel

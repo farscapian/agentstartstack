@@ -436,12 +436,14 @@ first, then `ass up trim` or `ass prune`.
 
 ### Listing clones
 
-`ass` discovers clones by origin URL, not folder name:
+From the **canonical** repo:
 
 ```bash
-# after: source ~/.bashrc
-_agentstartstack_clones_for_origin "$(git -C <canonical> remote get-url origin)"
+ass list
 ```
+
+`ass` discovers clones by origin URL, not folder name. For ahead/behind vs GitHub, use
+`ass status`.
 
 Or list the parent directory directly:
 
