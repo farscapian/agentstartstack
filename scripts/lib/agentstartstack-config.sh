@@ -113,7 +113,7 @@ agentstartstack_apply_defaults() {
   # Colon-separated parent dirs under which agent session clones live. Single
   # source of truth for both the init scripts and ass's clone discovery (which
   # matches clones by git origin URL -- no project-specific subdir naming assumed).
-  AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.ass/worktrees:${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 
   return 0
 }

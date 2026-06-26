@@ -428,7 +428,7 @@ ass new -- create and align a new session clone (from canonical pwd)
   ass new --grok      Grok / Cursor session clone
   ass new --claude    Claude Code session clone
 
-Run from the canonical local repo. Creates AGENT_SESSION_CLONE_PARENT/<timestamp>/.
+Run from the canonical local repo. Creates ~/.ass/worktrees/<repo>/<timestamp>/.
 EOF
     return 0
   fi
@@ -447,10 +447,8 @@ EOF
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
     _ass_err "ass new: canonical has no origin remote"; return 1
   }
-  parent="${AGENT_SESSION_CLONE_PARENT%%:*}"
-  parent="${parent:-${HOME}/.grok/worktrees}"
   session_id=$(date +%s)
-  clone_path="${parent}/$(basename "$canonical")/${session_id}"
+  clone_path="${HOME}/.ass/worktrees/$(basename "$canonical")/${session_id}"
   mkdir -p "$(dirname "$clone_path")"
   git clone "$origin" "$clone_path"
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."

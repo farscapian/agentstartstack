@@ -20,18 +20,14 @@ unset -f land s2s s2ps s2is push nut nutup nutupyall nutup_trim dropit assup ass
 # Retired names -- clear if still loaded in this shell.
 unset -f land s2s s2ps s2is push 2>/dev/null
 
-# Colon-separated parent dirs under which agent session clones live (Claude, Grok).
-# nut discovers clones within these by git origin URL -- no directory-naming scheme
-# is assumed. Override by exporting AGENT_SESSION_CLONE_PARENT before sourcing.
-: "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
-export AGENT_SESSION_CLONE_PARENT
-
 # Shared CLI logging (docs/cli.md, conventions.md -- Script output).
 _ASS_ALIASES_LIB_DIR=$(
   cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 )
 # shellcheck source=session-clones.sh
 source "${_ASS_ALIASES_LIB_DIR}/session-clones.sh"
+# AGENT_SESSION_CLONE_PARENT and ASS_NEW_SESSION_CLONE_ROOT come from session-clones.sh.
+# Override AGENT_SESSION_CLONE_PARENT before sourcing ass-aliases to customize discovery.
 # shellcheck source=cli-log.sh
 source "${_ASS_ALIASES_LIB_DIR}/cli-log.sh"
 : "${AGENTSTARTSTACK_CLI_LOG_PREFIX:=ass}"
@@ -123,7 +119,7 @@ _agentstartstack_under_session_clone_parent() {
   local path="$1" parents base
   [[ -n "$path" ]] || return 1
   path="$(readlink -f "$path" 2>/dev/null || echo "$path")"
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   local IFS=:
   for base in $parents; do
     [[ -n "$base" ]] || continue
@@ -851,7 +847,7 @@ ass_list() {
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "session clones: (none)"
-    _ass_info "parent dirs: ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+    _ass_info "parent dirs: ${AGENT_SESSION_CLONE_PARENT}"
     return 0
   fi
 
@@ -1490,7 +1486,7 @@ _ass_resolve_sync_target() {
     # Is pwd inside one of the agent session-clone parents?
     in_clone=0
     local IFS=:
-    for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+    for base in ${AGENT_SESSION_CLONE_PARENT}; do
       [[ -n "$base" ]] || continue
       [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
     done
@@ -1569,7 +1565,7 @@ _ass_drop_upstream() {
   here=$(readlink -f "$here")
 
   local IFS=:
-  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+  for base in ${AGENT_SESSION_CLONE_PARENT}; do
     [[ -n "$base" ]] || continue
     [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
   done
@@ -1931,31 +1927,6 @@ _ass_detect_installed_agent() {
   return 1
 }
 
-# Pick the grok or claude parent from AGENT_SESSION_CLONE_PARENT (colon-separated).
-_ass_session_parent_for_agent() {
-  local agent="$1" parents base fallback=""
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
-  local IFS=:
-  for base in $parents; do
-    [[ -n "$base" ]] || continue
-    [[ -z "$fallback" ]] && fallback="$base"
-    case "$agent" in
-      grok)
-        [[ "$base" == *grok* ]] && { printf '%s\n' "$base"; return 0; }
-        ;;
-      claude)
-        [[ "$base" == *claude* ]] && { printf '%s\n' "$base"; return 0; }
-        ;;
-    esac
-  done
-  unset IFS
-  if [[ "$agent" == grok ]]; then
-    printf '%s\n' "${fallback:-${HOME}/.grok/worktrees}"
-  else
-    printf '%s\n' "${fallback:-${HOME}/.claude/worktrees}"
-  fi
-}
-
 # Write gitignored .agentstartstack.env into a session clone so init_* can align it.
 _ass_new_write_clone_env() {
   local canonical="$1" clone_path="$2" origin="$3"
@@ -1970,19 +1941,25 @@ _ass_new_write_clone_env() {
     else
       printf 'CANONICAL_LOCAL_REPO=%s\n' "$canonical" >> "$env_file"
     fi
-    return 0
-  fi
-
-  cat > "$env_file" <<EOF
+  else
+    cat > "$env_file" <<EOF
 PROJECT_NAME=${project_name}
 DISPLAY_NAME=${project_name}
 CANONICAL_LOCAL_REPO=${canonical}
 ORIGIN_URL=${origin}
 EOF
+  fi
+  local parents
+  parents=$(_agent_session_clone_parents_default)
+  if grep -q '^AGENT_SESSION_CLONE_PARENT=' "$env_file" 2>/dev/null; then
+    sed -i "s|^AGENT_SESSION_CLONE_PARENT=.*|AGENT_SESSION_CLONE_PARENT=${parents}|" "$env_file"
+  else
+    printf 'AGENT_SESSION_CLONE_PARENT=%s\n' "${parents}" >> "$env_file"
+  fi
 }
 
 ass_new() {
-  local agent="" canonical origin parent session_id clone_path script_dir
+  local agent="" canonical origin session_id clone_path script_dir repo_name
   if _ass_help_requested "${1:-}"; then
     ass_help_new
     return 0
@@ -2013,9 +1990,9 @@ ass_new() {
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
     _ass_err "ass new: canonical has no origin remote"; return 1
   }
-  parent=$(_ass_session_parent_for_agent "$agent")
+  repo_name=$(basename "$canonical")
   session_id=$(date +%s)
-  clone_path="${parent}/$(basename "$canonical")/${session_id}"
+  clone_path="${ASS_NEW_SESSION_CLONE_ROOT}/${repo_name}/${session_id}"
   mkdir -p "$(dirname "$clone_path")"
   git clone "$origin" "$clone_path"
   _ass_new_write_clone_env "$canonical" "$clone_path" "$origin"
@@ -2086,13 +2063,14 @@ _ass_up_trim_clone_unlanded() {
 
 _ass_up_trim_harness() {
   local clone="$1" parents base
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   clone=$(readlink -f "$clone")
   local IFS=:
   for base in $parents; do
     [[ -n "$base" ]] || continue
     if [[ "$clone" == "$base"/* ]]; then
       case "$base" in
+        */.ass/worktrees) printf 'ass'; return 0 ;;
         */.claude/worktrees) printf 'claude'; return 0 ;;
         */.grok/worktrees) printf 'grok'; return 0 ;;
         *claude*) printf 'claude'; return 0 ;;
@@ -2265,7 +2243,7 @@ _ass_up_trim_resolve_invoked_from() {
   here=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
   here=$(readlink -f "$here")
   local IFS=:
-  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+  for base in ${AGENT_SESSION_CLONE_PARENT}; do
     [[ -n "$base" ]] || continue
     [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
   done

@@ -24,6 +24,6 @@ Global Options (valid anywhere on the command line):
                       (implies -v and --timestamp; incompatible with -q)
 
 Repo roots:   $AGENTSTARTSTACK_PROJECT_ROOTS
-Session:      clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
+Session:      ass new -> ~/.ass/worktrees/<repo>/<timestamp> (legacy: ~/.grok, ~/.claude)
 
 See also: docs/cli-help.md (help file layout), docs/ass.md (workflow)

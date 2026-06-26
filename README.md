@@ -44,7 +44,7 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 ## Agent session workflow (summary)
 
 1. **New session** -- from the canonical local repo: `ass new` (infers grok/claude from PATH)
-2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo
+2. **Work** -- agent edits only the session clone (`~/.ass/worktrees/<repo>/<timestamp>/`), never the canonical local repo
 3. **Handoff** -- human runs `ass sync` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
 
 Full details: [`docs/workflow.md`](docs/workflow.md) and [`docs/ass.md`](docs/ass.md).

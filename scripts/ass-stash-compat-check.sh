@@ -11,6 +11,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/session-clones.sh
+source "${SCRIPT_DIR}/lib/session-clones.sh"
+
 err() { printf '[ERR]  %s\n' "$*" >&2; }
 
 usage() {
@@ -63,13 +67,14 @@ _assc_resolve_agent_kind() {
     fi
   fi
 
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   local IFS=:
   for base in $parents; do
     [[ -n "$base" ]] || continue
     base=$(readlink -f "$base" 2>/dev/null || echo "$base")
     if [[ "$path" == "$base"/* ]]; then
       case "$base" in
+        */.ass/worktrees) printf 'ass'; return 0 ;;
         */.claude/worktrees|*claude*) printf 'claude'; return 0 ;;
         */.grok/worktrees|*grok*) printf 'grok'; return 0 ;;
       esac

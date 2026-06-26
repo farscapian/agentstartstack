@@ -93,7 +93,10 @@ agent_session_clones_list "$origin"   # newest main first; ass status #1 = first
 `ass sync`, `ass status`, `ass list`, handoff pick, and trim all call this same function
 with the same sort order. Do not add alternate discovery or sort paths per command.
 
-Clones are matched by exact `origin` URL under `AGENT_SESSION_CLONE_PARENT`.
+`ass new` always creates clones at `~/.ass/worktrees/<repo-name>/<unix-timestamp>`
+(`ASS_NEW_SESSION_CLONE_ROOT` in `session-clones.sh`). Clones are matched by exact
+`origin` URL under `AGENT_SESSION_CLONE_PARENT` (default includes `~/.ass/worktrees`
+plus legacy `~/.grok/worktrees` and `~/.claude/worktrees` for older sessions).
 Only **full session clones** qualify: `.git` must be a directory at the clone root,
 and the path must sit under `.../<repo-name>/` (from the origin URL basename, e.g.
 `~/.grok/worktrees/agentstartstack/<session-id>`). Nested `.agentstartstack`

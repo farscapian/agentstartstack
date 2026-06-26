@@ -15,8 +15,9 @@ installed -> claude. With neither on PATH (and not in Codium), ass new exits
 with an error.
 
 Run from the canonical local repo (host project or agentstartstack template).
-Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env,
-aligns clone to canonical.
+Always creates ~/.ass/worktrees/<project>/<unix-timestamp>/, writes
+.agentstartstack.env, aligns clone to canonical. Grok and Claude sessions
+share this path (not ~/.grok/worktrees or ~/.claude/worktrees).
 
 Help:
   ass new help

@@ -34,17 +34,17 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Role | Path |
 |------|------|
 | Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`CANONICAL_LOCAL_REPO`; defaults to the repo root) |
-| Agent session clones (Grok + Claude) | `<AGENT_SESSION_CLONE_PARENT>/<session-id>/` (recommended parent: `~/.agentstack/sessions`) |
+| Agent session clones (Grok + Claude) | `~/.ass/worktrees/<repo-name>/<unix-timestamp>/` (`ass new`; legacy paths still discovered) |
 | Generic agent guidance | `<repo>/docs/` |
 | Project agent guidance | `<repo>/docs/` |
 | CONSUMER-ACTION watermark | `<repo>/.agentstartstack-action-seen` (tracked; consumer only) |
 | Dropit ledger | `<repo>/.agentstartstack-dropits` (tracked; consumer only) |
 
-Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. **Grok and Claude share one parent directory** -- configure `AGENT_SESSION_CLONE_PARENT` in `.agentstartstack.env` (or export it in `~/.bashrc` before sourcing `~/.bash_aliases`). Recommended layout: one flat directory per machine, one subdirectory per session, e.g. `~/.agentstack/sessions/1730000000/`.
+Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. **`ass new` always creates clones under `~/.ass/worktrees/<repo-name>/<unix-timestamp>/`** regardless of agent (Grok or Claude). Grok and Claude share that layout; do not rely on `~/.grok/worktrees` or `~/.claude/worktrees` for `ass new`.
 
-**Session ID convention:** use a unix timestamp (`date +%s`) unless you have a reason not to. The folder name is only a human/agent handle -- `ass` matches a clone to its canonical repo by **git origin URL**, searching under `AGENT_SESSION_CLONE_PARENT` (one or two levels deep), so neither the parent path nor the session-id string is semantically significant to git handoff.
+**Session ID convention:** `ass new` uses a unix timestamp (`date +%s`) as the directory name. The folder name is only a human/agent handle -- `ass` matches a clone to its canonical repo by **git origin URL**, searching under `AGENT_SESSION_CLONE_PARENT`, so neither the parent path nor the session-id string is semantically significant to git handoff.
 
-**Legacy paths:** older clones under `~/.grok/worktrees/` or `~/.claude/worktrees/` still work if listed in `AGENT_SESSION_CLONE_PARENT` (colon-separated). New sessions should use the unified parent only.
+**Legacy paths:** older clones under `~/.grok/worktrees/` or `~/.claude/worktrees/` remain discoverable via `AGENT_SESSION_CLONE_PARENT` (default includes all three parents, colon-separated). New sessions must use `ass new` (`~/.ass/worktrees/...`).
 
 - **Before testing fixes on the canonical local repo:** `git pull origin main` -- stale trees produce confusing output
 - **Handoff between trees:** `origin/main` -- humans push to origin; new sessions align from the canonical local repo
@@ -364,24 +364,19 @@ Generic rules:
 From the **canonical local repo** (`<canonical>`), create the clone, align it, then open the agent **inside the clone** -- not from canonical with a harness-owned worktree flag.
 
 ```bash
-# 1. Create (once per session) -- from <canonical>
-SESSION_ID=$(date +%s)
-git clone --recurse-submodules <ORIGIN_URL> \
-  "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+# 1. Create + align (once per session) -- from <canonical>
+ass new              # or ass new --grok / ass new --claude
+# -> ~/.ass/worktrees/<repo-name>/<unix-timestamp>/
 
-# 2. Align
-<canonical>/scripts/init_grok_session.sh \
-  "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
-# or init_claude_session.sh for Claude Code
-
-# 3. Open the agent in the clone
-cd "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+# 2. Open the agent in the clone (path printed by ass new)
+cd ~/.ass/worktrees/<repo-name>/<unix-timestamp>
 grok          # Grok/Cursor -- do NOT run grok --worktree from <canonical>
 claude        # Claude Code -- do NOT rely on claude --worktree from <canonical>
-              # unless a WorktreeCreate hook points at AGENT_SESSION_CLONE_PARENT
 ```
 
-Set `AGENT_SESSION_CLONE_PARENT` in `.agentstartstack.env` (recommended: `"${HOME}/.agentstack/sessions"`) or export it in `~/.bashrc` before `~/.bash_aliases` is sourced.
+`AGENT_SESSION_CLONE_PARENT` (colon-separated search roots) defaults to
+`~/.ass/worktrees`, `~/.grok/worktrees`, and `~/.claude/worktrees` for discovery.
+Only `ass new` creates clones; it always uses `~/.ass/worktrees/<repo>/<timestamp>/`.
 
 **Grok/Cursor after align:** paste the suggested first message from `init_grok_session.sh` (task + 1-3 guidance files).
 
@@ -404,22 +399,9 @@ Set `AGENT_SESSION_CLONE_PARENT` in `.agentstartstack.env` (recommended: `"${HOM
 
 ### Configuration
 
-`AGENT_SESSION_CLONE_PARENT` is the single parent directory for **all** agent session clones on a machine. It is read from `.agentstartstack.env` by the init scripts and from the environment (after `source ~/.bashrc`) by `ass` / `ass up trim`.
+`AGENT_SESSION_CLONE_PARENT` is the colon-separated list of directories `ass` searches for session clones (by git origin URL). It is read from `.agentstartstack.env` by the init scripts and from the environment (after `source ~/.bashrc`) by `ass` / `ass up trim`. Default: `~/.ass/worktrees:~/.grok/worktrees:~/.claude/worktrees`.
 
-Recommended default in each consumer's `.agentstartstack.env`:
-
-```bash
-AGENT_SESSION_CLONE_PARENT="${HOME}/.agentstack/sessions"
-```
-
-Machine-wide override (applies to every consumer unless `.agentstartstack.env` sets its own):
-
-```bash
-# in ~/.bashrc, before sourcing ~/.bash_aliases
-export AGENT_SESSION_CLONE_PARENT="${HOME}/.agentstack/sessions"
-```
-
-The init scripts **align** an existing clone; they do **not** create one. Creation is always a `git clone` (or a harness hook you configure) into `AGENT_SESSION_CLONE_PARENT/<session-id>/`.
+**`ass new` always creates** at `~/.ass/worktrees/<repo-name>/<unix-timestamp>/` (not under `~/.grok` or `~/.claude`). The init scripts **align** an existing clone; they do **not** create one -- use `ass new` from the canonical repo.
 
 ### Removing session clones (archive first)
 
@@ -453,7 +435,7 @@ ass list
 Or list the parent directory directly:
 
 ```bash
-ls -la "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/"
+ls -la "${HOME}/.ass/worktrees/$(basename "$(pwd)")/"
 ```
 
 ### Create a new session clone
@@ -461,7 +443,7 @@ ls -la "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/"
 ```bash
 # from <canonical>
 SESSION_ID=$(date +%s)
-CLONE="${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+CLONE="${HOME}/.ass/worktrees/$(basename "$(pwd)")/$SESSION_ID"
 
 git clone --recurse-submodules <ORIGIN_URL> "$CLONE"
 <canonical>/scripts/init_grok_session.sh "$CLONE"

@@ -11,6 +11,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/session-clones.sh
+source "${SCRIPT_DIR}/lib/session-clones.sh"
 ASS_CLI="${SCRIPT_DIR}/ass.sh"
 
 BEGIN_MARK="# >>> agentstartstack ass aliases >>>"
@@ -30,7 +32,7 @@ _under_session_clone_parent() {
   local path="$1" parents base
   [[ -n "$path" ]] || return 1
   path="$(readlink -f "$path" 2>/dev/null || echo "$path")"
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   local IFS=:
   for base in $parents; do
     [[ -n "$base" ]] || continue
@@ -93,7 +95,7 @@ resolve_ass_cli() {
     cand="${r}/agentstartstack/scripts/ass.sh"
     [[ -f "$cand" ]] && { readlink -f "$cand"; return 0; }
   done
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   for base in $parents; do
     [[ -n "$base" ]] || continue
     [[ "$SCRIPT_DIR" == "$base"/* ]] && { in_clone=1; break; }

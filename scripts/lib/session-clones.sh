@@ -6,9 +6,24 @@
 # Clones are matched by git origin URL under AGENT_SESSION_CLONE_PARENT (any depth
 # up to 5 path segments below each parent; no directory-naming scheme assumed).
 #
+# ass new ALWAYS creates clones under ASS_NEW_SESSION_CLONE_ROOT/<repo>/<timestamp>.
+#
 # shellcheck shell=bash
 
-: "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+ASS_NEW_SESSION_CLONE_ROOT="${HOME}/.ass/worktrees"
+export ASS_NEW_SESSION_CLONE_ROOT
+
+_agent_session_clone_parents_default() {
+  printf '%s:%s:%s\n' \
+    "${ASS_NEW_SESSION_CLONE_ROOT}" \
+    "${HOME}/.claude/worktrees" \
+    "${HOME}/.grok/worktrees"
+}
+
+if [[ -z "${AGENT_SESSION_CLONE_PARENT:-}" ]]; then
+  AGENT_SESSION_CLONE_PARENT=$(_agent_session_clone_parents_default)
+fi
+export AGENT_SESSION_CLONE_PARENT
 
 # Repo directory name from origin URL (e.g. agentstartstack.git -> agentstartstack).
 _agent_session_clone_repo_name() {
@@ -49,7 +64,11 @@ agent_session_clones_list() {
 
   [[ -n "$want" ]] || return 0
 
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  # Always search ass-new root; append configured parents (may be a user override).
+  parents="${ASS_NEW_SESSION_CLONE_ROOT}"
+  if [[ -n "${AGENT_SESSION_CLONE_PARENT:-}" ]]; then
+    parents="${parents}:${AGENT_SESSION_CLONE_PARENT}"
+  fi
   local IFS=:
   for base in $parents; do
     [[ -n "$base" && -d "$base" ]] || continue

@@ -11,12 +11,6 @@
 # Retired names -- clear if still loaded in this shell.
 unset -f land s2s s2ps s2is push 2>/dev/null
 
-# Colon-separated parent dirs under which agent session clones live (Claude, Grok).
-# nut discovers clones within these by git origin URL -- no directory-naming scheme
-# is assumed. Override by exporting AGENT_SESSION_CLONE_PARENT before sourcing.
-: "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
-export AGENT_SESSION_CLONE_PARENT
-
 _NUT_ALIASES_LIB_DIR=$(
   cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 )
@@ -29,7 +23,7 @@ _agentstartstack_under_session_clone_parent() {
   local path="$1" parents base
   [[ -n "$path" ]] || return 1
   path="$(readlink -f "$path" 2>/dev/null || echo "$path")"
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   local IFS=:
   for base in $parents; do
     [[ -n "$base" ]] || continue
@@ -355,7 +349,7 @@ _nut_resolve_sync_target() {
     # Is pwd inside one of the agent session-clone parents?
     in_clone=0
     local IFS=:
-    for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+    for base in ${AGENT_SESSION_CLONE_PARENT}; do
       [[ -n "$base" ]] || continue
       [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
     done
@@ -480,7 +474,7 @@ EOF
   # Guard: must be inside an agent session clone (under a clone parent).
   local base in_clone=0
   local IFS=:
-  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+  for base in ${AGENT_SESSION_CLONE_PARENT}; do
     [[ -n "$base" ]] || continue
     [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
   done
@@ -604,7 +598,7 @@ _nutup_trim_clone_unlanded() {
 
 _nutup_trim_harness() {
   local clone="$1" parents base
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  parents="${AGENT_SESSION_CLONE_PARENT}"
   clone=$(readlink -f "$clone")
   local IFS=:
   for base in $parents; do
@@ -768,7 +762,7 @@ _nutup_trim_resolve_invoked_from() {
   here=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
   here=$(readlink -f "$here")
   local IFS=:
-  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+  for base in ${AGENT_SESSION_CLONE_PARENT}; do
     [[ -n "$base" ]] || continue
     [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
   done
