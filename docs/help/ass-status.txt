@@ -9,6 +9,7 @@ Columns (each clone row):
           (ass list shows 1,2,3,... for ass drop / ass info index)
   agent   grok / claude
   wip     uncommitted work not in canonical (- or dirty)
+  -->     session #1 local-syncs to canonical (ass sync); blank on other rows
   ahead   commits on this clone not on canonical main
   behind  commits on canonical main not on this clone
   -->     canonical pushes to origin/main (visual separator)

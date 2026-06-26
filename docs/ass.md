@@ -203,6 +203,7 @@ ass status
 | **#** | `1` = newest (rollover target); `^` = rolls into #1 on trim/drop (`ass list` has numeric index for `ass drop`) |
 | **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
 | **wip** | Uncommitted work not yet in canonical: `-` (clean) or `dirty` |
+| **-->** (after wip) | Session **#1** local-syncs to canonical (`ass sync` handoff); blank on other rows |
 | **canonical** (group title) | First ahead/behind pair vs canonical/main |
 | **ahead / behind** | Under **canonical** — vs canonical/main (ref in INFO line) |
 | **-->** | Canonical pushes to `origin/main` (visual separator) |

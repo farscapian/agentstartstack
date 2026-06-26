@@ -417,21 +417,23 @@ _ass_status_wip_column() {
   fi
 }
 
-# Column layout: # agent wip | canonical ahead/behind | --> | origin ahead/behind | HEAD path
+# Column layout: # agent wip --> | canonical ahead/behind | --> | origin ahead/behind | HEAD path
+# 1st --> (after wip): session #1 local-syncs to canonical (data only on row 1).
+# 2nd -->: canonical pushes to origin/main (separator on every row).
 # Count cols are width 7 (fits git short SHA on the reference row).
 _ass_status_format_group_title_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-15s  %-5s  %-15s  %-9s  %s\n' "$@"
+  printf '%-3s %-7s %-7s %-5s %-7s %-7s  %-5s  %-7s %-7s  %-9s  %s\n' "$@"
 }
 
 _ass_status_format_header_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-7s %-7s  %-5s  %-7s %-7s  %-9s  %s\n' "$@"
+  printf '%-3s %-7s %-7s %-5s %-7s %-7s  %-5s  %-7s %-7s  %-9s  %s\n' "$@"
 }
 
 _ass_status_format_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %7s %7s  %-5s  %7s %7s  %-9s  %s' "$@"
+  printf '%-3s %-7s %-7s %-5s %7s %7s  %-5s  %7s %7s  %-9s  %s' "$@"
 }
 
 # ass status # column: 1 = newest (rollover target); ^ = rolls into #1 on trim/drop.
@@ -446,15 +448,18 @@ _ass_status_index_display() {
 
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
-  local ahead behind can_ahead can_behind head wip notes
+  local ahead behind can_ahead can_behind head wip sync_col notes
 
   read -r ahead behind < <(_ass_origin_ahead_behind "$path")
   read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
   head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   wip=$(_ass_status_wip_column "$path")
+  sync_col=""
+  [[ "$idx" == "1" ]] && sync_col="-->"
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  _ass_status_format_row "$idx" "$agent" "$wip" "$can_ahead" "$can_behind" "-->" "$ahead" "$behind" "$head" "$path"
+  _ass_status_format_row "$idx" "$agent" "$wip" "$sync_col" "$can_ahead" "$can_behind" \
+    "-->" "$ahead" "$behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -493,9 +498,9 @@ ass_status() {
   _ass_info "vs canonical/main @ ${can_head}  -->  origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  _ass_status_format_group_title_row "" "" "" "canonical" "" "origin/main" "" ""
-  _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
-  _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-->" "-------" "-------" "---------" "----"
+  _ass_status_format_group_title_row "" "" "" "" "canonical" "" "" "origin/main" "" ""
+  _ass_status_format_header_row "#" "agent" "wip" "-->" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
+  _ass_status_format_header_row "---" "-------" "-------" "-----" "-------" "-------" "-->" "-------" "-------" "---------" "----"
 
   mapfile -t clones < <(agent_session_clones_list "$origin")
 
@@ -513,8 +518,9 @@ ass_status() {
   echo ""
   _ass_info "^ = rolls into #1 on trim/drop (ass list shows numeric index for ass drop)"
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
+  _ass_info "1st --> (after wip) = session #1 local-syncs to canonical (ass sync handoff)"
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
-  _ass_info "--> = canonical pushes to origin/main"
+  _ass_info "2nd --> = canonical pushes to origin/main"
   _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
   return 0
 }
