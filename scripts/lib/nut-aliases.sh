@@ -220,13 +220,19 @@ _nut_parse_args() {
 }
 
 # Echo how many commits on canonical main are not in the clone's main.
+# Computed from the canonical repo so the count works even when the clone lacks
+# canonical's newer objects locally.
 _nut_clone_behind_canonical() {
-  local clone="$1" canonical="$2" can_head
+  local clone="$1" canonical="$2" clone_head can_head
+  clone_head=$(git -C "$clone" rev-parse main 2>/dev/null) || {
+    printf '?'
+    return 0
+  }
   can_head=$(git -C "$canonical" rev-parse main 2>/dev/null) || {
     printf '?'
     return 0
   }
-  git -C "$clone" rev-list --count "main..${can_head}" 2>/dev/null || printf '?'
+  git -C "$canonical" rev-list --count "${clone_head}..${can_head}" 2>/dev/null || printf '?'
 }
 
 _nut_print_handoff_report() {
@@ -743,7 +749,7 @@ _nutup_trim_kept_contains() {
 _nutup_trim_one() {
   local name="$1" dry_run="$2" yes="$3" no_rollover="$4" keep_latest="$5" archive_override="$6"
   local canonical archive_dir invoked_from rollover_target
-  local -a all_clones=() all_clones_list=() kept=() kept_dedup=() to_archive=()
+  local -a all_clones=() all_clones_list=() kept=() to_archive=()
   local clone mtime t dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
   local files conflicts subjects line skip k reason pwd_here head markers
 
@@ -768,50 +774,31 @@ _nutup_trim_one() {
     return 0
   fi
 
-  # Build kept set: invoked clone + N most-recently-modified clones.
-  if [[ -n "$invoked_from" ]]; then
-    kept+=("$invoked_from")
-  fi
-
+  # Survivor = newest commit on main (same rule as nut). Keep the top keep_latest
+  # clones by that ordering; consolidate dirty work into the survivor, prune the rest.
   mapfile -t all_clones < <(
     for clone in "${all_clones_list[@]}"; do
-      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
+      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
     done | sort -rn -k1,1 | awk '{print $2}'
   )
 
   t=0
   for clone in "${all_clones[@]}"; do
     [[ "$t" -ge "$keep_latest" ]] && break
-    _nutup_trim_kept_contains "$clone" "${kept[@]}" || kept+=("$clone")
+    kept+=("$clone")
     t=$((t + 1))
   done
 
-  kept_dedup=()
-  for clone in "${kept[@]}"; do
-    _nutup_trim_kept_contains "$clone" "${kept_dedup[@]}" || kept_dedup+=("$clone")
-  done
-  kept=("${kept_dedup[@]}")
+  rollover_target="${kept[0]:-}"
 
-  # Rollover target = newest clone in kept set.
-  rollover_target=$(
-    for clone in "${kept[@]}"; do
-      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
-    done | sort -rn -k1,1 | head -1 | awk '{print $2}'
-  )
-
-  # Classify clones outside the kept set (oldest first for rollover ordering).
   to_archive=()
-  for clone in "${all_clones[@]}"; do
-    skip=0
-    for k in "${kept[@]}"; do
-      [[ "$clone" == "$k" ]] && { skip=1; break; }
-    done
-    [[ "$skip" == 1 ]] && continue
+  for clone in "${all_clones_list[@]}"; do
+    _nutup_trim_kept_contains "$clone" "${kept[@]}" && continue
     to_archive+=("$clone")
   done
   mapfile -t to_archive < <(
     for clone in "${to_archive[@]}"; do
-      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
+      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
     done | sort -n -k1,1 | awk '{print $2}'
   )
 
@@ -820,21 +807,21 @@ _nutup_trim_one() {
   pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
   echo "nutup trim: pwd: ${pwd_here}"
   echo "nutup trim: canonical (${name}): ${canonical}"
-  if [[ -n "$invoked_from" ]]; then
-    echo "nutup trim: pwd session clone (protected): ${invoked_from}"
-  else
-    echo "nutup trim: pwd session clone: none"
-    echo "nutup trim:   (not inside a session clone -- run from the clone you want to keep)"
+  if [[ "$pwd_here" == "$canonical" ]]; then
+    echo "nutup trim: pwd is canonical (expected)"
+  elif [[ -n "$invoked_from" ]]; then
+    echo "nutup trim: pwd session clone: ${invoked_from}"
   fi
+  echo "nutup trim: survivor: newest commit on main (same rule as nut)"
   echo "nutup trim: session clones (${#all_clones_list[@]}):"
   for clone in "${all_clones_list[@]}"; do
-    mtime=$(_nutup_trim_clone_mtime "$clone")
-    head=$(git -C "$clone" log -1 --oneline 2>/dev/null || echo "(no commits)")
+    head=$(git -C "$clone" log -1 --oneline main 2>/dev/null || echo "(no commits)")
     markers=""
     _nutup_trim_clone_dirty "$clone" && markers="${markers} dirty"
     _nutup_trim_clone_unlanded "$clone" "$canonical" && markers="${markers} unlanded"
     printf 'nutup trim:   %s\n' "$clone"
-    printf 'nutup trim:     HEAD %s  .git-mtime=%s%s\n' "$head" "$mtime" "$markers"
+    printf 'nutup trim:     HEAD %s  behind canonical: %s commit(s)%s\n' \
+      "$head" "$(_nut_clone_behind_canonical "$clone" "$canonical")" "$markers"
   done
   echo "nutup trim: plan (keep-latest=${keep_latest}):"
   for clone in "${all_clones_list[@]}"; do
@@ -843,8 +830,8 @@ _nutup_trim_one() {
       continue
     fi
     if _nutup_trim_kept_contains "$clone" "${kept[@]}"; then
-      reason="newest .git mtime (keep-latest)"
-      [[ "$clone" == "$invoked_from" ]] && reason="pwd session clone + keep-latest"
+      reason="newest commit on main (keep-latest)"
+      [[ "$clone" == "$rollover_target" ]] && reason="survivor (newest commit on main)"
       printf 'nutup trim:   keep (%s): %s\n' "$reason" "$clone"
       continue
     fi
@@ -929,10 +916,12 @@ nutup trim -- consolidate and prune stale agent session clones for a consumer
   nutup trim --dry-run       print plan only (never consolidates or prunes)
   nutup trim --yes           skip confirmation prompt (still consolidates/prunes)
   nutup trim --no-rollover   keep dirty older clones instead of consolidating
-  nutup trim --keep-latest N keep N newest clones (default 1)
+  nutup trim --keep-latest N keep N newest-by-commit clones (default 1)
   nutup trim --archive-dir <path>
 
-Consolidates uncommitted work from older clones into the kept clone, then prunes
+Run from the canonical repo (pwd is canonical). Survivor = newest commit on main
+(same rule as nut). Consolidates uncommitted work from older clones into the
+survivor, then prunes
 stale clones (verified .tar.gz archive, then remove source dir). Un-landed clones
 (commits not in origin/main) are kept for agent cherry-pick.
 EOF

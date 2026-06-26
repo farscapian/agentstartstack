@@ -110,11 +110,13 @@ nutup trim --yes           # skip confirmation prompt
 nutup trim --keep-latest 2 # keep two newest clones
 ```
 
-Before consolidating or pruning anything, trim prints **pwd**, the **canonical** repo, every
-**session clone** for that consumer (HEAD, `.git` mtime, dirty/unlanded flags), and a
-**keep/prune plan**. Run it from the session clone you want to **keep** so pwd protects that
-clone; running from canonical alone keeps only the newest `.git` mtime. Clones are consolidated
-and pruned only after `--yes` or an interactive `y` at the prompt (not on `--dry-run`).
+Run from the **canonical** repo (typical workflow: stay in canonical, run `nutup trim` or
+`nutup trim <name>`). Trim discovers every session clone for that consumer, picks the
+**survivor** (newest commit on `main` -- same rule as `nut`), consolidates dirty work from
+stale clones into the survivor, and prunes the rest. Before acting, it prints **pwd**, the
+**canonical** repo, each session clone (HEAD, behind-canonical, dirty/unlanded), and a
+**keep/prune plan**. Clones are consolidated and pruned only after `--yes` or an interactive
+`y` at the prompt (not on `--dry-run`).
 
 `nutupyall` calls `nutup trim --yes` for each consumer as its final step (opt out with `NUTUPYALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 
