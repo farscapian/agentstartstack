@@ -23,6 +23,66 @@ agentstartstack_load_config() {
     dir="$(dirname "$dir")"
   done
 
+  agentstartstack_infer_config "$start_dir" && return 0
+  return 1
+}
+
+# Infer identity when .agentstartstack.env is missing (template repo or legacy clone).
+# Session clones: prefer local-sync -> canonical; copy canonical .env when present.
+# Template canonical: synthesize PROJECT_NAME and paths from the repo tree.
+agentstartstack_infer_config() {
+  local start_dir="${1:-}" dir canonical origin env_file
+
+  [[ -n "$start_dir" ]] || return 1
+  dir="$(readlink -f "$start_dir")"
+  git -C "$dir" rev-parse --is-inside-work-tree &>/dev/null || return 1
+
+  canonical=""
+  if canonical=$(git -C "$dir" remote get-url local-sync 2>/dev/null); then
+    [[ -d "$canonical" ]] || canonical=""
+    [[ -n "$canonical" ]] && canonical="$(readlink -f "$canonical")"
+  fi
+
+  if [[ -n "$canonical" && -f "${canonical}/.agentstartstack.env" ]]; then
+    # shellcheck source=/dev/null
+    source "${canonical}/.agentstartstack.env"
+    AGENTSTARTSTACK_HOST_ROOT="$dir"
+    AGENTSTARTSTACK_CONFIG_FILE="${canonical}/.agentstartstack.env"
+    CANONICAL_LOCAL_REPO="$(readlink -f "$canonical")"
+    return 0
+  fi
+
+  env_file="${dir}/.agentstartstack.env"
+  if [[ -f "$env_file" ]]; then
+    # shellcheck source=/dev/null
+    source "$env_file"
+    AGENTSTARTSTACK_HOST_ROOT="$dir"
+    AGENTSTARTSTACK_CONFIG_FILE="$env_file"
+    return 0
+  fi
+
+  # Template repo (agentstartstack itself) or a fresh clone before ass_new writes .env.
+  if [[ -f "${dir}/scripts/init_grok_session.sh" && -d "${dir}/docs" ]]; then
+    AGENTSTARTSTACK_HOST_ROOT="$dir"
+    AGENTSTARTSTACK_CONFIG_FILE=""
+    PROJECT_NAME="$(basename "$dir")"
+    DISPLAY_NAME="$PROJECT_NAME"
+    CANONICAL_LOCAL_REPO="$dir"
+    ORIGIN_URL="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+    return 0
+  fi
+
+  if [[ -n "$canonical" && -f "${canonical}/scripts/init_grok_session.sh" \
+        && -d "${canonical}/docs" ]]; then
+    AGENTSTARTSTACK_HOST_ROOT="$dir"
+    AGENTSTARTSTACK_CONFIG_FILE=""
+    PROJECT_NAME="$(basename "$canonical")"
+    DISPLAY_NAME="$PROJECT_NAME"
+    CANONICAL_LOCAL_REPO="$canonical"
+    ORIGIN_URL="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+    return 0
+  fi
+
   return 1
 }
 

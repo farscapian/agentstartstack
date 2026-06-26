@@ -51,7 +51,8 @@ resolve_repo_root() {
 REPO_ROOT="$(resolve_repo_root "${1:-}")"
 [[ -n "$REPO_ROOT" ]] || err "Not inside a git repo. Pass the session clone path as an argument."
 
-agentstartstack_load_config "$REPO_ROOT" || err "Missing .agentstartstack.env (run add-to-project.sh)"
+agentstartstack_load_config "$REPO_ROOT" \
+  || err "Missing .agentstartstack.env (run add-to-project.sh, or ass new --claude from canonical)"
 agentstartstack_apply_defaults || exit 1
 agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 

@@ -7,7 +7,7 @@ Shared AI agent guidance and workflow tooling for projects. Add this repo as a *
 | Path (in this repo) | Purpose |
 |---------------------|---------|
 | `docs/` | Generic agent docs: workflow, ass, conventions, security, terminal tips, etc. |
-| `scripts/` | Parameterized `init_grok_session.sh`, `init_claude_session.sh`, git hooks |
+| `scripts/` | `ass.sh` CLI, `init_grok_session.sh`, `init_claude_session.sh`, git hooks |
 | `templates/` | Stubs for wiring a new project (`.agentstartstack.env`, `CLAUDE.md`, project `docs/`) |
 
 When mounted as a submodule in a host project:
@@ -31,7 +31,7 @@ git submodule add git@github.com:farscapian/agentstartstack.git .agentstartstack
 
 # 3. Edit .agentstartstack.env and CLAUDE.md for your project
 # 4. Commit submodule + new files
-git add .agentstartstack .agentstartstack.env CLAUDE.md agentstartstack scripts .githooks
+git add .agentstartstack .agentstartstack.env CLAUDE.md docs scripts .githooks
 git commit -m "Add agentstartstack submodule and AI guidance"
 ```
 
@@ -43,11 +43,81 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 
 ## Agent session workflow (summary)
 
-1. **Session sync** -- human runs `scripts/init_grok_session.sh` or `scripts/init_claude_session.sh` from the project (thin wrappers call into `.agentstartstack/scripts/`).
-2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo.
-3. **Handoff** -- human runs `nut` (or `nutup`) from `~/.bash_aliases`; agents never `git push origin`.
+1. **New session** -- from the canonical local repo: `ass new --grok` or `ass new --claude`
+2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo
+3. **Handoff** -- human runs `ass` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
 
-Full details: [`agentstartstack/workflow.md`](agentstartstack/workflow.md) and [`agentstartstack/nut.md`](agentstartstack/nut.md).
+Full details: [`docs/workflow.md`](docs/workflow.md) and [`docs/ass.md`](docs/ass.md).
+
+## `ass` CLI (human-side handoff)
+
+Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-aliases.sh`](scripts/install-shell-aliases.sh), your shell defines a thin `ass()` wrapper. **Pwd-oriented:** `cd` to the canonical repo or a session clone, then run a command.
+
+### Handoff
+
+| Command | Description |
+|---------|-------------|
+| `ass` | Local-sync session clone -> canonical (pick farthest ahead; auto-sync behind clones) |
+| `ass -f` | Same, but ignore session clones initialized before the last `ass` |
+| `ass --stashes` | Opt in: prompt to move canonical stashes into the session clone |
+| `ass up` | `ass`, then `git push origin main` |
+| `ass up -f` | `ass -f`, then push |
+| `ass up --stashes` | `ass --stashes`, then push |
+
+### Session clones
+
+| Command | Description |
+|---------|-------------|
+| `ass new --grok` | Clone + align a Grok/Cursor session (run from canonical pwd) |
+| `ass new --claude` | Clone + align a Claude Code session (run from canonical pwd) |
+| `ass list` | List session clones for this project (by origin URL) |
+| `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
+| `ass sync` | Align behind session clones to canonical (`--dry-run` to preview) |
+| `ass prune [<path>]` | Consolidate one clone into the newest, then archive + remove it |
+| `ass drop <n>` | Archive and remove session clone #n (index from `ass list`) |
+
+### Trim and publish
+
+| Command | Description |
+|---------|-------------|
+| `ass up trim` | Roll dirty work into kept clones, archive stale session clones |
+| `ass up trim --dry-run` | Print keep/prune/rollover plan only |
+| `ass up trim --yes` | Skip confirmation prompt |
+| `ass up trim --keep-latest N` | Keep N most-recently-modified clones (default 1) |
+| `ass up trim --no-rollover` | Keep dirty older clones instead of rolling work over |
+| `ass up --all` | `ass up` agentstartstack, refresh consumer submodules, auto-trim clones |
+
+### Upstream handoff
+
+| Command | Description |
+|---------|-------------|
+| `ass dropit <src> [dest]` | From a consumer session clone: copy generic work into agentstartstack |
+
+### Help
+
+```bash
+ass --help
+ass new --help
+ass up --help
+ass up trim --help
+ass up --all --help
+ass dropit --help
+```
+
+See [`docs/ass.md`](docs/ass.md) for guards, trim/archive rules, and `ass up --all` bump protocol.
+
+### Starting a Grok session (template or host project)
+
+From the **canonical** repo:
+
+```bash
+cd ~/Sync/mini_projects/agentstartstack   # or your host project canonical
+ass new --grok
+```
+
+On success, `ass new` prints the session clone path. Open that folder in Cursor/Grok or `cd` there and paste the path as the workspace. The clone is aligned to canonical `main` and ready for agent work.
+
+Works for the agentstartstack template repo itself (no `.agentstartstack.env` at canonical -- `ass new` writes one into the session clone).
 
 ## Branding
 
@@ -55,6 +125,6 @@ Always lowercase **agentstartstack** in docs and messages (never Agent Start Sta
 
 ## Maintenance
 
-- Generic workflow changes belong here; bump the submodule in host projects when updated.
-- Project-specific gotchas, CLI, architecture stay in each host project's `docs/`.
-- When `nut` behavior changes, edit `scripts/lib/nut-aliases.sh` (the single source of truth) and re-run `scripts/install-shell-aliases.sh` (the init scripts also run it), then `source ~/.bashrc`. Do not hand-edit `~/.bash_aliases`.
+- CLI changes: edit `scripts/lib/ass-aliases.sh`, then re-run `scripts/install-shell-aliases.sh` and `source ~/.bashrc`
+- Generic workflow changes belong here; bump the submodule in host projects when updated
+- Project-specific gotchas, CLI, architecture stay in each host project's `docs/`

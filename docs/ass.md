@@ -22,6 +22,7 @@ ass -f              # handoff only from a post-last-ass session clone
 ass --stashes         # opt in: prompt to move canonical stashes to session clone
 ass new --grok      # create + align a Grok session clone (canonical pwd)
 ass new --claude    # create + align a Claude session clone (canonical pwd)
+# Works for host projects and the agentstartstack template (writes .agentstartstack.env into the clone)
 ass prune           # consolidate one session clone into the newest, then remove it
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass status          # ahead/behind origin/main for canonical and session clones
@@ -122,14 +123,13 @@ ass up trim --yes           # skip confirmation prompt
 ass up trim --keep-latest 2 # keep two newest clones
 ```
 
-Run from the **canonical** repo (typical workflow: stay in canonical, run `ass up trim` or
-`ass up trim <name>`). Trim discovers every session clone for that consumer, picks the
-**survivor** (newest commit on `main` -- trim survivor rule; handoff uses farthest ahead of
-canonical), consolidates dirty work from
-stale clones into the survivor, and prunes the rest. Before acting, it prints **pwd**, the
-**canonical** repo, each session clone (HEAD, behind-canonical, dirty/unlanded), and a
-**keep/prune plan**. Clones are consolidated and pruned only after `--yes` or an interactive
-`y` at the prompt (not on `--dry-run`).
+Run from **canonical** or a **session clone**. Trim discovers every session clone for that
+consumer, builds a **kept set** (`--keep-latest N` by mtime, plus the pwd clone when
+applicable), and picks a **rollover target** (newest mtime in the kept set). Dirty work from
+stale clones is rolled into the rollover target, then stale clones are archived and removed.
+Before acting, it prints **pwd**, the **canonical** repo, each session clone (HEAD,
+behind-canonical, dirty/unlanded), tarball destinations, and a **keep/prune plan**. Archives
+and removals run only after `--yes` or an interactive `y` (not on `--dry-run`).
 
 `ass up --all` calls `ass up trim --yes` for each consumer as its final step (opt out with `ASS_UP_ALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 

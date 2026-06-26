@@ -1577,6 +1577,56 @@ EOF
   return 0
 }
 
+# Pick the grok or claude parent from AGENT_SESSION_CLONE_PARENT (colon-separated).
+_ass_session_parent_for_agent() {
+  local agent="$1" parents base fallback=""
+  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  local IFS=:
+  for base in $parents; do
+    [[ -n "$base" ]] || continue
+    [[ -z "$fallback" ]] && fallback="$base"
+    case "$agent" in
+      grok)
+        [[ "$base" == *grok* ]] && { printf '%s\n' "$base"; return 0; }
+        ;;
+      claude)
+        [[ "$base" == *claude* ]] && { printf '%s\n' "$base"; return 0; }
+        ;;
+    esac
+  done
+  unset IFS
+  if [[ "$agent" == grok ]]; then
+    printf '%s\n' "${fallback:-${HOME}/.grok/worktrees}"
+  else
+    printf '%s\n' "${fallback:-${HOME}/.claude/worktrees}"
+  fi
+}
+
+# Write gitignored .agentstartstack.env into a session clone so init_* can align it.
+_ass_new_write_clone_env() {
+  local canonical="$1" clone_path="$2" origin="$3"
+  local env_file="${clone_path}/.agentstartstack.env" project_name
+
+  project_name="$(basename "$canonical")"
+  if [[ -f "${canonical}/.agentstartstack.env" ]]; then
+    cp "${canonical}/.agentstartstack.env" "$env_file"
+    # Ensure CANONICAL_LOCAL_REPO points at the real canonical checkout.
+    if grep -q '^CANONICAL_LOCAL_REPO=' "$env_file" 2>/dev/null; then
+      sed -i "s|^CANONICAL_LOCAL_REPO=.*|CANONICAL_LOCAL_REPO=${canonical}|" "$env_file"
+    else
+      printf 'CANONICAL_LOCAL_REPO=%s\n' "$canonical" >> "$env_file"
+    fi
+    return 0
+  fi
+
+  cat > "$env_file" <<EOF
+PROJECT_NAME=${project_name}
+DISPLAY_NAME=${project_name}
+CANONICAL_LOCAL_REPO=${canonical}
+ORIGIN_URL=${origin}
+EOF
+}
+
 ass_new() {
   local agent="" canonical origin parent session_id clone_path script_dir
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -1586,7 +1636,8 @@ ass new -- create and align a new session clone (from canonical pwd)
   ass new --grok      Grok / Cursor session clone
   ass new --claude    Claude Code session clone
 
-Run from the canonical local repo. Creates AGENT_SESSION_CLONE_PARENT/<timestamp>/.
+Run from the canonical local repo (host project or agentstartstack template).
+Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env, aligns.
 EOF
     return 0
   fi
@@ -1605,15 +1656,21 @@ EOF
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
     _ass_err "ass new: canonical has no origin remote"; return 1
   }
-  parent="${AGENT_SESSION_CLONE_PARENT%%:*}"
-  parent="${parent:-${HOME}/.grok/worktrees}"
+  parent=$(_ass_session_parent_for_agent "$agent")
   session_id=$(date +%s)
   clone_path="${parent}/$(basename "$canonical")/${session_id}"
   mkdir -p "$(dirname "$clone_path")"
   git clone "$origin" "$clone_path"
+  _ass_new_write_clone_env "$canonical" "$clone_path" "$origin"
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
   "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
   _ass_ok "ass new: session clone ready: ${clone_path}"
+  _ass_info "Open agent session: cd ${clone_path}"
+  if [[ "$agent" == grok ]]; then
+    _ass_info "Grok/Cursor: open that folder or paste the path above as the session workspace"
+  else
+    _ass_info "Claude Code: cd there, then start claude in that directory"
+  fi
 }
 
 # ass up trim -- consolidate and prune stale agent session clones for a consumer.
@@ -1694,14 +1751,32 @@ _ass_up_trim_resolve_archive_dir() {
     printf '%s\n' "${AGENTSTARTSTACK_CLONE_ARCHIVE_DIR}"
     return 0
   fi
-  printf '%s\n' "${HOME}/.docs/archives/${name}/agent_clones"
+  printf '%s\n' "${HOME}/.agentstartstack/archives/${name}/agent_clones"
 }
 
 _ass_up_trim_rollover() {
   local old="$1" target="$2"
-  local patch tmp relpath files=0 conflicts=0
+  local stash_sha patch relpath files=0 conflicts=0 tracked untracked
 
-  patch=$(mktemp "${TMPDIR:-/tmp}/nutup-trim-patch.XXXXXX")
+  stash_sha=$(git -C "$old" stash create --include-untracked 2>/dev/null) || stash_sha=""
+  if [[ -n "$stash_sha" ]]; then
+    mapfile -t tracked < <(git -C "$old" diff --name-only HEAD 2>/dev/null)
+    mapfile -t untracked < <(git -C "$old" ls-files --others --exclude-standard 2>/dev/null)
+    files=$((${#tracked[@]} + ${#untracked[@]}))
+    if ! git -C "$target" stash apply "$stash_sha" 2>/dev/null; then
+      conflicts=1
+    fi
+    if [[ -n "$(git -C "$target" diff --name-only --diff-filter=U 2>/dev/null)" ]]; then
+      conflicts=1
+    fi
+    if [[ -n "$(find "$target" -name '*.rej' -print -quit 2>/dev/null)" ]]; then
+      conflicts=1
+    fi
+    printf '%s %s\n' "$files" "$conflicts"
+    return 0
+  fi
+
+  patch=$(mktemp "${TMPDIR:-/tmp}/ass-up-trim-patch.XXXXXX")
   git -C "$old" diff HEAD > "$patch"
   if [[ -s "$patch" ]]; then
     if git -C "$target" apply --3way "$patch" 2>/dev/null; then
@@ -1726,6 +1801,47 @@ _ass_up_trim_rollover() {
   done < <(git -C "$old" ls-files --others --exclude-standard 2>/dev/null)
 
   printf '%s %s\n' "$files" "$conflicts"
+}
+
+# Kept set = --keep-latest N clones by mtime, plus pwd session clone when invoked from one.
+# Rollover target = newest-by-mtime clone in the kept set.
+_ass_up_trim_build_kept_set() {
+  local keep_latest="$1" invoked_from="$2"
+  shift 2
+  local -a all_clones_list=("$@")
+  local -a kept=() sorted=()
+  local clone mtime best_mtime=0 rollover_target="" t
+
+  mapfile -t sorted < <(
+    for clone in "${all_clones_list[@]}"; do
+      printf '%s %s\n' "$(_ass_up_trim_clone_mtime "$clone")" "$clone"
+    done | sort -rn -k1,1 | awk '{print $2}'
+  )
+
+  t=0
+  for clone in "${sorted[@]}"; do
+    [[ "$t" -ge "$keep_latest" ]] && break
+    _ass_up_trim_kept_contains "$clone" "${kept[@]}" || kept+=("$clone")
+    t=$((t + 1))
+  done
+
+  if [[ -n "$invoked_from" ]] \
+     && ! _ass_up_trim_kept_contains "$invoked_from" "${kept[@]}"; then
+    kept+=("$invoked_from")
+  fi
+
+  for clone in "${kept[@]}"; do
+    mtime=$(_ass_up_trim_clone_mtime "$clone")
+    if [[ "$mtime" -ge "$best_mtime" ]]; then
+      best_mtime=$mtime
+      rollover_target="$clone"
+    fi
+  done
+
+  printf '%s\n' "$rollover_target"
+  for clone in "${kept[@]}"; do
+    printf '%s\n' "$clone"
+  done
 }
 
 _ass_up_trim_archive_clone() {
@@ -1808,9 +1924,10 @@ _ass_up_trim_kept_contains() {
 _ass_up_trim_one() {
   local name="$1" dry_run="$2" yes="$3" no_rollover="$4" keep_latest="$5" archive_override="$6"
   local canonical archive_dir invoked_from rollover_target detail
-  local -a all_clones=() all_clones_list=() kept=() to_archive=()
-  local clone mtime t dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
-  local files conflicts subjects line skip k reason pwd_here head markers
+  local -a all_clones_list=() kept=() to_archive=() kept_lines=()
+  local clone mtime dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
+  local kept_current=0 files conflicts subjects line reason pwd_here head markers
+  local tarball_dest harness shortsha datestamp base
 
   canonical=$(_ass_sync_root "$name") || {
     echo "ass up trim: no canonical local repo for: ${name}" >&2
@@ -1833,22 +1950,13 @@ _ass_up_trim_one() {
     return 0
   fi
 
-  # Survivor = newest commit on main (same rule as nut). Keep the top keep_latest
-  # clones by that ordering; consolidate dirty work into the survivor, prune the rest.
-  mapfile -t all_clones < <(
-    for clone in "${all_clones_list[@]}"; do
-      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
-    done | sort -rn -k1,1 | awk '{print $2}'
-  )
-
-  t=0
-  for clone in "${all_clones[@]}"; do
-    [[ "$t" -ge "$keep_latest" ]] && break
-    kept+=("$clone")
-    t=$((t + 1))
-  done
-
-  rollover_target="${kept[0]:-}"
+  mapfile -t kept_lines < <(_ass_up_trim_build_kept_set "$keep_latest" "$invoked_from" \
+    "${all_clones_list[@]}")
+  rollover_target="${kept_lines[0]:-}"
+  kept=()
+  if [[ ${#kept_lines[@]} -gt 1 ]]; then
+    kept=("${kept_lines[@]:1}")
+  fi
 
   to_archive=()
   for clone in "${all_clones_list[@]}"; do
@@ -1857,7 +1965,7 @@ _ass_up_trim_one() {
   done
   mapfile -t to_archive < <(
     for clone in "${to_archive[@]}"; do
-      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
+      printf '%s %s\n' "$(_ass_up_trim_clone_mtime "$clone")" "$clone"
     done | sort -n -k1,1 | awk '{print $2}'
   )
 
@@ -1871,7 +1979,7 @@ _ass_up_trim_one() {
   elif [[ -n "$invoked_from" ]]; then
     echo "ass up trim: pwd session clone: ${invoked_from}"
   fi
-  echo "ass up trim: survivor: newest commit on main (same rule as nut)"
+  echo "ass up trim: rollover target: newest mtime in kept set"
   echo "ass up trim: session clones (${#all_clones_list[@]}):"
   for clone in "${all_clones_list[@]}"; do
     head=$(git -C "$clone" log -1 --oneline main 2>/dev/null || echo "(no commits)")
@@ -1889,8 +1997,9 @@ _ass_up_trim_one() {
       continue
     fi
     if _ass_up_trim_kept_contains "$clone" "${kept[@]}"; then
-      reason="newest commit on main (keep-latest)"
-      [[ "$clone" == "$rollover_target" ]] && reason="survivor (newest commit on main)"
+      reason="keep-latest (mtime)"
+      [[ "$clone" == "$rollover_target" ]] && reason="rollover target (newest mtime)"
+      [[ -n "$invoked_from" && "$clone" == "$invoked_from" ]] && reason="current (pwd)"
       printf 'ass up trim:   keep (%s): %s\n' "$reason" "$clone"
       continue
     fi
@@ -1901,13 +2010,18 @@ _ass_up_trim_one() {
       done <<<"$detail"
       continue
     fi
+    harness=$(_ass_up_trim_harness "$clone")
+    shortsha=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    datestamp=$(date +%Y%m%d)
+    base=$(basename "$clone")
+    tarball_dest="${archive_dir}/${harness}-${base}-${shortsha}-${datestamp}.tar.gz"
     if [[ "$dry_run" == 1 ]]; then
-      printf 'ass up trim:   prune (dry-run): %s\n' "$clone"
+      printf 'ass up trim:   prune (dry-run): %s -> %s\n' "$clone" "$tarball_dest"
     else
-      printf 'ass up trim:   prune: %s\n' "$clone"
+      printf 'ass up trim:   prune: %s -> %s\n' "$clone" "$tarball_dest"
     fi
   done
-  printf 'ass up trim:   consolidation target: %s\n' "$rollover_target"
+  printf 'ass up trim:   rollover target: %s\n' "$rollover_target"
 
   if [[ "$dry_run" == 1 ]]; then
     echo "ass up trim: dry-run -- not consolidated or pruned (re-run without --dry-run to confirm)"
@@ -1948,13 +2062,13 @@ _ass_up_trim_one() {
         continue
       fi
       if [[ "$dry_run" == 1 ]]; then
-        echo "ass up trim:   [dry-run] would consolidate dirty: ${clone} -> ${rollover_target}"
+        echo "ass up trim:   [dry-run] would roll over dirty: ${clone} -> ${rollover_target}"
       else
         read -r files conflicts < <(_ass_up_trim_rollover "$clone" "$rollover_target")
         if [[ "$conflicts" == 1 ]]; then
-          echo "ass up trim:   consolidated: ${clone} (${files} file(s); conflicts left for agent)"
+          echo "ass up trim:   rolled over: ${clone} (${files} file(s); conflicts left for agent)"
         else
-          echo "ass up trim:   consolidated: ${clone} (${files} file(s))"
+          echo "ass up trim:   rolled over: ${clone} (${files} file(s))"
         fi
         rolled=$((rolled + 1))
       fi
@@ -1967,11 +2081,15 @@ _ass_up_trim_one() {
     fi
   done
 
+  if [[ -n "$invoked_from" ]] && _ass_up_trim_kept_contains "$invoked_from" "${kept[@]}"; then
+    kept_current=1
+  fi
+
   if [[ "$dry_run" == 1 ]]; then
-    echo "ass up trim: ${name} -- dry-run: ${archived} would prune, ${rolled} would consolidate -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+    echo "ass up trim: ${name} -- dry-run: ${archived} would archive, ${rolled} would roll over -> $(basename "${rollover_target:-none}"), ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty), ${kept_current} kept (current)"
   else
-    echo "ass up trim: ${name} -- consolidated and pruned: ${rolled} consolidated -> ${rollover_target}, ${archived} pruned, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
-    echo "ass up trim:   prune archives in ${archive_dir}"
+    echo "ass up trim: ${name} -- ${archived} archived, ${rolled} rolled over -> $(basename "${rollover_target:-none}"), ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty), ${kept_current} kept (current)"
+    echo "ass up trim: done -- archives in ${archive_dir}"
   fi
   return 0
 }
@@ -1990,13 +2108,13 @@ ass up trim -- consolidate and prune stale agent session clones for a consumer
   ass up trim --dry-run       print plan only (never consolidates or prunes)
   ass up trim --yes           skip confirmation prompt (still consolidates/prunes)
   ass up trim --no-rollover   keep dirty older clones instead of consolidating
-  ass up trim --keep-latest N keep N newest-by-commit clones (default 1)
+  ass up trim --keep-latest N keep N most-recently-modified clones (default 1)
   ass up trim --archive-dir <path>
 
-Run from the canonical repo (pwd is canonical). Survivor = newest commit on main
-(same rule as nut). Consolidates uncommitted work from older clones into the
-survivor, then prunes
-stale clones (verified .tar.gz archive, then remove source dir). Un-landed clones
+Run from canonical or a session clone. Kept set = pwd clone (when applicable) plus
+--keep-latest N clones by mtime. Rollover target = newest mtime in the kept set.
+Rolls uncommitted work from older clones into the rollover target, then archives
+stale clones (verified .tar.gz, then remove source dir). Un-landed clones
 (commits not in origin/main) are kept for agent cherry-pick.
 EOF
     return 0
