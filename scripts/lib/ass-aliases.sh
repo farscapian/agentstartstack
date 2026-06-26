@@ -1577,8 +1577,41 @@ EOF
   return 0
 }
 
+# True when ass new runs inside a Codium (VSCodium) integrated terminal.
+_ass_in_codium_integrated_terminal() {
+  [[ "${TERM_PROGRAM:-}" == vscode ]] || return 1
+
+  local ipc="${VSCODE_IPC_HOOK_CLI:-}" git_node="${VSCODE_GIT_ASKPASS_NODE:-}"
+  case "${ipc}${git_node}" in
+    *[Cc]odium*|*/codium/*) return 0 ;;
+  esac
+
+  local pid="${PPID:-}" depth=0 comm
+  while [[ "$depth" -lt 8 && -n "$pid" && "$pid" -gt 1 ]]; do
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ') || break
+    case "$comm" in
+      codium|codium-bin|Codium) return 0 ;;
+    esac
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || break
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+# Open the session clone in Codium and launch the Claude Code extension panel.
+_ass_open_claude_code_in_codium() {
+  local clone_path="$1"
+  command -v codium >/dev/null 2>&1 || return 1
+
+  codium -r "$clone_path" >/dev/null 2>&1 \
+    || codium "$clone_path" >/dev/null 2>&1 \
+    || return 1
+  codium "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
+  return 0
+}
+
 # Infer session agent from installed CLIs: grok only -> grok; claude only -> claude;
-# both -> claude. Explicit --grok/--claude overrides this.
+# both -> claude. Codium integrated terminal -> claude. Explicit flags override.
 _ass_detect_installed_agent() {
   local has_grok=0 has_claude=0
   command -v grok >/dev/null 2>&1 && has_grok=1
@@ -1654,12 +1687,13 @@ ass_new() {
     cat <<'EOF'
 ass new -- create and align a new session clone (from canonical pwd)
 
-  ass new               infer agent from installed CLIs (grok/claude on PATH)
+  ass new               infer agent (see below)
   ass new --grok        force Grok / Cursor session clone
   ass new --claude      force Claude Code session clone
 
-When both grok and claude are installed, the default is claude. With neither on
-PATH, ass new exits with an error (install one or pass --grok/--claude after setup).
+Inference order: Codium integrated terminal -> claude (opens Claude Code extension);
+else grok-only on PATH -> grok; claude-only -> claude; both installed -> claude.
+With neither on PATH (and not in Codium), ass new exits with an error.
 
 Run from the canonical local repo (host project or agentstartstack template).
 Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env, aligns.
@@ -1674,11 +1708,16 @@ EOF
     esac
   done
   if [[ -z "$agent" ]]; then
-    agent=$(_ass_detect_installed_agent) || {
-      _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
-      return 1
-    }
-    _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
+    if _ass_in_codium_integrated_terminal; then
+      agent=claude
+      _ass_info "ass new: using claude (Codium integrated terminal)"
+    else
+      agent=$(_ass_detect_installed_agent) || {
+        _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
+        return 1
+      }
+      _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
+    fi
   fi
   canonical=$(git rev-parse --show-toplevel 2>/dev/null) || {
     _ass_err "ass new: run from the canonical local repo"; return 1
@@ -1696,10 +1735,17 @@ EOF
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
   "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
   _ass_ok "ass new: session clone ready: ${clone_path}"
-  _ass_info "Open agent session: cd ${clone_path}"
-  if [[ "$agent" == grok ]]; then
+  if [[ "$agent" == claude ]] && _ass_in_codium_integrated_terminal; then
+    if _ass_open_claude_code_in_codium "$clone_path"; then
+      _ass_ok "ass new: opened ${clone_path} in Codium (Claude Code extension)"
+    else
+      _ass_info "Open agent session: cd ${clone_path} (codium CLI not found -- open folder manually)"
+    fi
+  elif [[ "$agent" == grok ]]; then
+    _ass_info "Open agent session: cd ${clone_path}"
     _ass_info "Grok/Cursor: open that folder or paste the path above as the session workspace"
   else
+    _ass_info "Open agent session: cd ${clone_path}"
     _ass_info "Claude Code: cd there, then start claude in that directory"
   fi
 }

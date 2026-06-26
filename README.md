@@ -68,7 +68,7 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 
 | Command | Description |
 |---------|-------------|
-| `ass new` | Clone + align a session (infers agent: grok-only -> grok, claude-only -> claude, both -> claude) |
+| `ass new` | Clone + align a session (Codium terminal -> claude + extension; else grok/claude from PATH) |
 | `ass new --grok` | Force Grok/Cursor session |
 | `ass new --claude` | Force Claude Code session |
 | `ass list` | List session clones for this project (by origin URL) |
@@ -113,7 +113,7 @@ From the **canonical** repo:
 
 ```bash
 cd ~/Sync/mini_projects/agentstartstack   # or your host project canonical
-ass new                  # or ass new --grok to force Grok when both are installed
+ass new                  # from Codium terminal: opens Claude Code; else infers agent
 ```
 
 On success, `ass new` prints the session clone path. Open that folder in Cursor/Grok or `cd` there and paste the path as the workspace. The clone is aligned to canonical `main` and ready for agent work.

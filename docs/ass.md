@@ -20,10 +20,11 @@ Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `ass push`.
 ass                 # local-sync handoff (pwd: canonical or session clone)
 ass -f              # handoff only from a post-last-ass session clone
 ass --stashes         # opt in: prompt to move canonical stashes to session clone
-ass new             # create + align a session clone (infers grok/claude from PATH)
+ass new             # create + align a session clone (infers agent; see below)
 ass new --grok      # force Grok / Cursor session clone
 ass new --claude    # force Claude Code session clone
-# Default when both are installed: claude. Works for host projects and the template repo.
+# Inference: Codium integrated terminal -> claude (opens Claude Code extension);
+# else grok-only -> grok, claude-only -> claude, both -> claude.
 ass prune           # consolidate one session clone into the newest, then remove it
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass status          # ahead/behind origin/main for canonical and session clones
