@@ -23,8 +23,10 @@ ass --stashes         # opt in: prompt to move canonical stashes to session clon
 ass new             # create + align a session clone (infers agent; see below)
 ass new --grok      # force Grok / Cursor session clone
 ass new --claude    # force Claude Code session clone
-# Inference: Codium integrated terminal -> claude (opens Claude Code extension);
-# else grok-only -> grok, claude-only -> claude, both -> claude.
+# Inference: Codium integrated terminal -> claude (new detached Codium window on the
+# left monitor, maximized, Claude Code extension opened); else grok/claude from PATH.
+# Optional: ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y override monitor origin;
+# wmctrl (if installed) reinforces placement on XWayland.
 ass prune           # consolidate one session clone into the newest, then remove it
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass status          # ahead/behind origin/main for canonical and session clones

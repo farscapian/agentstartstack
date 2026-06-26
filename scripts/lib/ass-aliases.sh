@@ -1598,15 +1598,60 @@ _ass_in_codium_integrated_terminal() {
   return 1
 }
 
-# Open the session clone in Codium and launch the Claude Code extension panel.
-_ass_open_claude_code_in_codium() {
-  local clone_path="$1"
-  command -v codium >/dev/null 2>&1 || return 1
+# Leftmost connected output from xrandr: X Y WIDTH HEIGHT.
+_ass_codium_left_monitor_geometry() {
+  local line x y w h
+  command -v xrandr >/dev/null 2>&1 || return 1
+  line=$(xrandr --query 2>/dev/null | awk '
+    $2 == "connected" {
+      if (match($0, /([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)/, m)) {
+        printf "%d %d %d %d\n", m[3], m[4], m[1], m[2]
+      }
+    }
+  ' | sort -n -k1,1 | head -1)
+  [[ -n "$line" ]] || return 1
+  read -r x y w h <<<"$line"
+  printf '%s %s %s %s\n' "$x" "$y" "$w" "$h"
+}
 
-  codium -r "$clone_path" >/dev/null 2>&1 \
-    || codium "$clone_path" >/dev/null 2>&1 \
+# Best-effort: move a new Codium window to the left monitor and maximize (wmctrl/XWayland).
+_ass_codium_place_window_maximized() {
+  local marker="$1" x="${2:-0}" y="${3:-0}"
+  local wid attempt
+
+  command -v wmctrl >/dev/null 2>&1 || return 1
+  for attempt in $(seq 1 40); do
+    sleep 0.25
+    wid=$(wmctrl -l 2>/dev/null | grep -iF "$marker" | tail -1 | awk '{print $1}') || true
+    [[ -n "$wid" ]] || continue
+    wmctrl -i -r "$wid" -e "0,${x},${y},-1,-1" 2>/dev/null || true
+    wmctrl -i -r "$wid" -b add,maximized_vert,maximized_horz 2>/dev/null && return 0
+  done
+  return 1
+}
+
+# Detached Codium window on the left monitor (maximized) + Claude Code extension.
+_ass_open_claude_code_in_codium() {
+  local clone_path="$1" marker x=0 y=0
+
+  command -v codium >/dev/null 2>&1 || return 1
+  marker=$(basename "$clone_path")
+
+  if read -r x y _ _ < <(_ass_codium_left_monitor_geometry 2>/dev/null); then
+    :
+  fi
+  x="${ASS_CODIUM_WINDOW_X:-$x}"
+  y="${ASS_CODIUM_WINDOW_Y:-$y}"
+
+  # -n: new detached window. Electron passthrough: position + maximize on that monitor.
+  codium -n --window-position="${x},${y}" --start-maximized "$clone_path" >/dev/null 2>&1 \
+    || codium -n "$clone_path" >/dev/null 2>&1 \
     || return 1
-  codium "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
+
+  _ass_codium_place_window_maximized "$marker" "$x" "$y" &
+
+  sleep 1
+  codium -r "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
   return 0
 }
 
@@ -1737,7 +1782,7 @@ EOF
   _ass_ok "ass new: session clone ready: ${clone_path}"
   if [[ "$agent" == claude ]] && _ass_in_codium_integrated_terminal; then
     if _ass_open_claude_code_in_codium "$clone_path"; then
-      _ass_ok "ass new: opened ${clone_path} in Codium (Claude Code extension)"
+      _ass_ok "ass new: opened ${clone_path} in a new Codium window (left monitor, maximized)"
     else
       _ass_info "Open agent session: cd ${clone_path} (codium CLI not found -- open folder manually)"
     fi

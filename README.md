@@ -113,7 +113,7 @@ From the **canonical** repo:
 
 ```bash
 cd ~/Sync/mini_projects/agentstartstack   # or your host project canonical
-ass new                  # from Codium terminal: opens Claude Code; else infers agent
+ass new                  # from Codium terminal: new window on left monitor + Claude Code
 ```
 
 On success, `ass new` prints the session clone path. Open that folder in Cursor/Grok or `cd` there and paste the path as the workspace. The clone is aligned to canonical `main` and ready for agent work.
