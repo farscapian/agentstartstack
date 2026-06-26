@@ -2,7 +2,7 @@ ass status -- agent session clones vs origin/main and canonical/main
 
 Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
 Fetches origin/main quietly before counting. Lists agent session clones only
-(not canonical). References are shown in the INFO line above the table.
+(not canonical). Reference SHAs appear in the table group-title row.
 
 Columns (each clone row):
   #       1 = newest clone (rollover target); ^ = rolls into #1 on trim/drop
@@ -10,12 +10,11 @@ Columns (each clone row):
   agent   grok / claude
   wip     uncommitted work not in canonical (- or dirty)
   -->     session #1 local-syncs to canonical (ass sync); blank on other rows
-  ahead   commits on this clone not on canonical main
+  ahead   commits on this clone not on canonical main (group: canonical SHA)
   behind  commits on canonical main not on this clone
-  ahead   commits on this clone not on origin/main
+  ahead   commits on this clone not on origin/main (group: origin/main SHA)
   behind  commits on origin/main not on this clone
-  HEAD    this clone's main
-  path
+  path    session clone directory (~ shortens $HOME)
 
 Usage:
   ass status

@@ -417,22 +417,34 @@ _ass_status_wip_column() {
   fi
 }
 
-# Column layout: # agent wip --> | canonical ahead/behind | origin ahead/behind | HEAD path
+# Column layout: # agent wip [-->] | canonical ahead/behind | origin ahead/behind | path
 # --> (after wip): session #1 local-syncs to canonical (data only on row 1).
-# Count cols are width 7 (fits git short SHA on the reference row).
+# Group title row shows canonical (SHA) --> origin/main (SHA) above the count columns.
 _ass_status_format_group_title_row() {
+  local can_head="$1" origin_head="$2"
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-5s %-7s %-7s  %-7s %-7s  %-9s  %s\n' "$@"
+  printf '%26s%s   -->   %s\n' '' "canonical (${can_head})" "origin/main (${origin_head})"
 }
 
 _ass_status_format_header_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-5s %-7s %-7s  %-7s %-7s  %-9s  %s\n' "$@"
+  printf '%-3s %-7s %-7s %-5s %-9s %-6s    %-9s %-9s  %s\n' "$@"
 }
 
 _ass_status_format_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-5s %7s %7s  %7s %7s  %-9s  %s' "$@"
+  printf '%-3s %-7s %-7s %-5s %9s %6s    %9s %9s  %s' "$@"
+}
+
+# Tilde-shorten clone paths under $HOME for the status table.
+_ass_status_display_path() {
+  local path="$1"
+  path=$(readlink -f "$path")
+  if [[ "$path" == "${HOME}/"* ]]; then
+    printf '~/%s' "${path#"${HOME}"/}"
+  else
+    printf '%s' "$path"
+  fi
 }
 
 # ass status # column: 1 = newest (rollover target); ^ = rolls into #1 on trim/drop.
@@ -447,18 +459,18 @@ _ass_status_index_display() {
 
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
-  local ahead behind can_ahead can_behind head wip sync_col notes
+  local ahead behind can_ahead can_behind wip sync_col notes disp_path
 
   read -r ahead behind < <(_ass_origin_ahead_behind "$path")
   read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
-  head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   wip=$(_ass_status_wip_column "$path")
   sync_col=""
   [[ "$idx" == "1" ]] && sync_col="-->"
   notes=$(_ass_status_notes "$path" "$pwd_here")
+  disp_path=$(_ass_status_display_path "$path")
 
   _ass_status_format_row "$idx" "$agent" "$wip" "$sync_col" "$can_ahead" "$can_behind" \
-    "$ahead" "$behind" "$head" "$path"
+    "$ahead" "$behind" "$disp_path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -494,12 +506,11 @@ ass_status() {
   can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
 
   _ass_info "ass status: ${repo_name} (agent session clones)"
-  _ass_info "vs canonical/main @ ${can_head}  -->  origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  _ass_status_format_group_title_row "" "" "" "" "canonical" "" "origin/main" "" ""
-  _ass_status_format_header_row "#" "agent" "wip" "-->" "ahead" "behind" "ahead" "behind" "HEAD" "path"
-  _ass_status_format_header_row "---" "-------" "-------" "-----" "-------" "-------" "-------" "-------" "---------" "----"
+  _ass_status_format_group_title_row "$can_head" "$origin_head"
+  _ass_status_format_header_row "#" "agent" "wip" "" "ahead" "behind" "ahead" "behind" "path"
+  _ass_status_format_header_row "---" "-------" "-------" "-----" "---------" "------" "---------" "---------" "----"
 
   mapfile -t clones < <(agent_session_clones_list "$origin")
 
