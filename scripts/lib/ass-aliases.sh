@@ -459,6 +459,134 @@ EOF
   return 0
 }
 
+# ass sync -- align every session clone that is behind canonical (pwd = canonical).
+ass_sync() {
+  local -a _ass_argv clones=()
+  local canonical origin repo_name pwd_here clone script_dir
+  local behind ahead synced=0 skipped=0 failed=0 would_sync=0 dry_run=0
+  local head can_head
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+ass sync -- align session clones to canonical (pwd)
+
+Run from the canonical local repo. For each session clone discovered by git
+origin URL, if it is behind canonical main, fast-forward or rebase it onto
+local-sync/main so it picks up every canonical commit.
+
+Dirty clones are auto-committed first (see workflow.md HARD RULES). Clones
+already at canonical (0 behind) are skipped. Clones only ahead of canonical
+(agent work not yet handed off) are left unchanged.
+
+  ass sync
+  ass sync --dry-run    plan only; do not modify clones
+EOF
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  while [[ ${#_ass_argv[@]} -gt 0 ]]; do
+    case "${_ass_argv[0]}" in
+      --dry-run) dry_run=1; _ass_argv=("${_ass_argv[@]:1}") ;;
+      *)
+        _ass_err "ass sync: unexpected argument: ${_ass_argv[0]} (run from canonical pwd)"
+        return 1
+        ;;
+    esac
+  done
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+  script_dir="${_ASS_ALIASES_LIB_DIR}/.."
+
+  if [[ "$pwd_here" != "$canonical" ]]; then
+    _ass_warn "ass sync: pwd is not canonical -- syncing clones for ${repo_name} anyway"
+    _ass_warn "ass sync:   canonical: ${canonical}"
+    _ass_warn "ass sync:   pwd:       ${pwd_here}"
+  fi
+
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass sync: canonical has no origin remote"
+    return 1
+  }
+
+  can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
+  _ass_info "ass sync: ${repo_name} @ ${can_head}"
+  _ass_info "canonical: ${canonical}"
+  [[ "$dry_run" == 1 ]] && _ass_info "ass sync: dry-run (no changes)"
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    clones+=("$(readlink -f "$clone")")
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  if [[ ${#clones[@]} -eq 0 ]]; then
+    _ass_info "ass sync: no session clones"
+    return 0
+  fi
+
+  echo ""
+  for clone in "${clones[@]}"; do
+    behind=$(_ass_clone_behind_canonical "$clone" "$canonical")
+    ahead=$(_ass_clone_ahead_of_canonical "$clone" "$canonical")
+    head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+
+    if [[ "$behind" == 0 || "$behind" == '?' ]]; then
+      if _ass_clone_has_dirty_worktree "$clone"; then
+        _ass_info "ass sync: ${clone}"
+        _ass_info "ass sync:   HEAD ${head}  0 behind  dirty -- would auto-commit only"
+        if [[ "$dry_run" == 0 ]]; then
+          "${script_dir}/auto-commit-session-work.sh" "$clone" || true
+        fi
+      else
+        _ass_info "ass sync: ${clone}"
+        _ass_info "ass sync:   HEAD ${head}  already aligned (0 behind)"
+      fi
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    _ass_info "ass sync: ${clone}"
+    _ass_info "ass sync:   HEAD ${head}  ${behind} behind canonical  ${ahead} ahead"
+    if [[ "$dry_run" == 1 ]]; then
+      _ass_info "ass sync:   (dry-run) would fast-forward or rebase onto local-sync/main"
+      would_sync=$((would_sync + 1))
+      continue
+    fi
+
+    if _ass_clone_has_dirty_worktree "$clone"; then
+      _ass_info "ass sync: auto-committing dirty work before sync..."
+      "${script_dir}/auto-commit-session-work.sh" "$clone" || true
+      behind=$(_ass_clone_behind_canonical "$clone" "$canonical")
+      ahead=$(_ass_clone_ahead_of_canonical "$clone" "$canonical")
+      if [[ "$behind" == 0 || "$behind" == '?' ]]; then
+        _ass_ok "ass sync: ${clone} -- auto-committed; now aligned"
+        synced=$((synced + 1))
+        continue
+      fi
+    fi
+
+    if _ass_handoff_reconcile_clone "$clone" "$canonical"; then
+      head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+      _ass_ok "ass sync: aligned ${clone} @ ${head}"
+      synced=$((synced + 1))
+    else
+      _ass_err "ass sync: failed ${clone} (resolve conflicts or .agentstartstack-bump, then re-run)"
+      failed=$((failed + 1))
+    fi
+  done
+
+  echo ""
+  if [[ "$dry_run" == 1 ]]; then
+    _ass_info "ass sync: would_sync=${would_sync} skipped=${skipped}"
+  else
+    _ass_info "ass sync: synced=${synced} skipped=${skipped} failed=${failed}"
+  fi
+  [[ "$failed" -eq 0 ]]
+}
+
 _ass_print_handoff_report() {
   local sync_target="$1" origin_target="$2" repo_name="$3" selected="${4:-}"
   local pwd_here clone head behind sel

@@ -24,6 +24,7 @@ ass new --claude    # create + align a Claude session clone (canonical pwd)
 ass prune           # consolidate one session clone into the newest, then remove it
 ass status          # ahead/behind origin/main for canonical and session clones
 ass list            # session clones for canonical pwd (by origin URL)
+ass sync            # align behind session clones to canonical (canonical pwd)
 ass up              # local-sync, then git push origin main
 ass up -f           # as ass -f, then push
 ass up trim         # consolidate and prune stale session clones
@@ -137,6 +138,29 @@ Shows agent kind (`grok` / `claude` from `.git/agentstartstack-session-agent`), 
 commits **behind canonical**, and path. Newest clone first. Use `ass status` for
 ahead/behind counts vs `origin/main`.
 
+## ass sync (align clones to canonical)
+
+After you commit or `ass up` from the **canonical** repo, run `ass sync` to pull
+those commits into every session clone that is **behind canonical**. Run from the
+canonical local repo:
+
+```bash
+ass sync
+ass sync --dry-run    # plan only
+```
+
+For each clone discovered by origin URL:
+
+- **Behind canonical** -- fast-forwards when the clone has no local commits, or
+  rebases onto `local-sync/main` when it has diverged (agent commits not yet handed off).
+- **Already aligned (0 behind)** -- skipped.
+- **Dirty** -- auto-committed first (`auto-commit-session-work.sh`), then synced if still behind.
+
+Use after publishing from canonical so active agent sessions pick up your changes
+without re-running `init_*_session.sh` (which hard-resets). See also
+[Re-align before committing](workflow.md#re-align-before-committing-mandatory) for
+per-clone fast-forward during a session.
+
 ## ass status (vs origin/main)
 
 `ass status` prints a table with **`origin/main` as the fixed reference**. Run from the
@@ -169,7 +193,8 @@ ass prune <clone-path>    # explicit clone to archive and remove
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
-functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`, `dropit`).
+functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`,
+`ass_status`, `ass_list`, `ass_sync`, `dropit`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 
 Install / update the thin `ass()` wrapper in your shell:

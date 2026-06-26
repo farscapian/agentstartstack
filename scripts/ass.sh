@@ -21,6 +21,7 @@ After install-shell-aliases.sh, only a thin ass() wrapper is installed.
   ass.sh up --all                 ass up agentstartstack, refresh consumer submodules
   ass.sh status                   ahead/behind origin/main for canonical + session clones
   ass.sh list                     session clones for canonical pwd (by origin URL)
+  ass.sh sync [--dry-run]         align behind session clones to canonical (canonical pwd)
   ass.sh dropit <src> [dest]      copy generic work into agentstartstack session clone
 
 Global flags: -v, -q, --timestamp, --log-id=ID, --create-log (see docs/cli.md)
@@ -37,6 +38,7 @@ _ass_cli_subcommand_help() {
     all)    ass_up_all --help ;;
     status) ass_status --help ;;
     list)   ass_list --help ;;
+    sync)   ass_sync --help ;;
     dropit) dropit --help ;;
     ""|handoff|ass) ass --help ;;
     *)
@@ -77,6 +79,7 @@ main() {
     dropit) shift; dropit "$@" ;;
     status) shift; ass_status "$@" ;;
     list)   shift; ass_list "$@" ;;
+    sync)   shift; ass_sync "$@" ;;
     *) ass "$@" ;;
   esac
 }
