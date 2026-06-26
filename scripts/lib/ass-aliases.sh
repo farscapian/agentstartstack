@@ -289,14 +289,14 @@ _ass_status_notes() {
 }
 
 _ass_status_print_row() {
-  local role="$1" path="$2" pwd_here="$3" agent="${4:--}"
+  local role="$1" path="$2" pwd_here="$3" agent="${4:--}" idx="${5:--}"
   local ahead behind head notes
 
   read ahead behind < <(_ass_origin_ahead_behind "$path")
   head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  printf '%-20s %-7s %5s %6s  %-9s  %s' "$role" "$agent" "$ahead" "$behind" "$head" "$path"
+  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s' "$idx" "$role" "$agent" "$ahead" "$behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -315,6 +315,7 @@ Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
 Fetches origin/main quietly before counting.
 
 Columns (reference = origin/main on main):
+  #       session clone index (newest first); - for canonical and origin ref
   agent   grok / claude for session clones (- for canonical and origin ref)
   ahead   commits on this tree not on origin/main
   behind  commits on origin/main not on this tree
@@ -346,10 +347,10 @@ EOF
   _ass_info "reference: origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "tree" "agent" "ahead" "behind" "HEAD" "path"
-  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "--------------------" "-------" "-----" "------" "---------" "----"
-  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "origin/main (ref)" "-" "0" "0" "$origin_head" "origin/main"
-  _ass_status_print_row "canonical" "$canonical" "$pwd_here" "-"
+  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "#" "tree" "agent" "ahead" "behind" "HEAD" "path"
+  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "---" "-----------------" "-------" "-----" "------" "---------" "----"
+  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "-" "origin/main (ref)" "-" "0" "0" "$origin_head" "origin/main"
+  _ass_status_print_row "canonical" "$canonical" "$pwd_here" "-" "-"
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
@@ -359,10 +360,15 @@ EOF
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "session clones: (none)"
   else
+    mapfile -t clones < <(
+      for clone in "${clones[@]}"; do
+        printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
+      done | sort -rn -k1,1 | awk '{print $2}'
+    )
     i=1
     for clone in "${clones[@]}"; do
-      _ass_status_print_row "session clone ${i}" "$clone" "$pwd_here" \
-        "$(_ass_session_agent_kind "$clone")"
+      _ass_status_print_row "session clone" "$clone" "$pwd_here" \
+        "$(_ass_session_agent_kind "$clone")" "$i"
       i=$((i + 1))
     done
   fi
