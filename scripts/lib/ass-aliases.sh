@@ -2212,15 +2212,17 @@ _ass_up_trim_autotrim_enabled() {
   [[ "${ASS_PUBLISH_AUTOTRIM:-${ASS_UP_ALL_AUTOTRIM:-1}}" != "0" ]]
 }
 
+# Returns: 0 ok to trim; 2 skip (consumer CLI / long-running tool active -- a
+# benign skip, NOT a failure); 1 real error (env load failed).
 _ass_up_trim_guard() {
   local canonical="$1" name="$2"
   _ass_up_trim_load_env "$canonical" || return 1
   if [[ -n "${ACTIVE_GUARD_PGREP:-}" ]] \
      && pgrep -af "$ACTIVE_GUARD_PGREP" >/dev/null 2>&1; then
     echo "ass up trim: ${name} CLI active (ACTIVE_GUARD_PGREP) -- skipping" >&2
-    return 1
+    return 2
   fi
-  _ass_guard_active_sessions "$canonical" || return 1
+  _ass_guard_active_sessions "$canonical" || return 2
 }
 
 _ass_up_trim_clone_mtime() {
@@ -2458,7 +2460,7 @@ _ass_up_trim_one() {
   }
   canonical=$(readlink -f "$canonical")
 
-  _ass_up_trim_guard "$canonical" "$name" || return 1
+  _ass_up_trim_guard "$canonical" "$name" || return $?
 
   archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "$archive_override")
   invoked_from=$(_ass_up_trim_resolve_invoked_from "$canonical" || true)
@@ -2664,16 +2666,21 @@ ass_up_trim() {
   done
 
   if [[ "$all" == 1 ]]; then
+    local rc skipped=0
     while IFS= read -r host; do
       [[ -n "$host" ]] || continue
       name=$(basename "$host")
-      if _ass_up_trim_one "$name" "$dry_run" "$yes" "$no_rollover" "$keep_latest" "$archive_dir"; then
+      _ass_up_trim_one "$name" "$dry_run" "$yes" "$no_rollover" "$keep_latest" "$archive_dir"
+      rc=$?
+      if [[ "$rc" -eq 0 ]]; then
         ok=$((ok + 1))
+      elif [[ "$rc" -eq 2 ]]; then
+        skipped=$((skipped + 1))
       else
         failed=$((failed + 1))
       fi
     done < <(_ass_publish_consumer_roots | sort -u)
-    echo "ass up trim: done -- ${ok} ok, ${failed} failed"
+    echo "ass up trim: done -- ${ok} ok, ${skipped} skipped (active), ${failed} failed"
     [[ "$failed" -eq 0 ]]
     return $?
   fi
@@ -2818,8 +2825,8 @@ ass_publish()
   local as_sha
   as_sha=$(git rev-parse --short HEAD) || return 1
 
-  local host name busy iclone ireason sub_sha clone n_flag old_sha new_sha
-  local bumped=0 flagged=0 current=0 failed=0 needs_agent=0
+  local host name busy iclone ireason sub_sha clone n_flag old_sha new_sha trim_rc
+  local bumped=0 flagged=0 current=0 failed=0 needs_agent=0 trim_skipped=0
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
     name=$(basename "$host")
@@ -2878,8 +2885,13 @@ ass_publish()
     fi
 
     if _ass_up_trim_autotrim_enabled "$host"; then
-      if ass_up_trim "$name" --yes; then
+      ass_up_trim "$name" --yes
+      trim_rc=$?
+      if [[ "$trim_rc" -eq 0 ]]; then
         echo "ass publish: ${name} -- consolidated and pruned" >&2
+      elif [[ "$trim_rc" -eq 2 ]]; then
+        echo "ass publish: ${name} -- trim skipped (consumer CLI/session active)" >&2
+        trim_skipped=$((trim_skipped + 1))
       else
         echo "ass publish: ${name} -- trim failed (logged; continuing)" >&2
         failed=$((failed + 1))
@@ -2889,6 +2901,6 @@ ass_publish()
     fi
   done < <(_ass_publish_consumer_roots | sort -u)
 
-  echo "ass publish: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${failed} failed"
+  echo "ass publish: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${trim_skipped} trim-skipped, ${failed} failed"
   [[ "$failed" -eq 0 ]]
 }
