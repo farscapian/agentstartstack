@@ -377,19 +377,11 @@ EOF
   _ass_status_format_header_row "#" "agent" "ahead" "behind" "ahead" "behind" "HEAD" "path"
   _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-------" "---------" "----"
 
-  while IFS= read -r clone; do
-    [[ -n "$clone" ]] || continue
-    clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin")
+  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "agent session clones: (none)"
   else
-    mapfile -t clones < <(
-      for clone in "${clones[@]}"; do
-        printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
-      done | sort -rn -k1,1 | awk '{print $2}'
-    )
     i=1
     for clone in "${clones[@]}"; do
       _ass_status_print_row "$clone" "$pwd_here" "$canonical" \
@@ -425,6 +417,49 @@ _ass_session_agent_kind() {
   kind=$(_ass_up_trim_harness "$clone")
   [[ "$kind" == grok || "$kind" == claude ]] && { printf '%s\n' "$kind"; return 0; }
   printf '?'
+}
+
+# Session clone paths for $1's origin, newest commit on main first (ass list/status index).
+_ass_session_clones_sorted() {
+  local canonical="$1" origin="$2" clone
+  local -a clones=()
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    clones+=("$(readlink -f "$clone")")
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  [[ ${#clones[@]} -gt 0 ]] || return 0
+
+  for clone in "${clones[@]}"; do
+    printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
+  done | sort -rn -k1,1 | awk '{print $2}'
+}
+
+# 1-based index into _ass_session_clones_sorted (same numbering as ass list/status).
+_ass_session_clone_at_index() {
+  local canonical="$1" origin="$2" index="$3"
+  local -a clones=()
+
+  [[ "$index" =~ ^[0-9]+$ && "$index" -ge 1 ]] || return 1
+  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  [[ "$index" -le "${#clones[@]}" ]] || return 1
+  printf '%s\n' "${clones[index - 1]}"
+}
+
+# Newest session clone other than $1 (for dirty-work rollover before drop).
+_ass_drop_rollover_survivor() {
+  local target="$1"
+  shift
+  local c
+
+  target=$(readlink -f "$target")
+  for c in "$@"; do
+    [[ -n "$c" ]] || continue
+    c=$(readlink -f "$c")
+    [[ "$c" != "$target" ]] && { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
 }
 
 # ass list -- session clones for the canonical repo at pwd.
@@ -470,22 +505,13 @@ EOF
   _ass_info "ass list: ${repo_name}"
   _ass_info "canonical: ${canonical}"
 
-  while IFS= read -r clone; do
-    [[ -n "$clone" ]] || continue
-    clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin")
+  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "session clones: (none)"
     _ass_info "parent dirs: ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
     return 0
   fi
-
-  mapfile -t clones < <(
-    for clone in "${clones[@]}"; do
-      printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
-    done | sort -rn -k1,1 | awk '{print $2}'
-  )
 
   echo ""
   printf '%-3s %-7s %-9s %6s  %s\n' "#" "agent" "HEAD" "behind" "path"
@@ -1384,6 +1410,85 @@ EOF
   fi
   archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "")
   _ass_up_trim_archive_clone "$clone" "$archive_dir" 0
+}
+
+# ass drop -- archive and remove a session clone by ass list/status index.
+ass_drop() {
+  local -a _ass_argv clones=()
+  local index="${1:-}" canonical origin repo_name pwd_here clone survivor archive_dir
+  local agent head
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+ass drop -- archive and remove a session clone by index
+
+Run from the canonical local repo. Index matches ass list / ass status (# column,
+newest clone = 1). Archives to a verified .tar.gz first (HARD RULE), then removes
+the clone directory. Dirty work is rolled into another session clone when one exists.
+
+  ass drop <n>              drop session clone #n
+
+Refuses clones with commits not yet on origin/main (unlanded).
+EOF
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -ne 1 ]]; then
+    _ass_err "ass drop: usage: ass drop <n>  (see: ass list)"
+    return 1
+  fi
+  index="${_ass_argv[0]}"
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  if [[ "$pwd_here" != "$canonical" ]]; then
+    _ass_warn "ass drop: pwd is not canonical -- dropping clone for ${repo_name} anyway"
+    _ass_warn "ass drop:   canonical: ${canonical}"
+    _ass_warn "ass drop:   pwd:       ${pwd_here}"
+  fi
+
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass drop: canonical has no origin remote"
+    return 1
+  }
+
+  clone=$(_ass_session_clone_at_index "$canonical" "$origin" "$index") || {
+    mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+    _ass_err "ass drop: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
+    return 1
+  }
+  clone=$(readlink -f "$clone")
+
+  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  agent=$(_ass_session_agent_kind "$clone")
+  head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+
+  _ass_info "ass drop: #${index} ${agent} @ ${head}"
+  _ass_info "ass drop:   ${clone}"
+
+  if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
+    _ass_err "ass drop: clone has unlanded commits -- cherry-pick or ass handoff first"
+    return 1
+  fi
+
+  if _ass_up_trim_clone_dirty "$clone"; then
+    survivor=$(_ass_drop_rollover_survivor "$clone" "${clones[@]}") || {
+      _ass_err "ass drop: only session clone and dirty -- commit or clear work first"
+      return 1
+    }
+    _ass_info "ass drop: consolidating dirty work -> ${survivor}"
+    read -r _f _c < <(_ass_up_trim_rollover "$clone" "$survivor")
+  fi
+
+  archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "")
+  _ass_up_trim_archive_clone "$clone" "$archive_dir" 0 \
+    || { _ass_err "ass drop: archive failed -- clone left in place"; return 1; }
+  _ass_ok "ass drop: removed #${index} (${agent})"
+  return 0
 }
 
 ass_new() {

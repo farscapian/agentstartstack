@@ -16,6 +16,7 @@ After install-shell-aliases.sh, only a thin ass() wrapper is installed.
   ass.sh [-f] [--ignore-stashes]  local-sync handoff (ass)
   ass.sh new --grok|--claude      create + align a session clone (canonical pwd)
   ass.sh prune [<clone-path>]     consolidate one clone into the newest, then remove it
+  ass.sh drop <n>                 archive and remove session clone #n (see ass list)
   ass.sh up [-f]                  local-sync, then git push origin main
   ass.sh up trim [options]        consolidate and prune stale session clones
   ass.sh up --all                 ass up agentstartstack, refresh consumer submodules
@@ -33,6 +34,7 @@ _ass_cli_subcommand_help() {
   case "$sub" in
     new)    ass_new --help ;;
     prune)  ass_prune --help ;;
+    drop)   ass_drop --help ;;
     up)     ass_up --help ;;
     trim)   ass_up_trim --help ;;
     all)    ass_up_all --help ;;
@@ -66,6 +68,7 @@ main() {
       ;;
     new) shift; ass_new "$@" ;;
     prune) shift; ass_prune "$@" ;;
+    drop)  shift; ass_drop "$@" ;;
     up)
       shift
       if [[ "${1:-}" == trim ]]; then

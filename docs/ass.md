@@ -23,6 +23,7 @@ ass --ignore-stashes  # handoff without canonical stash prompts
 ass new --grok      # create + align a Grok session clone (canonical pwd)
 ass new --claude    # create + align a Claude session clone (canonical pwd)
 ass prune           # consolidate one session clone into the newest, then remove it
+ass drop <n>        # archive and remove session clone #n (see ass list)
 ass status          # ahead/behind origin/main for canonical and session clones
 ass list            # session clones for canonical pwd (by origin URL)
 ass sync            # align behind session clones to canonical (canonical pwd)
@@ -201,12 +202,24 @@ ass prune                 # pwd must be a session clone to remove
 ass prune <clone-path>    # explicit clone to archive and remove
 ```
 
+## ass drop (archive by index)
+
+`ass drop <n>` archives and removes the session clone at index **`n`** from `ass list` /
+`ass status` (newest = 1). Run from the **canonical** repo. Same archive-first HARD RULE
+as `ass prune` and `ass up trim`. Dirty work is rolled into another session clone when
+one exists; refuses unlanded commits.
+
+```bash
+ass list                  # see # column
+ass drop 2                # archive and remove clone #2
+```
+
 ## Source
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
 functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`,
-`ass_status`, `ass_list`, `ass_sync`, `dropit`).
+`ass_status`, `ass_list`, `ass_sync`, `ass_drop`, `dropit`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 
 Install / update the thin `ass()` wrapper in your shell:
