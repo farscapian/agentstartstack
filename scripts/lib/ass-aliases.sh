@@ -1766,7 +1766,7 @@ _ass_drop_session_clone() {
   fi
 
   if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
-    _ass_err "ass drop: clone has unlanded commits -- cherry-pick or ass handoff first"
+    _ass_err "ass drop: clone has commits not yet in canonical -- run 'ass sync' (or cherry-pick) first"
     _ass_err "ass drop:   ${clone}"
     return 1
   fi
@@ -2188,11 +2188,15 @@ _ass_up_trim_clone_dirty() {
   [[ -n "$(git -C "$1" status --porcelain 2>/dev/null)" ]]
 }
 
+# True when the clone has commits not yet handed off to canonical (these would be
+# lost if the clone were removed). "Landed" means the clone HEAD is an ancestor of
+# canonical's main (i.e. reached canonical via ass sync / local-sync). Pushing
+# canonical to origin is a separate human step and does NOT gate drop/trim --
+# work already in canonical is durable even before git push.
 _ass_up_trim_clone_unlanded() {
   local clone="$1" canonical="$2" head
   head=$(git -C "$clone" rev-parse HEAD 2>/dev/null) || return 1
-  git -C "$canonical" fetch -q origin 2>/dev/null || true
-  ! git -C "$canonical" merge-base --is-ancestor "$head" origin/main 2>/dev/null
+  ! git -C "$canonical" merge-base --is-ancestor "$head" main 2>/dev/null
 }
 
 _ass_up_trim_harness() {

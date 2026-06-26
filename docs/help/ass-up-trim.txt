@@ -23,7 +23,7 @@ Run from canonical or a session clone. Kept set = pwd clone (when applicable) pl
 --keep-latest N clones by mtime. Rollover target = newest mtime in the kept set.
 Rolls uncommitted work from older clones into the rollover target, then archives
 stale clones (verified .tar.gz, then remove source dir). Un-landed clones
-(commits not in origin/main) are kept for agent cherry-pick.
+(commits not yet handed off to canonical) are kept for agent cherry-pick.
 
 Help:
   ass up trim help

@@ -126,8 +126,9 @@ See [workflow.md](workflow.md) for session align, agent clone paths, and full gi
 `ass up trim` **consolidates and prunes** stale agent **session clones** for a consumer.
 **Consolidate** rolls uncommitted work from older clones into the newest kept clone
 (unless `--no-rollover`). **Prune** archives each stale clone as a verified `.tar.gz`,
-then removes the source directory. Clones with commits not yet in `origin/main` are
-**kept** and reported for cherry-pick.
+then removes the source directory. Clones with commits not yet handed off to
+canonical (unlanded) are **kept** and reported for cherry-pick; clones whose work
+is already in canonical are prunable even before canonical is pushed to `origin`.
 
 **HARD RULE:** session clones may only be removed after archive (see [workflow.md](workflow.md)
 HARD RULES). `ass drop` and `ass up trim` are the **only** supported removal paths -- never

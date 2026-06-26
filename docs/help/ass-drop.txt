@@ -11,7 +11,8 @@ Prompts for confirmation when more than one clone would be removed.
 Usage:
   ass drop
 
-Refuses clones with commits not yet on origin/main (unlanded).
+Refuses clones with commits not yet handed off to canonical (unlanded); pushing
+canonical to origin is a separate step and does not gate drop.
 Refuses clones with an active grok/claude session (quit the session first).
 
 2) Archive and remove session clone #n (canonical pwd)
