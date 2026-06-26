@@ -15,6 +15,14 @@ These rules are non-negotiable for humans and agents working with agentstartstac
    `auto-commit-session-work.sh` after align so agent edits are never left only in the
    working tree (where a mistaken hard-reset would destroy them).
 
+3. **Session clones SHALL only be removed after archive.** The only permitted way to delete
+   a session-clone directory is via `ass up trim` or `ass prune`, which create a verified
+   `.tar.gz` under `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` (or the default archive path) and
+   remove the source only after `tar tzf` succeeds. **Never** `rm -rf` a session clone by
+   hand, and never delete a clone directory to "sync" or "clean up" canonical. If a clone
+   must go, archive it first through `ass`; if the archive step fails, leave the clone in
+   place.
+
 ## Canonical paths
 
 Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<canonical>` = `CANONICAL_LOCAL_REPO` from `.agentstartstack.env`.
@@ -408,6 +416,23 @@ export AGENT_SESSION_CLONE_PARENT="${HOME}/.agentstack/sessions"
 ```
 
 The init scripts **align** an existing clone; they do **not** create one. Creation is always a `git clone` (or a harness hook you configure) into `AGENT_SESSION_CLONE_PARENT/<session-id>/`.
+
+### Removing session clones (archive first)
+
+Session-clone directories are **archived, not deleted outright**. Use:
+
+- `ass up trim` -- batch consolidate + archive stale clones (typical; run from canonical)
+- `ass prune [<clone-path>]` -- archive one explicit clone after consolidating into the newest
+
+Both call the same archive path: tarball under `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` (default
+`~/.agentstartstack/archives/<project>/agent_clones/`), verify the archive, then remove the
+source tree. There is **no** supported manual `rm -rf` of a session clone. Aligning a clone
+(`init_*_session.sh`) may `git clean -fd` *inside* an existing clone; that is not removal of
+the clone directory itself.
+
+**Never** delete a session-clone folder to fix canonical/session drift, and never remove a
+clone while a Grok/Claude session is still open on that path -- restart or close the session
+first, then `ass up trim` or `ass prune`.
 
 ### Listing clones
 

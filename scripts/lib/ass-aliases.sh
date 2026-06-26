@@ -853,11 +853,12 @@ ass_prune() {
   local -a all=()
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-ass prune -- consolidate one session clone into the newest, then remove it
+ass prune -- archive one session clone, then remove it (after verified .tar.gz)
 
   ass prune                 pwd must be a session clone
   ass prune <clone-path>    explicit clone to prune
 
+Archives first (same path as ass up trim); rm -rf runs only after tar tzf succeeds.
 Refuses unlanded clones (commits not in origin/main). Dirty work is rolled into
 the survivor (newest commit on main, same rule as ass handoff).
 EOF
@@ -1079,6 +1080,11 @@ _ass_up_trim_archive_clone() {
     rm -f "$tarball"
     return 1
   fi
+  # HARD RULE (docs/workflow.md): session clones may only be removed after verified archive.
+  [[ -f "$tarball" ]] || {
+    echo "ass up trim:   ERROR missing archive ${tarball} -- refusing rm" >&2
+    return 1
+  }
   rm -rf "$clone"
   echo "ass up trim:   pruned ${clone} -> ${tarball}"
   return 0

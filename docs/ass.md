@@ -99,6 +99,10 @@ See [workflow.md](workflow.md) for session align, agent clone paths, and full gi
 then removes the source directory. Clones with commits not yet in `origin/main` are
 **kept** and reported for cherry-pick.
 
+**HARD RULE:** session clones may only be removed after archive (see [workflow.md](workflow.md)
+HARD RULES). `ass up trim` and `ass prune` are the **only** supported removal paths -- never
+`rm -rf` a session clone by hand.
+
 ```bash
 ass up trim                 # consumer inferred from pwd
 ass up trim iotstack        # named consumer
@@ -117,6 +121,17 @@ stale clones into the survivor, and prunes the rest. Before acting, it prints **
 `y` at the prompt (not on `--dry-run`).
 
 `ass up --all` calls `ass up trim --yes` for each consumer as its final step (opt out with `ASS_UP_ALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
+
+## ass prune (archive one clone)
+
+`ass prune` consolidates dirty work from one session clone into the newest clone for the
+same consumer, **archives** the target as a verified `.tar.gz`, then removes it. Same
+archive-first rule as trim -- if archiving or verification fails, the clone is left in place.
+
+```bash
+ass prune                 # pwd must be a session clone to remove
+ass prune <clone-path>    # explicit clone to archive and remove
+```
 
 ## Source
 
