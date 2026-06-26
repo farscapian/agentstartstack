@@ -1,6 +1,6 @@
 # agentstartstack -- AI Development Notes (index)
 
-Shared agent guidance template. **Load topic files from `agentstartstack/` instead of reading this index repeatedly.**
+Shared agent guidance template. **Load topic files from `docs/` instead of reading this index repeatedly.**
 
 Host projects that include this repo as a submodule should use their own root `CLAUDE.md` as the primary index (generic + project-specific topics). This file documents the template repo itself.
 
@@ -10,23 +10,23 @@ Host projects that include this repo as a submodule should use their own root `C
 
 - Branding: always lowercase `agentstartstack`
 - Text: ASCII-only in docs, logs, help, and code comments
-- Agents work in session clones, NOT in the canonical local repo (see `agentstartstack/workflow.md`)
+- Agents work in session clones, NOT in the canonical local repo (see `docs/workflow.md`)
 - New Grok session: run host project's `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/`)
 - New Claude Code session: run host project's `scripts/init_claude_session.sh`
-- After changes: commit in session clone; human runs `nut` then `git push origin main` (or `nutup`). NEVER `git push origin` from agents (see `agentstartstack/nut.md`)
+- After changes: commit in session clone; human runs `ass` then `git push origin main` (or `ass up`). NEVER `git push origin` from agents (see `docs/ass.md`)
 
 ## Topic index
 
 | File | Load when |
 |------|-----------|
-| [agentstartstack/submodule-integration.md](agentstartstack/submodule-integration.md) | Wiring this repo into a host project |
-| [agentstartstack/workflow.md](agentstartstack/workflow.md) | Repos, agent session clones, git sync, commit policy |
-| [agentstartstack/nut.md](agentstartstack/nut.md) | `nut` / `nutup` -- Newest commit Until Transferred |
-| [agentstartstack/conventions.md](agentstartstack/conventions.md) | Naming, ASCII-only text, script output tags |
-| [agentstartstack/terminal.md](agentstartstack/terminal.md) | Copy/paste in Cursor/Codium integrated terminal |
-| [agentstartstack/security.md](agentstartstack/security.md) | Never print secrets; env file hygiene |
-| [agentstartstack/code-quality.md](agentstartstack/code-quality.md) | shellcheck rules and git hooks |
-| [agentstartstack/implementation.md](agentstartstack/implementation.md) | Common shell patterns (prompts, traps, env loading) |
-| [agentstartstack/testing.md](agentstartstack/testing.md) | Pre-handoff validation checklist (generic) |
+| [docs/submodule-integration.md](docs/submodule-integration.md) | Wiring this repo into a host project |
+| [docs/workflow.md](docs/workflow.md) | Repos, agent session clones, git sync, commit policy |
+| [docs/ass.md](docs/ass.md) | `ass` / `ass up` -- AgentStartStack handoff CLI |
+| [docs/conventions.md](docs/conventions.md) | Naming, ASCII-only text, script output tags |
+| [docs/terminal.md](docs/terminal.md) | Copy/paste in Cursor/Codium integrated terminal |
+| [docs/security.md](docs/security.md) | Never print secrets; env file hygiene |
+| [docs/code-quality.md](docs/code-quality.md) | shellcheck rules and git hooks |
+| [docs/implementation.md](docs/implementation.md) | Common shell patterns (prompts, traps, env loading) |
+| [docs/testing.md](docs/testing.md) | Pre-handoff validation checklist (generic) |
 
-Full catalog: [agentstartstack/README.md](agentstartstack/README.md).
+Full catalog: [docs/README.md](docs/README.md).

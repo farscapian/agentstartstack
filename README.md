@@ -6,7 +6,7 @@ Shared AI agent guidance and workflow tooling for projects. Add this repo as a *
 
 | Path (in this repo) | Purpose |
 |---------------------|---------|
-| `agentstartstack/` | Generic agent docs: workflow, nut, conventions, security, terminal tips, etc. |
+| `docs/` | Generic agent docs: workflow, ass, conventions, security, terminal tips, etc. |
 | `scripts/` | Parameterized `init_grok_session.sh`, `init_claude_session.sh`, git hooks |
 | `templates/` | Stubs for wiring a new project (`.agentstartstack.env`, `CLAUDE.md`, project `docs/`) |
 
@@ -15,7 +15,7 @@ When mounted as a submodule in a host project:
 | Host path | Purpose |
 |-----------|---------|
 | `.agentstartstack/` | This repo (submodule) |
-| `.agentstartstack/agentstartstack/` | Generic guidance |
+| `.agentstartstack/docs/` | Generic guidance |
 | `docs/` | Project-specific guidance |
 
 ## Quick start (new project)
