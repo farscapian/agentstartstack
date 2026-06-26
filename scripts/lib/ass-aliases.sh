@@ -249,20 +249,28 @@ _ass_parse_args() {
   return 0
 }
 
+# Echo "ahead behind" for clone HEAD vs canonical main (after local-sync fetch).
+_ass_clone_canonical_ahead_behind() {
+  local clone="$1" canonical="$2" behind ahead clone_head can_head
+
+  _ass_ensure_local_sync_remote "$clone" "$canonical"
+  git -C "$clone" fetch -q local-sync main 2>/dev/null || true
+  if read -r behind ahead _ < <(git -C "$clone" rev-list --left-right --count local-sync/main...HEAD 2>/dev/null); then
+    printf '%s %s\n' "$ahead" "$behind"
+    return 0
+  fi
+  clone_head=$(git -C "$clone" rev-parse main 2>/dev/null) || { printf '? ?\n'; return 0; }
+  can_head=$(git -C "$canonical" rev-parse main 2>/dev/null) || { printf '? ?\n'; return 0; }
+  ahead=$(git -C "$canonical" rev-list --count "${can_head}..${clone_head}" 2>/dev/null || printf '?')
+  behind=$(git -C "$canonical" rev-list --count "${clone_head}..${can_head}" 2>/dev/null || printf '?')
+  printf '%s %s\n' "$ahead" "$behind"
+}
+
 # Echo how many commits on canonical main are not in the clone's main.
-# Computed from the canonical repo so the count works even when the clone lacks
-# canonical's newer objects locally.
 _ass_clone_behind_canonical() {
-  local clone="$1" canonical="$2" clone_head can_head
-  clone_head=$(git -C "$clone" rev-parse main 2>/dev/null) || {
-    printf '?'
-    return 0
-  }
-  can_head=$(git -C "$canonical" rev-parse main 2>/dev/null) || {
-    printf '?'
-    return 0
-  }
-  git -C "$canonical" rev-list --count "${clone_head}..${can_head}" 2>/dev/null || printf '?'
+  local clone="$1" canonical="$2" _ahead behind
+  read -r _ahead behind < <(_ass_clone_canonical_ahead_behind "$clone" "$canonical")
+  printf '%s\n' "$behind"
 }
 
 # Echo "ahead behind" commit counts for $1's HEAD vs origin/main (after fetch).
@@ -289,36 +297,42 @@ _ass_status_notes() {
 }
 
 _ass_status_print_row() {
-  local role="$1" path="$2" pwd_here="$3" agent="${4:--}" idx="${5:--}"
-  local ahead behind head notes
+  local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
+  local ahead behind can_ahead can_behind head notes
 
-  read ahead behind < <(_ass_origin_ahead_behind "$path")
+  read -r ahead behind < <(_ass_origin_ahead_behind "$path")
+  read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
   head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s' "$idx" "$role" "$agent" "$ahead" "$behind" "$head" "$path"
+  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s' \
+    "$idx" "$agent" "$ahead" "$behind" "$can_ahead" "$can_behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
 
-# ass status -- show canonical + session clones vs origin/main (fixed reference).
+# ass status -- session clones vs origin/main and canonical (HEAD in column headings).
 ass_status() {
   local -a _ass_argv clones=()
-  local sync_target canonical origin repo_name pwd_here origin_head
+  local sync_target canonical origin repo_name pwd_here origin_head can_head
   local clone i
 
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-ass status -- commit counts vs origin/main (fixed reference)
+ass status -- session clones vs origin/main and canonical
 
 Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
-Fetches origin/main quietly before counting.
+Fetches origin/main quietly before counting. Lists session clones only (newest first).
 
-Columns (reference = origin/main on main):
-  #       session clone index (newest first); - for canonical and origin ref
-  agent   grok / claude for session clones (- for canonical and origin ref)
-  ahead   commits on this tree not on origin/main
-  behind  commits on origin/main not on this tree
+Columns:
+  #       session clone index (newest first)
+  agent   grok / claude
+  ahead   commits on this clone not on origin/main (HEAD under column)
+  behind  commits on origin/main not on this clone
+  ahead   commits on this clone not on canonical main (HEAD under column)
+  behind  commits on canonical main not on this clone
+  HEAD    this clone's main
+  path
 
   ass status
 EOF
@@ -342,15 +356,18 @@ EOF
 
   git -C "$canonical" fetch -q origin main 2>/dev/null || true
   origin_head=$(git -C "$canonical" rev-parse --short origin/main 2>/dev/null || echo '?')
+  can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
 
   _ass_info "ass status: ${repo_name}"
-  _ass_info "reference: origin/main @ ${origin_head}"
+  _ass_info "origin/main @ ${origin_head}  canonical @ ${can_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "#" "tree" "agent" "ahead" "behind" "HEAD" "path"
-  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "---" "-----------------" "-------" "-----" "------" "---------" "----"
-  printf '%-3s %-17s %-7s %5s %6s  %-9s  %s\n' "-" "origin/main (ref)" "-" "0" "0" "$origin_head" "origin/main"
-  _ass_status_print_row "canonical" "$canonical" "$pwd_here" "-" "-"
+  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
+    "#" "agent" "ahead" "behind" "ahead" "behind" "HEAD" "path"
+  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
+    "---" "-------" "-----" "------" "-----" "------" "---------" "----"
+  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
+    "" "" "$origin_head" "$origin_head" "$can_head" "$can_head" "" ""
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
@@ -367,15 +384,15 @@ EOF
     )
     i=1
     for clone in "${clones[@]}"; do
-      _ass_status_print_row "session clone" "$clone" "$pwd_here" \
+      _ass_status_print_row "$clone" "$pwd_here" "$canonical" \
         "$(_ass_session_agent_kind "$clone")" "$i"
       i=$((i + 1))
     done
   fi
 
   echo ""
-  _ass_info "ahead  = commits here not yet on origin/main"
-  _ass_info "behind = commits on origin/main not yet here"
+  _ass_info "ahead/behind (${origin_head}) = vs origin/main"
+  _ass_info "ahead/behind (${can_head}) = vs canonical main"
   return 0
 }
 
@@ -853,10 +870,9 @@ _ass_canonical_move_wip_to_clone() {
 }
 
 _ass_clone_ahead_of_canonical() {
-  local clone="$1" canonical="$2" clone_head can_head
-  clone_head=$(git -C "$clone" rev-parse main 2>/dev/null) || { printf '?'; return 0; }
-  can_head=$(git -C "$canonical" rev-parse main 2>/dev/null) || { printf '?'; return 0; }
-  git -C "$canonical" rev-list --count "${can_head}..${clone_head}" 2>/dev/null || printf '?'
+  local clone="$1" canonical="$2" ahead _behind
+  read -r ahead _behind < <(_ass_clone_canonical_ahead_behind "$clone" "$canonical")
+  printf '%s\n' "$ahead"
 }
 
 # Canonical must not lag origin/main before handoff; prompt to ff-only merge if it does.

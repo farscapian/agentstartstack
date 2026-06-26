@@ -168,10 +168,12 @@ without re-running `init_*_session.sh` (which hard-resets). See also
 [Re-align before committing](workflow.md#re-align-before-committing-mandatory) for
 per-clone fast-forward during a session.
 
-## ass status (vs origin/main)
+## ass status (session clones)
 
-`ass status` prints a table with **`origin/main` as the fixed reference**. Run from the
-canonical repo or any session clone for that consumer (pwd-oriented).
+`ass status` lists **session clones only** (newest first). Each row shows ahead/behind vs
+**`origin/main`** and vs **canonical** `main`. The short HEAD of each reference appears
+under the ahead/behind column pairs. Run from the canonical repo or any session clone
+(pwd-oriented).
 
 ```bash
 ass status
@@ -179,13 +181,14 @@ ass status
 
 | Column | Meaning |
 |--------|---------|
-| **#** | Session clone index (newest first, same order as `ass list`); `-` for canonical and origin ref |
-| **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` (`-` for canonical and origin ref) |
-| **ahead** | Commits on this tree **not yet on** `origin/main` |
-| **behind** | Commits on `origin/main` **not yet on** this tree |
+| **#** | Session clone index (newest first, same order as `ass list`) |
+| **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
+| **ahead / behind** (first pair) | Vs `origin/main` (HEAD under columns) |
+| **ahead / behind** (second pair) | Vs canonical `main` (HEAD under columns) |
+| **HEAD** | This clone's `main` |
+| **path** | Clone directory |
 
-Example: canonical at **0 ahead** is in sync with GitHub; a session clone at **1 ahead**
-has one local commit waiting for `ass` / `ass up`.
+Example: a clone at **1 ahead** of canonical has one commit waiting for `ass` / `ass up`.
 
 ## ass prune (archive one clone)
 
