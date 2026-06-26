@@ -761,9 +761,10 @@ _ass_canonical_move_selected_stashes_to_clone() {
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
     title=$(_ass_stash_title_from_list_line "$line")
-    _ass_info "ass:   ${display_num}. ${title}"
+    printf '  %s. %s\n' "$display_num" "$title"
     display_num=$((display_num + 1))
   done < <(git -C "$canonical" stash list 2>/dev/null)
+  printf '\n'
   read -r -p "ass: stashes to move (comma/space-separated, e.g. 1 3 or all; empty=none): " selection </dev/tty
   selection="${selection//,/ }"
   if [[ -z "${selection// }" ]]; then
