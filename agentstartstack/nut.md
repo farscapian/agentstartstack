@@ -78,6 +78,14 @@ Agents never run `nut` or `nutup` unless the human explicitly asks.
 
 See [workflow.md](workflow.md) for session align, agent clone paths, and full git policy.
 
+## dropit
+
+`dropit <src> [<dest>]` -- from a **consumer** session clone, copy a generic feature or doc that belongs upstream in agentstartstack into agentstartstack's **latest session clone** (newest by commit, discovered by origin URL), so it can be committed there and flow upstream instead of being forked into the consumer. It implements the "originate upstream, don't fork" rule in [workflow.md](workflow.md).
+
+- Runs **only** from a consumer session clone (under `AGENT_SESSION_CLONE_PARENT`, with a `.agentstartstack` submodule). Refuses from a canonical repo or from agentstartstack's own clone.
+- `<dest>` defaults to `<src>`'s path relative to the consumer clone root.
+- Copy-only: it does not edit the consumer or commit in the agentstartstack clone. After it copies, review + commit in the agentstartstack clone and hand off with `nut`; if `<src>` was a fork created in the consumer, delete it there.
+
 ## Source
 
 The functions and aliases live in the tracked canonical file

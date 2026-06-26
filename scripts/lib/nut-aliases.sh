@@ -352,6 +352,96 @@ EOF
 # Alias: nutitup -- same as nutup (args pass through)
 alias nutitup='nutup'
 
+# dropit -- from a CONSUMER session clone, stash a generic feature/doc that
+# belongs upstream in agentstartstack into agentstartstack's latest session clone
+# (so it can be committed there and flow upstream) instead of forking it into the
+# consumer. Runs ONLY from a consumer session clone. Copy-only: it never edits the
+# consumer or the agentstartstack clone's history -- you review and commit there.
+#   dropit <src> [<dest>]
+dropit() {
+  local src="${1:-}" dest="${2:-}"
+
+  if [[ -z "$src" || "$src" == "-h" || "$src" == "--help" ]]; then
+    cat <<'EOF'
+dropit -- stash a generic feature/doc into agentstartstack's latest session clone
+
+Run from a CONSUMER session clone. Copies something that belongs upstream in
+agentstartstack into that repo's newest session clone -- do not fork it here.
+
+  dropit <src> [<dest>]
+    <src>   file/dir in this clone that belongs in agentstartstack
+    <dest>  path relative to the agentstartstack clone root
+            (default: same relative path as <src> here)
+
+Then review + commit in the agentstartstack clone and hand off with nut. If <src>
+was a fork created here, delete it from this consumer afterward.
+EOF
+    return 0
+  fi
+
+  local here
+  here=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "dropit: not in a git repo" >&2
+    return 1
+  }
+  here=$(readlink -f "$here")
+
+  # Guard: must be inside an agent session clone (under a clone parent).
+  local base in_clone=0
+  local IFS=:
+  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+    [[ -n "$base" ]] || continue
+    [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
+  done
+  unset IFS
+  if [[ "$in_clone" != 1 ]]; then
+    echo "dropit: run only from an agent session clone (under AGENT_SESSION_CLONE_PARENT)" >&2
+    return 1
+  fi
+
+  # Guard: must be a CONSUMER (has the .agentstartstack submodule), not
+  # agentstartstack itself. The submodule's origin is the agentstartstack origin.
+  local as_origin
+  as_origin=$(git -C "${here}/.agentstartstack" remote get-url origin 2>/dev/null) || {
+    echo "dropit: no .agentstartstack submodule here -- not a consumer clone" >&2
+    return 1
+  }
+
+  # Resolve <src> and its path relative to this clone root.
+  local abs_src rel
+  abs_src=$(readlink -f "$src" 2>/dev/null) || { echo "dropit: not found: $src" >&2; return 1; }
+  [[ -e "$abs_src" ]] || { echo "dropit: not found: $src" >&2; return 1; }
+  case "$abs_src" in
+    "$here"/*) rel="${abs_src#"${here}/"}" ;;
+    *) echo "dropit: <src> must be inside this clone: $abs_src" >&2; return 1 ;;
+  esac
+  [[ -n "$dest" ]] || dest="$rel"
+
+  # Find the latest agentstartstack session clone by origin URL (newest commit).
+  local best="" best_t=0 cand t
+  while IFS= read -r cand; do
+    [[ -n "$cand" ]] || continue
+    [[ "$cand" == "$here" ]] && continue
+    t=$(git -C "$cand" log -1 --format=%ct 2>/dev/null) || continue
+    if [[ "$t" -gt "$best_t" ]]; then
+      best_t=$t
+      best="$cand"
+    fi
+  done < <(_agentstartstack_clones_for_origin "$as_origin")
+
+  if [[ -z "$best" ]]; then
+    echo "dropit: no agentstartstack session clone found (origin: $as_origin)" >&2
+    echo "dropit:   create one (clone agentstartstack into AGENT_SESSION_CLONE_PARENT) and retry" >&2
+    return 1
+  fi
+
+  local target="${best}/${dest}"
+  mkdir -p "$(dirname "$target")"
+  cp -r "$abs_src" "$target"
+  echo "dropit: ${rel}  ->  ${best}/${dest}"
+  echo "dropit: review + commit in the agentstartstack clone, then nut."
+}
+
 # Run only from agentstartstack canonical local repo; nutup template, refresh consumers.
 _nutupyall_assert_here() {
   local here sync_root

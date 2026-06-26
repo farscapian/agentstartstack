@@ -46,6 +46,8 @@ When you spot a generic improvement while working in a consumer project:
 2. Do **not** apply it in the consumer repo (a local doc symptom of the upstream gap can wait for the corrected tool to flow down and sweep it).
 3. Let the human carry it upstream; it returns through the normal bump, and its commit message tells you what to run (see [Acting on the bump delta](#acting-on-the-bump-delta-mandatory)).
 
+If you have actually produced the generic content (a file or doc), use **`dropit <src> [<dest>]`** from this consumer clone to copy it into agentstartstack's latest session clone -- where it can be reviewed, committed, and flow upstream -- instead of forking it here. `dropit` runs only from a consumer session clone and never edits the consumer or the agentstartstack clone's history (see [nut.md](nut.md)).
+
 Rule of thumb: if the change would help the next project too, it belongs in the template. Flag it; do not fork it.
 
 **Human manual edits:** use the canonical local repo. Edit, test with the project CLI, commit, `git push origin main`. Then align any active agent clone:
