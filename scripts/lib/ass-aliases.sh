@@ -480,7 +480,8 @@ local-sync/main so it picks up every canonical commit.
 
 Dirty clones are auto-committed first (see workflow.md HARD RULES). Clones
 already at canonical (0 behind) are skipped. Clones only ahead of canonical
-(agent work not yet handed off) are left unchanged.
+(agent work not yet handed off) are left unchanged. `ass` / `ass up` run this
+automatically for every clone behind canonical before handoff.
 
   ass sync
   ass sync --dry-run    plan only; do not modify clones
@@ -560,19 +561,7 @@ EOF
       continue
     fi
 
-    if _ass_clone_has_dirty_worktree "$clone"; then
-      _ass_info "ass sync: auto-committing dirty work before sync..."
-      "${script_dir}/auto-commit-session-work.sh" "$clone" || true
-      behind=$(_ass_clone_behind_canonical "$clone" "$canonical")
-      ahead=$(_ass_clone_ahead_of_canonical "$clone" "$canonical")
-      if [[ "$behind" == 0 || "$behind" == '?' ]]; then
-        _ass_ok "ass sync: ${clone} -- auto-committed; now aligned"
-        synced=$((synced + 1))
-        continue
-      fi
-    fi
-
-    if _ass_handoff_reconcile_clone "$clone" "$canonical"; then
+    if _ass_sync_clone_behind_canonical "$clone" "$canonical"; then
       head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
       _ass_ok "ass sync: aligned ${clone} @ ${head}"
       synced=$((synced + 1))
@@ -593,7 +582,7 @@ EOF
 
 _ass_print_handoff_report() {
   local sync_target="$1" origin_target="$2" repo_name="$3" selected="${4:-}"
-  local pwd_here clone head behind sel
+  local pwd_here clone head ahead behind sel
   local -a clones=()
 
   sync_target=$(readlink -f "$sync_target")
@@ -620,12 +609,14 @@ _ass_print_handoff_report() {
     head=$(git -C "$clone" log -1 --oneline main 2>/dev/null \
       || git -C "$clone" log -1 --oneline 2>/dev/null \
       || echo "(no commits)")
+    ahead=$(_ass_clone_ahead_of_canonical "$clone" "$sync_target")
     behind=$(_ass_clone_behind_canonical "$clone" "$sync_target")
     sel=""
     [[ -n "$selected" && "$clone" == "$(readlink -f "$selected")" ]] \
       && sel="  [selected for handoff]"
     printf 'ass:   %s%s\n' "$clone" "$sel"
-    printf 'ass:     HEAD %s  behind canonical: %s commit(s)\n' "$head" "$behind"
+    printf 'ass:     HEAD %s  ahead canonical: %s  behind canonical: %s commit(s)\n' \
+      "$head" "$ahead" "$behind"
   done
 }
 
@@ -860,6 +851,115 @@ _ass_clone_ahead_of_canonical() {
   git -C "$canonical" rev-list --count "${can_head}..${clone_head}" 2>/dev/null || printf '?'
 }
 
+# Canonical must not lag origin/main before handoff; prompt to ff-only merge if it does.
+_ass_canonical_assert_not_behind_origin() {
+  local canonical="$1" ahead behind confirm
+
+  git -C "$canonical" fetch -q origin main 2>/dev/null || true
+  read -r ahead behind < <(_ass_origin_ahead_behind "$canonical")
+  if [[ "${behind:-0}" == 0 || "${behind}" == '?' ]]; then
+    return 0
+  fi
+
+  _ass_warn "ass: canonical is ${behind} commit(s) behind origin/main"
+  _ass_warn "ass:   canonical must not lag origin/main"
+  read -r -p "ass: merge origin/main into canonical now (ff-only)? [y/N] " confirm </dev/tty \
+    || { _ass_err "ass: aborted -- no tty; align canonical with origin/main first"; return 1; }
+  if [[ "${confirm,,}" != y && "${confirm,,}" != yes ]]; then
+    _ass_err "ass: aborted -- align canonical with origin/main, then re-run ass"
+    return 1
+  fi
+  git -C "$canonical" merge --ff-only origin/main \
+    || { _ass_err "ass: ff-only merge of origin/main failed -- reconcile canonical manually"; return 1; }
+  _ass_ok "ass: canonical fast-forwarded to origin/main"
+  return 0
+}
+
+# Auto-commit (if dirty) and reconcile one session clone that is behind canonical.
+_ass_sync_clone_behind_canonical() {
+  local clone="$1" canonical="$2"
+  local behind script_dir="${_ASS_ALIASES_LIB_DIR}/.."
+
+  behind=$(_ass_clone_behind_canonical "$clone" "$canonical")
+  [[ "$behind" == 0 || "$behind" == '?' ]] && return 0
+
+  _ass_info "ass: auto-syncing session clone (${behind} behind canonical): ${clone}"
+  if _ass_clone_has_dirty_worktree "$clone"; then
+    _ass_info "ass: auto-committing dirty work before sync..."
+    "${script_dir}/auto-commit-session-work.sh" "$clone" || true
+  fi
+  _ass_handoff_reconcile_clone "$clone" "$canonical"
+}
+
+# Every session clone behind canonical is synced automatically (no prompt).
+_ass_auto_sync_all_clones_behind_canonical() {
+  local canonical="$1" origin="$2"
+  local clone failed=0
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    if ! _ass_sync_clone_behind_canonical "$clone" "$canonical"; then
+      failed=1
+    fi
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  [[ "$failed" -eq 0 ]]
+}
+
+# Pick the session clone farthest ahead of canonical (tie: newest commit on main).
+_ass_pick_handoff_clone() {
+  local canonical="$1" origin="$2" repo_name="$3" force="${4:-0}"
+  local nut_last=0 init_time skipped=0
+  local candidate best_dir="" best_ahead=-1 best_time=0 ahead t
+
+  if [[ -f "${canonical}/.git/agentstartstack-ass-last" ]]; then
+    nut_last=$(tr -d '[:space:]' < "${canonical}/.git/agentstartstack-ass-last")
+    [[ "$nut_last" =~ ^[0-9]+$ ]] || nut_last=0
+  fi
+
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+
+    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+      init_time=$(_ass_session_init_time "$candidate")
+      if [[ "$init_time" -le "$nut_last" ]]; then
+        skipped=$((skipped + 1))
+        continue
+      fi
+    fi
+
+    ahead=$(_ass_clone_ahead_of_canonical "$candidate" "$canonical")
+    [[ "$ahead" == '?' ]] && continue
+    t=$(git -C "$candidate" log -1 --format=%ct 2>/dev/null) || t=0
+    if [[ "$ahead" -gt "$best_ahead" ]] \
+        || { [[ "$ahead" -eq "$best_ahead" ]] && [[ "$t" -gt "$best_time" ]]; }; then
+      best_ahead=$ahead
+      best_time=$t
+      best_dir=$candidate
+    fi
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  if [[ -z "$best_dir" ]]; then
+    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+      echo "ass: --force: no session clone initialized after the last ass for ${repo_name}" >&2
+      echo "ass:   last ass: $(date -d "@${nut_last}" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -r "$nut_last" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "@${nut_last}")" >&2
+      if [[ "$skipped" -gt 0 ]]; then
+        echo "ass:   ignored ${skipped} older session clone(s); align a new session (init_*_session.sh) or omit --force" >&2
+      fi
+    else
+      echo "ass: no session clone for ${repo_name}" >&2
+    fi
+    return 1
+  fi
+
+  if [[ "$force" == 1 && "$skipped" -gt 0 ]]; then
+    echo "ass: --force: ignored ${skipped} session clone(s) initialized before last ass" >&2
+  fi
+
+  printf '%s\n' "$best_dir"
+  return 0
+}
+
 _ass_handoff_reconcile_clone() {
   local clone="$1" canonical="$2"
   local ahead behind branch stashed=0
@@ -913,8 +1013,7 @@ _ass_handoff_preflight() {
 _ass_push() {
   local sync_target="$1"
   local force="${2:-0}" ignore_stashes="${3:-0}"
-  local origin_target best_dir="" best_time=0 candidate t commit repo_name
-  local nut_last=0 init_time skipped=0
+  local origin_target best_dir="" commit repo_name
 
   sync_target=$(readlink -f "$sync_target")
   [[ -d "${sync_target}/.git" ]] || {
@@ -931,45 +1030,10 @@ _ass_push() {
 
   repo_name=$(basename "$sync_target")
 
-  if [[ -f "${sync_target}/.git/agentstartstack-ass-last" ]]; then
-    nut_last=$(tr -d '[:space:]' < "${sync_target}/.git/agentstartstack-ass-last")
-    [[ "$nut_last" =~ ^[0-9]+$ ]] || nut_last=0
-  fi
+  _ass_canonical_assert_not_behind_origin "$sync_target" || return 1
+  _ass_auto_sync_all_clones_behind_canonical "$sync_target" "$origin_target" || return 1
 
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-
-    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
-      init_time=$(_ass_session_init_time "$candidate")
-      if [[ "$init_time" -le "$nut_last" ]]; then
-        skipped=$((skipped + 1))
-        continue
-      fi
-    fi
-
-    t=$(git -C "$candidate" log -1 --format=%ct 2>/dev/null) || continue
-    if [[ "$t" -gt "$best_time" ]]; then
-      best_time=$t
-      best_dir=$candidate
-    fi
-  done < <(_agentstartstack_clones_for_origin "$origin_target")
-
-  if [[ -z "$best_dir" ]]; then
-    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
-      echo "ass: --force: no session clone initialized after the last ass for ${repo_name}" >&2
-      echo "ass:   last ass: $(date -d "@${nut_last}" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -r "$nut_last" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "@${nut_last}")" >&2
-      if [[ "$skipped" -gt 0 ]]; then
-        echo "ass:   ignored ${skipped} older session clone(s); align a new session (init_*_session.sh) or omit --force" >&2
-      fi
-    else
-      echo "ass: no session clone for ${repo_name}" >&2
-    fi
-    return 1
-  fi
-
-  if [[ "$force" == 1 && "$skipped" -gt 0 ]]; then
-    echo "ass: --force: ignored ${skipped} session clone(s) initialized before last ass" >&2
-  fi
+  best_dir=$(_ass_pick_handoff_clone "$sync_target" "$origin_target" "$repo_name" "$force") || return 1
 
   _ass_canonical_move_wip_to_clone "$sync_target" "$best_dir" "$ignore_stashes" || return 1
   _ass_handoff_preflight "$best_dir" "$sync_target" || return 1
@@ -1055,9 +1119,12 @@ Session:     clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
              (matched to a canonical repo by git origin URL, any dir name)
 
 -f, --force  Ignore session clones initialized before the last ass; among the
-             remaining clones, pick the one with the newest commit on main.
-             Use after starting a fresh session (init_*_session.sh) so an older
-             stale clone cannot win.
+             remaining clones, pick the one farthest ahead of canonical (tie:
+             newest commit on main). Use after starting a fresh session
+             (init_*_session.sh) so an older stale clone cannot win.
+
+Before handoff, ass auto-syncs any session clone behind canonical (no prompt).
+Canonical must not be behind origin/main; ass prompts to ff-only merge if it is.
 --ignore-stashes  Skip canonical stash prompts; leave stashes and uncommitted
                   canonical work in place and proceed with handoff.
 EOF

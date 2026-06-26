@@ -15,7 +15,11 @@ These rules are non-negotiable for humans and agents working with agentstartstac
    `auto-commit-session-work.sh` after align so agent edits are never left only in the
    working tree (where a mistaken hard-reset would destroy them).
 
-3. **Session clones SHALL only be removed after archive.** The only permitted way to delete
+3. **Session clones must not lag canonical.** `ass` auto-syncs any clone behind canonical
+   before handoff (no prompt). Canonical must not lag `origin/main`; `ass` warns and prompts
+   to ff-only merge `origin/main` if it does.
+
+4. **Session clones SHALL only be removed after archive.** The only permitted way to delete
    a session-clone directory is via `ass up trim` or `ass prune`, which create a verified
    `.tar.gz` under `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` (or the default archive path) and
    remove the source only after `tar tzf` succeeds. **Never** `rm -rf` a session clone by

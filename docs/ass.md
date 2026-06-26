@@ -40,12 +40,14 @@ ass dropit --help
 ```
 
 **`ass`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
-Before handoff, prints **pwd**, the **canonical** repo, every **session clone** for that consumer,
-and how many commits each clone is **behind canonical** on `main` (plus which clone is selected).
+Before handoff, **auto-syncs** any session clone behind canonical (no prompt), checks that
+canonical is not behind `origin/main` (prompts to ff-only merge if it is), then picks the
+session clone **farthest ahead of canonical** for handoff. Prints **pwd**, canonical, every
+session clone (ahead/behind canonical), and which clone is selected.
 
 **`ass up`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `ass up` themselves.
 
-**`-f` / `--force`** -- among session clones for the repo, ignore any initialized **before** the last successful `ass` (tracked in the canonical repo as `.git/agentstartstack-ass-last`). Among the remaining clones, pick the one with the newest commit on `main` -- same rule as default `ass`, but stale pre-ass sessions cannot win. `init_*_session.sh` stamps each align as `.git/agentstartstack-session-init` in the clone. Use when you started a fresh session after the previous ass and an older session clone still exists on disk.
+**`-f` / `--force`** -- among session clones for the repo, ignore any initialized **before** the last successful `ass` (tracked in the canonical repo as `.git/agentstartstack-ass-last`). Among the remaining clones, pick the one **farthest ahead of canonical** (tie: newest commit on `main`) -- same rule as default `ass`, but stale pre-ass sessions cannot win. `init_*_session.sh` stamps each align as `.git/agentstartstack-session-init` in the clone. Use when you started a fresh session after the previous ass and an older session clone still exists on disk.
 
 **`--ignore-stashes`** -- skip canonical stash prompts during handoff. Leaves git stashes and uncommitted work in the canonical repo untouched and proceeds with local-sync. Works with `ass` and `ass up` (e.g. `ass --ignore-stashes`, `ass up --ignore-stashes`, `ass -f --ignore-stashes`).
 
@@ -65,7 +67,7 @@ The loop is per-consumer resilient: one failure (update, commit, or push) is log
 | Session clones | `~/.claude/worktrees/<name>/*` |
 | | `~/.grok/worktrees/<name>/*` |
 
-Session clones are matched by `origin` URL so repos cannot cross-contaminate. Among matches, the clone with the newest commit on `main` wins. With `-f` / `--force`, clones whose session-init stamp is not after the canonical last-ass stamp are excluded first.
+Session clones are matched by `origin` URL so repos cannot cross-contaminate. Handoff selects the clone **farthest ahead of canonical** (tie: newest commit on `main`). Session clones must never stay behind canonical -- `ass` auto-syncs them before selecting; use `ass sync` to align manually from canonical pwd. Canonical must not lag `origin/main`; `ass` warns and prompts to ff-only merge if it does. With `-f` / `--force`, clones whose session-init stamp is not after the canonical last-ass stamp are excluded first.
 
 ## Guards
 
@@ -121,7 +123,8 @@ ass up trim --keep-latest 2 # keep two newest clones
 
 Run from the **canonical** repo (typical workflow: stay in canonical, run `ass up trim` or
 `ass up trim <name>`). Trim discovers every session clone for that consumer, picks the
-**survivor** (newest commit on `main` -- same rule as `ass`), consolidates dirty work from
+**survivor** (newest commit on `main` -- trim survivor rule; handoff uses farthest ahead of
+canonical), consolidates dirty work from
 stale clones into the survivor, and prunes the rest. Before acting, it prints **pwd**, the
 **canonical** repo, each session clone (HEAD, behind-canonical, dirty/unlanded), and a
 **keep/prune plan**. Clones are consolidated and pruned only after `--yes` or an interactive
