@@ -184,7 +184,8 @@ ass status
 |--------|---------|
 | **#** | Session clone index (newest first, same order as `ass list`) |
 | **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
-| **ahead / behind** (first pair) | Vs `origin/main` (ref in header) |
+| **wip** | Uncommitted work not yet in canonical: `-` (clean) or `dirty` |
+| **ahead / behind** (first pair) | Vs `origin/main` (ref in INFO line) |
 | **ahead / behind** (second pair) | Vs canonical/main (ref in header) |
 | **HEAD** | This clone's `main` |
 | **path** | Clone directory |
