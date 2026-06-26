@@ -19,7 +19,7 @@ Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `ass push`.
 ```bash
 ass                 # local-sync handoff (pwd: canonical or session clone)
 ass -f              # handoff only from a post-last-ass session clone
-ass --ignore-stashes  # handoff without canonical stash prompts
+ass --stashes         # opt in: prompt to move canonical stashes to session clone
 ass new --grok      # create + align a Grok session clone (canonical pwd)
 ass new --claude    # create + align a Claude session clone (canonical pwd)
 ass prune           # consolidate one session clone into the newest, then remove it
@@ -29,7 +29,7 @@ ass list            # session clones for canonical pwd (by origin URL)
 ass sync            # align behind session clones to canonical (canonical pwd)
 ass up              # local-sync, then git push origin main
 ass up -f           # as ass -f, then push
-ass up --ignore-stashes  # as ass --ignore-stashes, then push
+ass up --stashes       # as ass --stashes, then push
 ass up trim         # consolidate and prune stale session clones
 ass up --all        # ass up agentstartstack, refresh consumer submodules
 ass dropit <src>    # from a consumer clone: stash generic work upstream
@@ -50,7 +50,7 @@ session clone (ahead/behind canonical), and which clone is selected.
 
 **`-f` / `--force`** -- among session clones for the repo, ignore any initialized **before** the last successful `ass` (tracked in the canonical repo as `.git/agentstartstack-ass-last`). Among the remaining clones, pick the one **farthest ahead of canonical** (tie: newest commit on `main`) -- same rule as default `ass`, but stale pre-ass sessions cannot win. `init_*_session.sh` stamps each align as `.git/agentstartstack-session-init` in the clone. Use when you started a fresh session after the previous ass and an older session clone still exists on disk.
 
-**`--ignore-stashes`** -- skip canonical stash prompts during handoff. Leaves git stashes and uncommitted work in the canonical repo untouched and proceeds with local-sync. Works with `ass` and `ass up` (e.g. `ass --ignore-stashes`, `ass up --ignore-stashes`, `ass -f --ignore-stashes`).
+**`--stashes`** -- opt in to canonical stash prompts during handoff (stash uncommitted canonical work, select git stashes to move to the session clone). **Default:** `ass` leaves canonical stashes and uncommitted work in place. Works with `ass` and `ass up` (e.g. `ass --stashes`, `ass up --stashes`, `ass -f --stashes`).
 
 **`ass up --all`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
 

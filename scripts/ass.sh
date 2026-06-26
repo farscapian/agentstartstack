@@ -13,7 +13,7 @@ ass.sh -- AgentStartStack handoff (human-side git handoff)
 Pwd-oriented: cd to the canonical repo or a session clone, then run a command.
 After install-shell-aliases.sh, only a thin ass() wrapper is installed.
 
-  ass.sh [-f] [--ignore-stashes]  local-sync handoff (ass)
+  ass.sh [-f] [--stashes]          local-sync handoff (ass)
   ass.sh new --grok|--claude      create + align a session clone (canonical pwd)
   ass.sh prune [<clone-path>]     consolidate one clone into the newest, then remove it
   ass.sh drop <n>                 archive and remove session clone #n (see ass list)

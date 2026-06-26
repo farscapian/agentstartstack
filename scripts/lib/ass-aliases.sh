@@ -215,11 +215,11 @@ _ass_session_init_time() {
   stat -c %Y "${clone}/.git" 2>/dev/null || echo 0
 }
 
-# Parse ass / ass up args: optional -f/--force, --ignore-stashes, -h/--help. Pwd-oriented (no repo name).
-# Sets _ASS_PARSE_FORCE (0|1), _ASS_PARSE_IGNORE_STASHES (0|1).
+# Parse ass / ass up args: optional -f/--force, --stashes, -h/--help. Pwd-oriented (no repo name).
+# Sets _ASS_PARSE_FORCE (0|1), _ASS_PARSE_STASHES (0|1).
 _ass_parse_args() {
   _ASS_PARSE_FORCE=0
-  _ASS_PARSE_IGNORE_STASHES=0
+  _ASS_PARSE_STASHES=0
   _ASS_PARSE_HELP=0
 
   while [[ $# -gt 0 ]]; do
@@ -227,8 +227,8 @@ _ass_parse_args() {
       -f|--force)
         _ASS_PARSE_FORCE=1
         ;;
-      --ignore-stashes)
-        _ASS_PARSE_IGNORE_STASHES=1
+      --stashes)
+        _ASS_PARSE_STASHES=1
         ;;
       -h|--help)
         _ASS_PARSE_HELP=1
@@ -891,15 +891,12 @@ _ass_canonical_move_selected_stashes_to_clone() {
 }
 
 _ass_canonical_move_wip_to_clone() {
-  local canonical="$1" clone="$2" ignore_stashes="${3:-0}"
+  local canonical="$1" clone="$2" handle_stashes="${3:-0}"
   local confirm has_dirty=0 has_stash=0
+  [[ "$handle_stashes" == 1 ]] || return 0
   _ass_clone_has_dirty_worktree "$canonical" && has_dirty=1
   git -C "$canonical" stash list 2>/dev/null | grep -q . && has_stash=1
   [[ "$has_dirty" == 1 || "$has_stash" == 1 ]] || return 0
-  if [[ "$ignore_stashes" == 1 ]]; then
-    _ass_info "ass: --ignore-stashes: leaving canonical stashes and uncommitted work in place"
-    return 0
-  fi
   if [[ "${AS_CLI_QUIET:-0}" -eq 1 ]]; then
     _ass_warn "ass: quiet mode -- not moving canonical WIP to session clone"
     return 0
@@ -1088,7 +1085,7 @@ _ass_handoff_preflight() {
 
 _ass_push() {
   local sync_target="$1"
-  local force="${2:-0}" ignore_stashes="${3:-0}"
+  local force="${2:-0}" handle_stashes="${3:-0}"
   local origin_target best_dir="" commit repo_name
 
   sync_target=$(readlink -f "$sync_target")
@@ -1111,7 +1108,7 @@ _ass_push() {
 
   best_dir=$(_ass_pick_handoff_clone "$sync_target" "$origin_target" "$repo_name" "$force") || return 1
 
-  _ass_canonical_move_wip_to_clone "$sync_target" "$best_dir" "$ignore_stashes" || return 1
+  _ass_canonical_move_wip_to_clone "$sync_target" "$best_dir" "$handle_stashes" || return 1
   _ass_handoff_preflight "$best_dir" "$sync_target" || return 1
 
   _ass_print_handoff_report "$sync_target" "$origin_target" "$repo_name" "$best_dir"
@@ -1182,10 +1179,10 @@ Prints pwd, canonical repo, every session clone, and how far behind canonical ea
 
   ass                 pwd-oriented handoff (cd to canonical or session clone)
   ass -f              only session clones initialized after the last ass
-  ass --ignore-stashes   handoff without canonical stash prompts
+  ass --stashes          prompt to move canonical stashes to session clone
   ass up                 local-sync, then git push origin main
   ass up -f              as ass -f, then push
-  ass up --ignore-stashes as ass --ignore-stashes, then push
+  ass up --stashes       as ass --stashes, then push
   ass up trim         consolidate and prune stale session clones
   ass up --all        ass up agentstartstack, refresh consumer submodules
   ass dropit <src>    copy generic work into agentstartstack session clone
@@ -1201,15 +1198,15 @@ Session:     clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
 
 Before handoff, ass auto-syncs any session clone behind canonical (no prompt).
 Canonical must not be behind origin/main; ass prompts to ff-only merge if it is.
---ignore-stashes  Skip canonical stash prompts; leave stashes and uncommitted
-                  canonical work in place and proceed with handoff.
+--stashes         Opt in to canonical stash prompts (move stashes to session clone).
+                  Default: leave canonical stashes and uncommitted work in place.
 EOF
     return 0
   fi
 
   local sync_target
   sync_target=$(_ass_resolve_sync_target "") || return 1
-  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_IGNORE_STASHES"
+  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_STASHES"
 }
 
 ass_up()
@@ -1231,19 +1228,19 @@ ass up -- local-sync with canonical local repo, then git push origin main
 
   ass up              pwd-oriented (cd to canonical or session clone)
   ass up -f           only session clones initialized after the last ass, then push
-  ass up --ignore-stashes as ass --ignore-stashes, then push
+  ass up --stashes       as ass --stashes, then push
   ass up trim             consolidate and prune stale session clones (see: ass up trim --help)
 
 -f, --force  See ass --help. Prefer this when handing off from a session started
              after the previous ass so older session clones are not selected.
---ignore-stashes  See ass --help. Skip canonical stash prompts during handoff.
+--stashes    See ass --help. Opt in to canonical stash prompts during handoff.
 EOF
     return 0
   fi
 
   local sync_target
   sync_target=$(_ass_resolve_sync_target "") || return 1
-  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_IGNORE_STASHES" || return 1
+  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_STASHES" || return 1
   _ass_info "ass up: ${sync_target} -> origin main"
   git -C "$sync_target" push origin main
 }
