@@ -322,7 +322,7 @@ _ass_status_print_row() {
   printf '\n'
 }
 
-# ass status -- session clones vs origin/main and canonical (HEAD in column headings).
+# ass status -- agent session clones vs origin/main and canonical/main.
 ass_status() {
   local -a _ass_argv clones=()
   local sync_target canonical origin repo_name pwd_here origin_head can_head
@@ -330,17 +330,18 @@ ass_status() {
 
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-ass status -- session clones vs origin/main and canonical
+ass status -- agent session clones vs origin/main and canonical/main
 
 Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
-Fetches origin/main quietly before counting. Lists session clones only (newest first).
+Fetches origin/main quietly before counting. Lists agent session clones only
+(not canonical). References are shown in the INFO line above the table.
 
-Columns:
+Columns (each clone row):
   #       session clone index (newest first)
   agent   grok / claude
-  ahead   commits on this clone not on origin/main (HEAD under column)
+  ahead   commits on this clone not on origin/main
   behind  commits on origin/main not on this clone
-  ahead   commits on this clone not on canonical main (HEAD under column)
+  ahead   commits on this clone not on canonical main
   behind  commits on canonical main not on this clone
   HEAD    this clone's main
   path
@@ -369,12 +370,11 @@ EOF
   origin_head=$(git -C "$canonical" rev-parse --short origin/main 2>/dev/null || echo '?')
   can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
 
-  _ass_info "ass status: ${repo_name}"
-  _ass_info "origin/main @ ${origin_head}  canonical @ ${can_head}"
+  _ass_info "ass status: ${repo_name} (agent session clones)"
+  _ass_info "vs origin/main @ ${origin_head}  vs canonical/main @ ${can_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
   _ass_status_format_header_row "#" "agent" "ahead" "behind" "ahead" "behind" "HEAD" "path"
-  _ass_status_format_row "" "" "$origin_head" "$origin_head" "$can_head" "$can_head" "" ""; printf '\n'
   _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-------" "---------" "----"
 
   while IFS= read -r clone; do
@@ -383,7 +383,7 @@ EOF
   done < <(_agentstartstack_clones_for_origin "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
-    echo "session clones: (none)"
+    echo "agent session clones: (none)"
   else
     mapfile -t clones < <(
       for clone in "${clones[@]}"; do
@@ -399,8 +399,8 @@ EOF
   fi
 
   echo ""
-  _ass_info "ahead/behind (${origin_head}) = vs origin/main"
-  _ass_info "ahead/behind (${can_head}) = vs canonical main"
+  _ass_info "1st ahead/behind pair: vs origin/main @ ${origin_head}"
+  _ass_info "2nd ahead/behind pair: vs canonical/main @ ${can_head}"
   return 0
 }
 

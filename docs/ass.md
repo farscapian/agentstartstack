@@ -168,12 +168,12 @@ without re-running `init_*_session.sh` (which hard-resets). See also
 [Re-align before committing](workflow.md#re-align-before-committing-mandatory) for
 per-clone fast-forward during a session.
 
-## ass status (session clones)
+## ass status (agent session clones)
 
-`ass status` lists **session clones only** (newest first). Each row shows ahead/behind vs
-**`origin/main`** and vs **canonical** `main`. The short HEAD of each reference appears
-under the ahead/behind column pairs. Run from the canonical repo or any session clone
-(pwd-oriented).
+`ass status` lists **agent session clones only** (newest first) — not canonical.
+Each row shows ahead/behind vs **`origin/main`** and vs **canonical/main**. Reference
+SHAs appear in the INFO line and in the table header (not as a data row). Run from the
+canonical repo or any session clone (pwd-oriented).
 
 ```bash
 ass status
@@ -183,8 +183,8 @@ ass status
 |--------|---------|
 | **#** | Session clone index (newest first, same order as `ass list`) |
 | **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
-| **ahead / behind** (first pair) | Vs `origin/main` (HEAD under columns) |
-| **ahead / behind** (second pair) | Vs canonical `main` (HEAD under columns) |
+| **ahead / behind** (first pair) | Vs `origin/main` (ref in header) |
+| **ahead / behind** (second pair) | Vs canonical/main (ref in header) |
 | **HEAD** | This clone's `main` |
 | **path** | Clone directory |
 
