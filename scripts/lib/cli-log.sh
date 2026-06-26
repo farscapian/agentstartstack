@@ -19,6 +19,40 @@ AS_CLI_LOG_FILE=""
 : "${AGENTSTARTSTACK_CLI_LOG_DIR:=${HOME}/.agentstartstack/logs}"
 : "${AGENTSTARTSTACK_CLI_LOG_PREFIX:=cli}"
 
+# Terminal colors (iotstack-style). Message text stays ASCII; tags are colored when enabled.
+AS_CLI_COLOR_RED=$'\033[0;31m'
+AS_CLI_COLOR_GRN=$'\033[0;32m'
+AS_CLI_COLOR_YLW=$'\033[0;33m'
+AS_CLI_COLOR_BLU=$'\033[0;34m'
+AS_CLI_COLOR_DIM=$'\033[2m'
+AS_CLI_COLOR_RST=$'\033[0m'
+
+_as_cli_color_enabled() {
+  local stream="$1"
+  [[ -n "${NO_COLOR:-}" || "${AS_CLI_COLOR:-1}" == 0 ]] && return 1
+  if [[ "$stream" == stderr ]]; then
+    [[ -t 2 ]]
+  else
+    [[ -t 1 ]]
+  fi
+}
+
+_as_cli_color_tag() {
+  local level="$1" stream="$2" tag="$3"
+  if ! _as_cli_color_enabled "$stream"; then
+    printf '%s' "$tag"
+    return 0
+  fi
+  case "$level" in
+    INFO)  printf '%s%s%s' "$AS_CLI_COLOR_BLU" "$tag" "$AS_CLI_COLOR_RST" ;;
+    OK)    printf '%s%s%s' "$AS_CLI_COLOR_GRN" "$tag" "$AS_CLI_COLOR_RST" ;;
+    WARN)  printf '%s%s%s' "$AS_CLI_COLOR_YLW" "$tag" "$AS_CLI_COLOR_RST" ;;
+    ERR)   printf '%s%s%s' "$AS_CLI_COLOR_RED" "$tag" "$AS_CLI_COLOR_RST" ;;
+    DEBUG) printf '%s%s%s' "$AS_CLI_COLOR_DIM" "$tag" "$AS_CLI_COLOR_RST" ;;
+    *)     printf '%s' "$tag" ;;
+  esac
+}
+
 _as_cli_resolve_log_file() {
   local id="$1" dir prefix safe
   [[ -n "$id" ]] || return 1
@@ -59,22 +93,23 @@ _as_cli_log_append() {
 _as_cli_emit() {
   local level="$1" stream="$2" tag="$3"
   shift 3
-  local ts prefix line
+  local ts prefix line colored_tag
   ts=$(_as_cli_timestamp_prefix)
   if [[ -n "$ts" ]]; then
     prefix="${ts} "
   else
     prefix=""
   fi
-  line="${prefix}${tag}$*"$'\n'
+  line="${prefix}${tag} $*"$'\n'
   [[ -n "${AS_CLI_LOG_FILE:-}" ]] && _as_cli_log_append "$line"
 
   [[ "${AS_CLI_QUIET:-0}" -eq 0 || "$level" == ERR ]] || return 0
+  colored_tag=$(_as_cli_color_tag "$level" "$stream" "$tag")
   if [[ "$stream" == stderr ]]; then
-    printf '%s%s ' "$prefix" "$tag" >&2
+    printf '%s%s ' "$prefix" "$colored_tag" >&2
     printf '%s\n' "$*" >&2
   else
-    printf '%s%s ' "$prefix" "$tag"
+    printf '%s%s ' "$prefix" "$colored_tag"
     printf '%s\n' "$*"
   fi
 }
@@ -82,7 +117,7 @@ _as_cli_emit() {
 _as_cli_emitf() {
   local level="$1" stream="$2" tag="$3" fmt="$4"
   shift 4
-  local ts prefix body
+  local ts prefix body colored_tag
   ts=$(_as_cli_timestamp_prefix)
   if [[ -n "$ts" ]]; then
     prefix="${ts} "
@@ -91,15 +126,16 @@ _as_cli_emitf() {
   fi
   # shellcheck disable=SC2059
   body=$(printf "$fmt" "$@")
-  [[ -n "${AS_CLI_LOG_FILE:-}" ]] && _as_cli_log_append "${prefix}${tag}${body}"
+  [[ -n "${AS_CLI_LOG_FILE:-}" ]] && _as_cli_log_append "${prefix}${tag} ${body}"
 
   [[ "${AS_CLI_QUIET:-0}" -eq 0 || "$level" == ERR ]] || return 0
+  colored_tag=$(_as_cli_color_tag "$level" "$stream" "$tag")
   if [[ "$stream" == stderr ]]; then
-    printf '%s%s ' "$prefix" "$tag" >&2
+    printf '%s%s ' "$prefix" "$colored_tag" >&2
     # shellcheck disable=SC2059
     printf "$fmt" "$@" >&2
   else
-    printf '%s%s ' "$prefix" "$tag"
+    printf '%s%s ' "$prefix" "$colored_tag"
     # shellcheck disable=SC2059
     printf "$fmt" "$@"
   fi
@@ -153,7 +189,7 @@ _as_cli_parse_global_flags() {
         shift
         AS_CLI_LOG_ID="${1:-}"
         if [[ -z "$AS_CLI_LOG_ID" ]]; then
-          printf '[ERR]  cli-log: --log-id requires an id\n' >&2
+          _as_cli_emit ERR stderr '[ERR]  ' 'cli-log: --log-id requires an id'
           return 1
         fi
         shift
@@ -188,11 +224,11 @@ _as_cli_parse_global_flags_finalize() {
     return 0
   fi
   if [[ "${AS_CLI_QUIET:-0}" -eq 1 ]]; then
-    printf '[ERR]  cli-log: --log-id is incompatible with -q/--quiet\n' >&2
+    _as_cli_emit ERR stderr '[ERR]  ' 'cli-log: --log-id is incompatible with -q/--quiet'
     return 1
   fi
   AS_CLI_LOG_FILE=$(_as_cli_resolve_log_file "$AS_CLI_LOG_ID") || {
-    printf '[ERR]  cli-log: invalid --log-id\n' >&2
+    _as_cli_emit ERR stderr '[ERR]  ' 'cli-log: invalid --log-id'
     return 1
   }
   AS_CLI_VERBOSE=1

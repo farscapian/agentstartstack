@@ -13,6 +13,10 @@ and for host-project entry scripts that source `scripts/lib/cli-log.sh`.
 | `[ERR]  ` | stderr | Failure (always shown, even in quiet mode) |
 | `[DEBUG]` | stderr | Only with `-v` / `--verbose` |
 
+Tags are colored on a TTY (iotstack-style): blue `[INFO]`, green `[OK]`, yellow
+`[WARN]`, red `[ERR]`, dim `[DEBUG]`. Set `NO_COLOR=1` or `AS_CLI_COLOR=0` to
+disable. Log files (`--log-id`) always store plain ASCII tags without escapes.
+
 ## Global flags (ass / ass up)
 
 Parsed **before** subcommands and passed through nested calls where applicable:
