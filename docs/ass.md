@@ -27,8 +27,10 @@ ass sync all --dry-run
 ass new             # create + align a session clone (infers agent; see below)
 ass new --grok      # force Grok / Cursor session clone
 ass new --claude    # force Claude Code session clone
-# Inference: Codium integrated terminal -> claude (new detached Codium window on the
-# left monitor, maximized, Claude Code extension opened); else grok/claude from PATH.
+# Agent inference: Codium integrated terminal -> claude; else grok/claude from PATH.
+# Codium window: a claude session opens a new detached Codium window on the clone
+# (left monitor, maximized, Claude Code extension opened) whenever the codium CLI is
+# on PATH -- regardless of where you launched ass new. Opt out: ASS_NEW_OPEN_CODIUM=0.
 # Optional: ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y override monitor origin.
 # ass new prompts to install wmctrl (apt) when missing, for left-monitor placement.
 ass drop            # archive all session clones except #1 (collapse into one)

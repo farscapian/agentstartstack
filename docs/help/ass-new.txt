@@ -9,10 +9,16 @@ Options:
   --grok              Force Grok / Cursor session clone
   --claude            Force Claude Code session clone
 
-Inference order: Codium integrated terminal -> claude (opens Claude Code
-extension); else grok-only on PATH -> grok; claude-only -> claude; both
-installed -> claude. With neither on PATH (and not in Codium), ass new exits
-with an error.
+Inference order (which agent): Codium integrated terminal -> claude; else
+grok-only on PATH -> grok; claude-only -> claude; both installed -> claude.
+With neither on PATH (and not in Codium), ass new exits with an error.
+
+Codium window: for a claude session, ass new opens a new Codium window on the
+clone with the Claude Code extension whenever the codium CLI is on PATH --
+regardless of where you launched ass new (you run it from canonical). Opt out
+with ASS_NEW_OPEN_CODIUM=0. The window goes to the left monitor, maximized
+(needs wmctrl; override origin with ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y).
+You (human) stay in canonical and run 'ass' there to land the agent's work.
 
 Run from the canonical local repo (host project or agentstartstack template).
 Always creates ~/.ass/worktrees/<project>/<unix-timestamp>/, writes

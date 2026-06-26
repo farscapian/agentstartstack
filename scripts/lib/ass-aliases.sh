@@ -1980,6 +1980,14 @@ _ass_codium_place_window_maximized() {
   return 1
 }
 
+# Policy gate: should ass new auto-open a Codium + Claude Code window for a claude
+# session? True whenever the codium CLI is on PATH; opt out with ASS_NEW_OPEN_CODIUM=0.
+# (Independent of where ass new was launched -- the human runs it from canonical.)
+_ass_new_should_open_codium() {
+  [[ "${ASS_NEW_OPEN_CODIUM:-1}" != 0 ]] || return 1
+  command -v codium >/dev/null 2>&1
+}
+
 # Detached Codium window on the left monitor (maximized) + Claude Code extension.
 _ass_open_claude_code_in_codium() {
   local clone_path="$1" marker x=0 y=0
@@ -2027,6 +2035,14 @@ _ass_detect_installed_agent() {
   return 1
 }
 
+# Append a newline to $1 when its last byte is not one (safe to call on missing/empty).
+_ass_ensure_trailing_newline() {
+  local file="$1"
+  [[ -s "$file" ]] || return 0
+  [[ -n $(tail -c 1 "$file" | tr -d '\n') ]] && printf '\n' >> "$file"
+  return 0
+}
+
 # Write gitignored .agentstartstack.env into a session clone so init_* can align it.
 _ass_new_write_clone_env() {
   local canonical="$1" clone_path="$2" origin="$3"
@@ -2035,6 +2051,9 @@ _ass_new_write_clone_env() {
   project_name="$(basename "$canonical")"
   if [[ -f "${canonical}/.agentstartstack.env" ]]; then
     cp "${canonical}/.agentstartstack.env" "$env_file"
+    # A copied env without a trailing newline would fuse with the first appended
+    # line (e.g. ORIGIN_URL=...gitAGENT_SESSION_CLONE_PARENT=...). Normalize first.
+    _ass_ensure_trailing_newline "$env_file"
     # Ensure CANONICAL_LOCAL_REPO points at the real canonical checkout.
     if grep -q '^CANONICAL_LOCAL_REPO=' "$env_file" 2>/dev/null; then
       sed -i "s|^CANONICAL_LOCAL_REPO=.*|CANONICAL_LOCAL_REPO=${canonical}|" "$env_file"
@@ -2099,19 +2118,21 @@ ass_new() {
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
   "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
   _ass_ok "ass new: session clone ready: ${clone_path}"
-  if [[ "$agent" == claude ]] && _ass_in_codium_integrated_terminal; then
+  if [[ "$agent" == claude ]] && _ass_new_should_open_codium; then
     if _ass_open_claude_code_in_codium "$clone_path"; then
       _ass_ok "ass new: opened ${clone_path} in a new Codium window (left monitor, maximized)"
     else
-      _ass_info "Open agent session: cd ${clone_path} (codium CLI not found -- open folder manually)"
+      _ass_info "ass new: could not open Codium automatically -- open ${clone_path} in Claude Code"
     fi
   elif [[ "$agent" == grok ]]; then
-    _ass_info "Open agent session: cd ${clone_path}"
-    _ass_info "Grok/Cursor: open that folder or paste the path above as the session workspace"
+    _ass_info "ass new: open ${clone_path} in Grok/Cursor as the session workspace"
   else
-    _ass_info "Open agent session: cd ${clone_path}"
-    _ass_info "Claude Code: cd there, then start claude in that directory"
+    _ass_info "ass new: open ${clone_path} in Claude Code (the agent works in that clone)"
   fi
+  # Pwd-oriented: the human never cd's into the clone. The agent works there;
+  # the human stays in canonical and runs 'ass' to local-sync the agent's work.
+  _ass_info "ass new: you (human) stay in canonical and run 'ass' here to land agent work:"
+  _ass_info "ass new:   ${canonical}"
 }
 
 # ass up trim -- consolidate and prune stale agent session clones for a consumer.
