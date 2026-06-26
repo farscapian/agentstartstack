@@ -10,6 +10,35 @@ _ass_cli_usage() {
   _ass_main_usage
 }
 
+# Read LOG_TO_FILE from the pwd repo's .agentstartstack.env without sourcing it
+# (avoids pulling in other env vars). Echoes the raw value, comments stripped.
+_ass_cli_env_value() {
+  local key="$1" root env line
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+  env="${root}/.agentstartstack.env"
+  [[ -f "$env" ]] || return 1
+  line=$(grep -E "^[[:space:]]*${key}=" "$env" 2>/dev/null | tail -1) || return 1
+  line="${line#*=}"
+  line="${line%%#*}"
+  printf '%s' "$line" | tr -d '[:space:]'
+}
+
+# When LOG_TO_FILE=1 (in the repo's .agentstartstack.env), append a full transcript
+# of this invocation to ~/.agentstartstack/ass.log (override: AGENTSTARTSTACK_LOG_FILE).
+# Output is tee'd, so colors auto-disable and the log stays clean ASCII.
+_ass_cli_start_file_log() {
+  local val log dir
+  val=$(_ass_cli_env_value LOG_TO_FILE) || return 0
+  case "$val" in 1|true|yes|on) ;; *) return 0 ;; esac
+  log="${AGENTSTARTSTACK_LOG_FILE:-${HOME}/.agentstartstack/ass.log}"
+  dir=$(dirname "$log")
+  mkdir -p "$dir" 2>/dev/null || true
+  printf '\n===== ass %s | pwd %s | args: %s =====\n' \
+    "$(date -Is 2>/dev/null || date)" "$(pwd 2>/dev/null || echo '?')" "$*" \
+    >> "$log" 2>/dev/null || return 0
+  exec > >(tee -a "$log") 2>&1
+}
+
 # True when $1 is a global flag that belongs to ass sync (legacy: bare ass -f).
 _ass_cli_is_sync_flag() {
   case "${1:-}" in
@@ -81,4 +110,5 @@ main() {
   esac
 }
 
+_ass_cli_start_file_log "$@"
 main "$@"

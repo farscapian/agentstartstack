@@ -45,6 +45,18 @@ When `--log-id` is set, `cli-log.sh` opens:
 
 Defaults: `~/.agentstartstack/logs/ass-<id>.log` (prefix `ass` when sourced from ass-aliases).
 
+### LOG_TO_FILE (persistent transcript)
+
+Set `LOG_TO_FILE=1` in the repo's `.agentstartstack.env` to append a **full
+transcript** of *every* `ass` command (all stdout/stderr, including git output)
+to `~/.agentstartstack/ass.log`. Override the path with `AGENTSTARTSTACK_LOG_FILE`.
+
+Each invocation is preceded by a `===== ass <timestamp> | pwd <dir> | args: … =====`
+header. The transcript is tee'd, so color auto-disables and the log stays clean
+ASCII. This differs from `--log-id` (per-run file, only `_as_cli_*` tagged lines):
+`LOG_TO_FILE` is an always-on, single-file audit log of the whole session output.
+It is read from `.agentstartstack.env` without sourcing the file (key scan only).
+
 ## Implementation
 
 - Library: [`scripts/lib/cli-log.sh`](../scripts/lib/cli-log.sh)
