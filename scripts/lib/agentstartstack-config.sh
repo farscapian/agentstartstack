@@ -51,7 +51,7 @@ agentstartstack_apply_defaults() {
   }
 
   # Colon-separated parent dirs under which agent session clones live. Single
-  # source of truth for both the init scripts and nut's clone discovery (which
+  # source of truth for both the init scripts and ass's clone discovery (which
   # matches clones by git origin URL -- no project-specific subdir naming assumed).
   AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 
@@ -69,6 +69,10 @@ agentstartstack_resolve_guidance_paths() {
     GENERIC_GUIDANCE_DIR=".agentstartstack/agentstartstack"
   elif [[ -d "${root}/agentstartstack/agentstartstack" ]]; then
     GENERIC_GUIDANCE_DIR="agentstartstack/agentstartstack"
+  elif [[ -d "${root}/docs" ]]; then
+    GENERIC_GUIDANCE_DIR="docs"
+  elif [[ -d "${root}/docs" ]]; then
+    GENERIC_GUIDANCE_DIR="docs"
   elif [[ -d "${root}/agentstartstack" ]]; then
     GENERIC_GUIDANCE_DIR="agentstartstack"
   else
@@ -91,7 +95,7 @@ agentstartstack_resolve_guidance_paths() {
 }
 
 # Backstop for the bump-delta protocol: detect a pending agentstartstack reconcile
-# even when no .agentstartstack-bump watch file is present -- e.g. nutupyall
+# even when no .agentstartstack-bump watch file is present -- e.g. ass up --all
 # deferred an action-bearing bump (it does not auto-commit those). Echoes the
 # range "OLD..NEW" and returns 0 if the .agentstartstack submodule is behind its
 # remote; returns 1 (no output) otherwise, including the template repo (no
