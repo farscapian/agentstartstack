@@ -680,12 +680,21 @@ _nutup_trim_resolve_invoked_from() {
   fi
 }
 
+_nutup_trim_kept_contains() {
+  local needle="$1" k
+  shift
+  for k in "$@"; do
+    [[ "$k" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
 _nutup_trim_one() {
   local name="$1" dry_run="$2" yes="$3" no_rollover="$4" keep_latest="$5" archive_override="$6"
   local canonical archive_dir invoked_from rollover_target
-  local -a all_clones=() kept=() to_archive=()
+  local -a all_clones=() all_clones_list=() kept=() kept_dedup=() to_archive=()
   local clone mtime t dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
-  local files conflicts subjects line skip k
+  local files conflicts subjects line skip k reason pwd_here head markers
 
   canonical=$(_nut_sync_root "$name") || {
     echo "nutup trim: no canonical local repo for: ${name}" >&2
@@ -700,10 +709,10 @@ _nutup_trim_one() {
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
-    all_clones+=("$(readlink -f "$clone")")
+    all_clones_list+=("$(readlink -f "$clone")")
   done < <(_nutupyall_session_clones "$name")
 
-  if [[ "${#all_clones[@]}" -eq 0 ]]; then
+  if [[ "${#all_clones_list[@]}" -eq 0 ]]; then
     echo "nutup trim: ${name} -- no session clones found"
     return 0
   fi
@@ -714,7 +723,7 @@ _nutup_trim_one() {
   fi
 
   mapfile -t all_clones < <(
-    for clone in "${all_clones[@]}"; do
+    for clone in "${all_clones_list[@]}"; do
       printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
     done | sort -rn -k1,1 | awk '{print $2}'
   )
@@ -722,9 +731,15 @@ _nutup_trim_one() {
   t=0
   for clone in "${all_clones[@]}"; do
     [[ "$t" -ge "$keep_latest" ]] && break
-    kept+=("$clone")
+    _nutup_trim_kept_contains "$clone" "${kept[@]}" || kept+=("$clone")
     t=$((t + 1))
   done
+
+  kept_dedup=()
+  for clone in "${kept[@]}"; do
+    _nutup_trim_kept_contains "$clone" "${kept_dedup[@]}" || kept_dedup+=("$clone")
+  done
+  kept=("${kept_dedup[@]}")
 
   # Rollover target = newest clone in kept set.
   rollover_target=$(
@@ -751,12 +766,51 @@ _nutup_trim_one() {
 
   git -C "$canonical" fetch -q origin 2>/dev/null || true
 
-  if [[ "$dry_run" != 1 && "$yes" != 1 ]]; then
-    echo "nutup trim: ${name} -- plan: keep ${#kept[@]} clone(s), archive ${#to_archive[@]}"
-    printf 'nutup trim:   rollover target: %s\n' "$rollover_target"
-    read -r -p "nutup trim: proceed? [y/N] " line
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+  echo "nutup trim: pwd: ${pwd_here}"
+  echo "nutup trim: canonical (${name}): ${canonical}"
+  if [[ -n "$invoked_from" ]]; then
+    echo "nutup trim: pwd session clone (protected): ${invoked_from}"
+  else
+    echo "nutup trim: pwd session clone: none"
+    echo "nutup trim:   (not inside a session clone -- run from the clone you want to keep)"
+  fi
+  echo "nutup trim: session clones (${#all_clones_list[@]}):"
+  for clone in "${all_clones_list[@]}"; do
+    mtime=$(_nutup_trim_clone_mtime "$clone")
+    head=$(git -C "$clone" log -1 --oneline 2>/dev/null || echo "(no commits)")
+    markers=""
+    _nutup_trim_clone_dirty "$clone" && markers="${markers} dirty"
+    _nutup_trim_clone_unlanded "$clone" "$canonical" && markers="${markers} unlanded"
+    printf 'nutup trim:   %s\n' "$clone"
+    printf 'nutup trim:     HEAD %s  .git-mtime=%s%s\n' "$head" "$mtime" "$markers"
+  done
+  echo "nutup trim: plan (keep-latest=${keep_latest}):"
+  for clone in "${all_clones_list[@]}"; do
+    if _nutup_trim_clone_unlanded "$clone" "$canonical"; then
+      printf 'nutup trim:   keep (unlanded): %s\n' "$clone"
+      continue
+    fi
+    if _nutup_trim_kept_contains "$clone" "${kept[@]}"; then
+      reason="newest .git mtime (keep-latest)"
+      [[ "$clone" == "$invoked_from" ]] && reason="pwd session clone + keep-latest"
+      printf 'nutup trim:   keep (%s): %s\n' "$reason" "$clone"
+      continue
+    fi
+    if [[ "$dry_run" == 1 ]]; then
+      printf 'nutup trim:   archive (dry-run): %s\n' "$clone"
+    else
+      printf 'nutup trim:   archive: %s\n' "$clone"
+    fi
+  done
+  printf 'nutup trim:   rollover target: %s\n' "$rollover_target"
+
+  if [[ "$dry_run" == 1 ]]; then
+    echo "nutup trim: dry-run -- no clones removed (re-run without --dry-run to confirm)"
+  elif [[ "$yes" != 1 ]]; then
+    read -r -p "nutup trim: archive ${#to_archive[@]} clone(s) for ${name}? [y/N] " line
     [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || {
-      echo "nutup trim: aborted"
+      echo "nutup trim: aborted (no clones removed)"
       return 1
     }
   fi
@@ -781,13 +835,17 @@ _nutup_trim_one() {
         kept_dirty=$((kept_dirty + 1))
         continue
       fi
-      read -r files conflicts < <(_nutup_trim_rollover "$clone" "$rollover_target")
-      if [[ "$conflicts" == 1 ]]; then
-        echo "nutup trim:   rolled over: ${clone} (${files} file(s); conflicts left for agent)"
+      if [[ "$dry_run" == 1 ]]; then
+        echo "nutup trim:   [dry-run] would roll over dirty: ${clone} -> ${rollover_target}"
       else
-        echo "nutup trim:   rolled over: ${clone} (${files} file(s))"
+        read -r files conflicts < <(_nutup_trim_rollover "$clone" "$rollover_target")
+        if [[ "$conflicts" == 1 ]]; then
+          echo "nutup trim:   rolled over: ${clone} (${files} file(s); conflicts left for agent)"
+        else
+          echo "nutup trim:   rolled over: ${clone} (${files} file(s))"
+        fi
+        rolled=$((rolled + 1))
       fi
-      rolled=$((rolled + 1))
     fi
 
     if _nutup_trim_archive_clone "$clone" "$archive_dir" "$dry_run"; then
@@ -797,8 +855,12 @@ _nutup_trim_one() {
     fi
   done
 
-  echo "nutup trim: ${name} -- ${archived} archived, ${rolled} rolled over -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
-  [[ "$dry_run" != 1 ]] && echo "nutup trim:   archives in ${archive_dir}"
+  if [[ "$dry_run" == 1 ]]; then
+    echo "nutup trim: ${name} -- dry-run: ${archived} would archive, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+  else
+    echo "nutup trim: ${name} -- ${archived} archived, ${rolled} rolled over -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+    echo "nutup trim:   archives in ${archive_dir}"
+  fi
   return 0
 }
 
@@ -813,8 +875,8 @@ nutup trim -- archive stale agent session clones for a consumer
   nutup trim                 infer consumer from pwd
   nutup trim <project>       named consumer
   nutup trim --all           every configured consumer
-  nutup trim --dry-run       print plan only
-  nutup trim --yes           skip confirmation
+  nutup trim --dry-run       print plan only (never removes clones)
+  nutup trim --yes           skip confirmation prompt (still removes clones)
   nutup trim --no-rollover   keep dirty older clones instead of rolling over
   nutup trim --keep-latest N keep N newest clones (default 1)
   nutup trim --archive-dir <path>

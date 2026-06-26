@@ -99,10 +99,16 @@ See [workflow.md](workflow.md) for session align, agent clone paths, and full gi
 nutup trim                 # consumer inferred from pwd
 nutup trim iotstack        # named consumer
 nutup trim --all           # every configured consumer
-nutup trim --dry-run       # plan only
-nutup trim --yes           # skip confirmation
+nutup trim --dry-run       # plan only (never removes clones)
+nutup trim --yes           # skip confirmation prompt
 nutup trim --keep-latest 2 # keep two newest clones
 ```
+
+Before archiving anything, trim prints **pwd**, the **canonical** repo, every **session clone**
+for that consumer (HEAD, `.git` mtime, dirty/unlanded flags), and a **keep/archive plan**.
+Run it from the session clone you want to **keep** so pwd protects that clone; running from
+canonical alone keeps only the newest `.git` mtime. Clones are removed only after `--yes` or
+an interactive `y` at the prompt (not on `--dry-run`).
 
 `nutupyall` calls `nutup trim --yes` for each consumer as its final step (opt out with `NUTUPYALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 
