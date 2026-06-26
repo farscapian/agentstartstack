@@ -240,10 +240,22 @@ unlanded commits. **Refuses clones with an active grok or Claude session** (dete
 running `grok --resume` for that workspace, or a `claude` process with cwd in the clone) --
 quit or close the agent session first.
 
+Two additional safety guards (the cwd check above misses a Claude Code session run
+from a Codium window opened at canonical, so these do not rely on it):
+
+- **Primary / pwd guard:** `ass drop <n>` refuses to remove the **primary** clone
+  (`#1`, the `1*` active rollover target) or the clone at your current **pwd**
+  unless you pass **`--force`** (`-f`). Bare `ass drop` likewise skips the pwd clone
+  without `--force`.
+- **Last-session prompt:** dropping the **last remaining** agent session clone for
+  the repo **always** prompts and proceeds only on an explicit `y` -- even with
+  `--force` -- since no session clone would remain.
+
 ```bash
 ass drop                  # archive all clones except #1 (collapse into one)
 ass list                  # see # column
 ass drop 2                # archive and remove clone #2
+ass drop 1 --force        # drop the primary/pwd clone (override the guard)
 ```
 
 Bare `ass drop` keeps session clone **#1** (newest commit on `main`) and archives every

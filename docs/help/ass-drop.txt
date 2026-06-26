@@ -23,8 +23,14 @@ rolls into another session clone when one exists.
 
 Usage:
   ass drop <n>
+  ass drop <n> --force   # also drop the primary (#1) or your pwd clone
 
-Same refusal rules as mode 1.
+Same refusal rules as mode 1, plus two safety guards:
+  - Refuses to remove the primary clone (#1, the 1* active rollover target) or
+    the clone at your current pwd unless you pass --force (-f). The active agent
+    session is almost always one of these.
+  - Dropping the LAST agent session for the repo always prompts and proceeds
+    only on an explicit y (even with --force) -- no clones would remain.
 
 3) Copy generic work into agentstartstack (consumer session clone pwd)
 

@@ -27,6 +27,12 @@ These rules are non-negotiable for humans and agents working with agentstartstac
    must go, archive it first through `ass`; if the archive step fails, leave the clone in
    place.
 
+5. **Never silently drop the last agent session.** When `ass drop` would remove the
+   **last remaining** session clone for a canonical repo, it MUST prompt and proceed only
+   on an explicit `y` (even with `--force`). It also refuses to remove the primary clone
+   (`#1`/`1*`) or the pwd clone without `--force`, since the active agent session is
+   almost always one of those.
+
 ## Canonical paths
 
 Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<canonical>` = `CANONICAL_LOCAL_REPO` from `.agentstartstack.env`.

@@ -1789,6 +1789,7 @@ _ass_drop_session_clone() {
 
 # ass drop (no args) -- archive every session clone except #1 (collapse into one).
 _ass_drop_all() {
+  local force="${1:-0}"
   local canonical origin repo_name pwd_here survivor
   local -a clones=()
   local clone agent head idx line
@@ -1838,8 +1839,11 @@ _ass_drop_all() {
     head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
     _ass_info "ass drop: #$((idx + 1)) ${agent} @ ${head}"
     _ass_info "ass drop:   ${clone}"
+    if [[ "$force" -ne 1 && "$clone" == "$pwd_here" ]]; then
+      _ass_warn "ass drop: skipping your current pwd clone (use --force to include it)"
+      continue
+    fi
     _ass_drop_session_clone "$clone" "$survivor" "$canonical" || return 1
-    dropped=$((dropped + 1))
     _ass_ok "ass drop: removed #$((idx + 1)) (${agent})"
   done
 
@@ -1849,9 +1853,9 @@ _ass_drop_all() {
 
 # ass drop -- archive session clone(s), or copy generic work upstream (consumer pwd).
 ass_drop() {
-  local -a _ass_argv clones=()
+  local -a _ass_argv clones=() rest=()
   local index canonical origin repo_name pwd_here clone survivor
-  local agent head
+  local agent head force=0 arg
 
   if _ass_help_requested "${1:-}"; then
     ass_help_drop
@@ -1859,8 +1863,18 @@ ass_drop() {
   fi
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
+
+  # Pull --force/-f out (applies to index drops: override the #1 / pwd guard).
+  for arg in "${_ass_argv[@]}"; do
+    case "$arg" in
+      --force|-f) force=1 ;;
+      *) rest+=("$arg") ;;
+    esac
+  done
+  _ass_argv=("${rest[@]}")
+
   if [[ ${#_ass_argv[@]} -eq 0 ]]; then
-    _ass_drop_all
+    _ass_drop_all "$force"
     return $?
   fi
   if [[ ${#_ass_argv[@]} -le 2 && ! "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
@@ -1906,6 +1920,35 @@ ass_drop() {
 
   _ass_info "ass drop: #${index} ${agent} @ ${head}"
   _ass_info "ass drop:   ${clone}"
+
+  # Guard: refuse to remove the primary (#1, the 1* active rollover target) or the
+  # pwd clone without --force -- the active agent session is almost always one of
+  # these, and cwd-based session detection misses Codium-at-canonical sessions.
+  local is_primary=0 is_pwd=0 what=""
+  [[ "$index" -eq 1 ]] && is_primary=1
+  [[ "$clone" == "$pwd_here" ]] && is_pwd=1
+  if [[ "$force" -ne 1 && ( "$is_primary" -eq 1 || "$is_pwd" -eq 1 ) ]]; then
+    [[ "$is_primary" -eq 1 ]] && what="the primary (#1, active) session clone"
+    [[ "$is_pwd" -eq 1 ]] && what="${what:+${what} / }your current pwd clone"
+    _ass_err "ass drop: refusing to remove ${what} without --force"
+    _ass_err "ass drop:   ${clone}"
+    _ass_err "ass drop: if you are sure, rerun: ass drop ${index} --force"
+    return 1
+  fi
+
+  # Hard interactive gate: dropping the LAST agent session for the repo always
+  # requires an explicit y, even with --force (no clones would remain otherwise).
+  if [[ ${#clones[@]} -eq 1 ]]; then
+    local confirm=""
+    if { exec 3</dev/tty; } 2>/dev/null; then
+      read -r -p "ass drop: this is the LAST agent session for ${repo_name}. Drop it? [y/N] " confirm <&3
+      exec 3<&-
+    fi
+    [[ "$confirm" == [yY] || "$confirm" == [yY][eE][sS] ]] || {
+      _ass_info "ass drop: aborted -- last agent session kept"
+      return 1
+    }
+  fi
 
   survivor=$(_ass_drop_rollover_survivor "$clone" "${clones[@]}") || survivor=""
   _ass_drop_session_clone "$clone" "$survivor" "$canonical" || return 1
