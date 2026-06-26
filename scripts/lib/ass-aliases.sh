@@ -289,14 +289,14 @@ _ass_status_notes() {
 }
 
 _ass_status_print_row() {
-  local role="$1" path="$2" pwd_here="$3"
+  local role="$1" path="$2" pwd_here="$3" agent="${4:--}"
   local ahead behind head notes
 
   read ahead behind < <(_ass_origin_ahead_behind "$path")
   head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  printf '%-20s %5s %6s  %-9s  %s' "$role" "$ahead" "$behind" "$head" "$path"
+  printf '%-20s %-7s %5s %6s  %-9s  %s' "$role" "$agent" "$ahead" "$behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -315,6 +315,7 @@ Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
 Fetches origin/main quietly before counting.
 
 Columns (reference = origin/main on main):
+  agent   grok / claude for session clones (- for canonical and origin ref)
   ahead   commits on this tree not on origin/main
   behind  commits on origin/main not on this tree
 
@@ -345,10 +346,10 @@ EOF
   _ass_info "reference: origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  printf '%-20s %5s %6s  %-9s  %s\n' "tree" "ahead" "behind" "HEAD" "path"
-  printf '%-20s %5s %6s  %-9s  %s\n' "--------------------" "-----" "------" "---------" "----"
-  printf '%-20s %5s %6s  %-9s  %s\n' "origin/main (ref)" "0" "0" "$origin_head" "origin/main"
-  _ass_status_print_row "canonical" "$canonical" "$pwd_here"
+  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "tree" "agent" "ahead" "behind" "HEAD" "path"
+  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "--------------------" "-------" "-----" "------" "---------" "----"
+  printf '%-20s %-7s %5s %6s  %-9s  %s\n' "origin/main (ref)" "-" "0" "0" "$origin_head" "origin/main"
+  _ass_status_print_row "canonical" "$canonical" "$pwd_here" "-"
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
@@ -360,7 +361,8 @@ EOF
   else
     i=1
     for clone in "${clones[@]}"; do
-      _ass_status_print_row "session clone ${i}" "$clone" "$pwd_here"
+      _ass_status_print_row "session clone ${i}" "$clone" "$pwd_here" \
+        "$(_ass_session_agent_kind "$clone")"
       i=$((i + 1))
     done
   fi

@@ -179,6 +179,7 @@ ass status
 
 | Column | Meaning |
 |--------|---------|
+| **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` (`-` for canonical and origin ref) |
 | **ahead** | Commits on this tree **not yet on** `origin/main` |
 | **behind** | Commits on `origin/main` **not yet on** this tree |
 
