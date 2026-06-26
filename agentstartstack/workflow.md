@@ -9,14 +9,17 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Role | Path |
 |------|------|
 | Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`CANONICAL_LOCAL_REPO`; defaults to the repo root) |
-| Grok/Cursor session clones | `~/.grok/worktrees/<project>/<session-id>/` |
-| Claude Code session clones | `~/.claude/worktrees/<project>/<session-id>/` |
+| Agent session clones (Grok + Claude) | `<AGENT_SESSION_CLONE_PARENT>/<session-id>/` (recommended parent: `~/.agentstack/sessions`) |
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
 | Project agent guidance | `<repo>/docs/` |
 | CONSUMER-ACTION watermark | `<repo>/.agentstartstack-action-seen` (tracked; consumer only) |
 | Dropit ledger | `<repo>/.agentstartstack-dropits` (tracked; consumer only) |
 
-Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. The `<project>` path component above is only a convention -- `nut` matches a clone to its canonical repo by **git origin URL**, searching the dirs in `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`), so the worktree directory name is not significant.
+Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. **Grok and Claude share one parent directory** -- configure `AGENT_SESSION_CLONE_PARENT` in `.agentstartstack.env` (or export it in `~/.bashrc` before sourcing `~/.bash_aliases`). Recommended layout: one flat directory per machine, one subdirectory per session, e.g. `~/.agentstack/sessions/1730000000/`.
+
+**Session ID convention:** use a unix timestamp (`date +%s`) unless you have a reason not to. The folder name is only a human/agent handle -- `nut` matches a clone to its canonical repo by **git origin URL**, searching under `AGENT_SESSION_CLONE_PARENT` (one or two levels deep), so neither the parent path nor the session-id string is semantically significant to git handoff.
+
+**Legacy paths:** older clones under `~/.grok/worktrees/` or `~/.claude/worktrees/` still work if listed in `AGENT_SESSION_CLONE_PARENT` (colon-separated). New sessions should use the unified parent only.
 
 - **Before testing fixes on the canonical local repo:** `git pull origin main` -- stale trees produce confusing output
 - **Handoff between trees:** `origin/main` -- humans push to origin; new sessions align from the canonical local repo
@@ -25,8 +28,8 @@ Session clones are isolated full git clones (not linked `git worktree` entries).
 
 | Role | Edit here | Why |
 |------|-----------|-----|
-| Grok/Cursor agent (active session) | `~/.grok/worktrees/<project>/<session-id>/` | Isolated workspace; commits without touching daily tree |
-| Claude Code agent (active session) | `~/.claude/worktrees/<project>/<session-id>/` | Same isolation; absolute paths only; VS Code at canonical local repo is reference |
+| Grok/Cursor agent (active session) | `<AGENT_SESSION_CLONE_PARENT>/<session-id>/` | Isolated workspace; commits without touching daily tree |
+| Claude Code agent (active session) | `<AGENT_SESSION_CLONE_PARENT>/<session-id>/` | Same isolation; absolute paths only; VS Code at canonical local repo is reference |
 | Human (manual work) | `<canonical>` | Primary local repo; CLI runs from here |
 
 **Rule of thumb:** agents write their session clone; humans write the canonical local repo. Do not edit an active session clone by hand.
@@ -55,7 +58,7 @@ Flagging a generic improvement can go further than a verbal note: a consumer-sid
 
 **When a dropit occurs, the consumer agent SHALL:**
 
-1. **Do NOT generate a new GUID** (no `uuidgen`). Reference the agent's **own session GUID** -- the `<session-id>` already embedded in its session clone path (`~/<harness>/worktrees/<project>/<session-id>`). That id already uniquely identifies the originating agent session, and reusing it is what lets the *same* agent recognize its own dropit when the implementation returns. Stamp it on the dropped file as a header line:
+1. **Do NOT generate a new GUID** (no `uuidgen`). Reference the agent's **own session ID** -- the `<session-id>` directory name under `AGENT_SESSION_CLONE_PARENT` (recommended: the unix timestamp from session creation). That id already uniquely identifies the originating agent session, and reusing it is what lets the *same* agent recognize its own dropit when the implementation returns. Stamp it on the dropped file as a header line:
    ```
    Dropit-Id: <session-guid>
    ```
@@ -77,11 +80,8 @@ Rule of thumb: if the change would help the next project too, it belongs in the 
 **Human manual edits:** use the canonical local repo. Edit, test with the project CLI, commit, `git push origin main`. Then align any active agent clone:
 
 ```bash
-<canonical>/scripts/init_grok_session.sh \
-  ~/.grok/worktrees/<project>/<session-id>
-
-<canonical>/scripts/init_claude_session.sh \
-  ~/.claude/worktrees/<project>/<session-id>
+<canonical>/scripts/init_grok_session.sh <session-clone-path>
+<canonical>/scripts/init_claude_session.sh <session-clone-path>
 ```
 
 **Mid-session human intervention:** prefer telling the agent what to change. If you must edit git-tracked files yourself, edit the canonical local repo, push, then align the agent clone.
@@ -101,14 +101,14 @@ Align the session clone with the canonical local repo. Run once per session (or 
 **Grok/Cursor:** host `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/init_grok_session.sh`).
 
 ```bash
-cd ~/.grok/worktrees/<project>/<session-id>
+cd <AGENT_SESSION_CLONE_PARENT>/<session-id>
 <canonical>/scripts/init_grok_session.sh
 ```
 
 **Claude Code:** host `scripts/init_claude_session.sh`.
 
 ```bash
-cd ~/.claude/worktrees/<project>/<session-id>
+cd <AGENT_SESSION_CLONE_PARENT>/<session-id>
 <canonical>/scripts/init_claude_session.sh
 ```
 
@@ -334,15 +334,33 @@ Generic rules:
 
 ## End-to-end (quick reference)
 
-**Start a Grok session**
-1. Open the session folder in Cursor/Grok
-2. Run `scripts/init_grok_session.sh` (session align + goal prompt + agent tips)
-3. Paste the suggested first message (task + 1-3 guidance files)
+**Start any agent session (Grok or Claude)**
 
-**Start a Claude Code session**
-1. Clone: `git clone --recurse-submodules <ORIGIN_URL> ~/.claude/worktrees/<project>/<session-id>`
-2. Run `scripts/init_claude_session.sh`
-3. VS Code stays at the canonical local repo for reference; Claude Code edits the clone only
+From the **canonical local repo** (`<canonical>`), create the clone, align it, then open the agent **inside the clone** -- not from canonical with a harness-owned worktree flag.
+
+```bash
+# 1. Create (once per session) -- from <canonical>
+SESSION_ID=$(date +%s)
+git clone --recurse-submodules <ORIGIN_URL> \
+  "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+
+# 2. Align
+<canonical>/scripts/init_grok_session.sh \
+  "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+# or init_claude_session.sh for Claude Code
+
+# 3. Open the agent in the clone
+cd "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+grok          # Grok/Cursor -- do NOT run grok --worktree from <canonical>
+claude        # Claude Code -- do NOT rely on claude --worktree from <canonical>
+              # unless a WorktreeCreate hook points at AGENT_SESSION_CLONE_PARENT
+```
+
+Set `AGENT_SESSION_CLONE_PARENT` in `.agentstartstack.env` (recommended: `"${HOME}/.agentstack/sessions"`) or export it in `~/.bashrc` before `~/.bash_aliases` is sourced.
+
+**Grok/Cursor after align:** paste the suggested first message from `init_grok_session.sh` (task + 1-3 guidance files).
+
+**Claude Code after align:** VS Code stays at `<canonical>` for the human's reference; Claude edits the session clone only (absolute paths).
 
 **During any agent session**
 - Agent edits and commits only in the session clone; never in the canonical local repo
@@ -359,19 +377,63 @@ Generic rules:
 
 ## Agent session clones
 
+### Configuration
+
+`AGENT_SESSION_CLONE_PARENT` is the single parent directory for **all** agent session clones on a machine. It is read from `.agentstartstack.env` by the init scripts and from the environment (after `source ~/.bashrc`) by `nut` / `nutup trim`.
+
+Recommended default in each consumer's `.agentstartstack.env`:
+
 ```bash
-ls -la ~/.grok/worktrees/<project>/
-ls -la ~/.claude/worktrees/<project>/
+AGENT_SESSION_CLONE_PARENT="${HOME}/.agentstack/sessions"
 ```
 
-Create a new Claude Code session clone:
+Machine-wide override (applies to every consumer unless `.agentstartstack.env` sets its own):
 
 ```bash
-git clone --recurse-submodules <ORIGIN_URL> \
-  ~/.claude/worktrees/<project>/<session-id>
-<canonical>/scripts/init_claude_session.sh \
-  ~/.claude/worktrees/<project>/<session-id>
+# in ~/.bashrc, before sourcing ~/.bash_aliases
+export AGENT_SESSION_CLONE_PARENT="${HOME}/.agentstack/sessions"
 ```
+
+The init scripts **align** an existing clone; they do **not** create one. Creation is always a `git clone` (or a harness hook you configure) into `AGENT_SESSION_CLONE_PARENT/<session-id>/`.
+
+### Listing clones
+
+`nut` discovers clones by origin URL, not folder name:
+
+```bash
+# from a shell with ~/.bash_aliases sourced
+_agentstartstack_clones_for_origin "$(git -C <canonical> remote get-url origin)"
+```
+
+Or list the parent directory directly:
+
+```bash
+ls -la "${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/"
+```
+
+### Create a new session clone
+
+```bash
+# from <canonical>
+SESSION_ID=$(date +%s)
+CLONE="${AGENT_SESSION_CLONE_PARENT:-$HOME/.agentstack/sessions}/$SESSION_ID"
+
+git clone --recurse-submodules <ORIGIN_URL> "$CLONE"
+<canonical>/scripts/init_grok_session.sh "$CLONE"
+# or init_claude_session.sh "$CLONE"
+
+cd "$CLONE"
+grok    # or claude
+```
+
+### Harness pitfalls (read before spawning from canonical)
+
+| Harness | Safe pattern | Avoid |
+|---------|--------------|-------|
+| **Grok** | `cd` into the session clone, then `grok` | `grok --worktree` from `<canonical>` -- spawns under `~/.grok/worktrees/`, bypassing `AGENT_SESSION_CLONE_PARENT` |
+| **Claude Code** | `cd` into the session clone, then `claude` | `claude --worktree` from `<canonical>` without a **WorktreeCreate** hook -- defaults to `~/.claude/worktrees/` |
+
+Optional: add a **WorktreeCreate** hook in the consumer's `.claude/settings.json` that clones into `AGENT_SESSION_CLONE_PARENT/$(date +%s)` and prints that path on stdout, so `claude --worktree` from canonical still lands in the unified parent. Grok has no equivalent hook today -- use explicit `git clone` + `cd` + `grok`.
 
 ## Git hooks (shellcheck)
 
