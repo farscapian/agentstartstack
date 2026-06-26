@@ -27,7 +27,7 @@ nutup               # local-sync, then git push origin main
 nutup -f            # as nut -f, then push
 nutup iotstack      # local-sync for iotstack, then push
 nutupyall           # nutup agentstartstack, refresh consumer submodules
-nutup trim          # archive stale session clones (see nutup trim --help)
+nutup trim          # consolidate and prune stale session clones (see nutup trim --help)
 dropit <src>        # from a consumer clone: stash generic work upstream
 nut --help
 nutup --help
@@ -91,9 +91,13 @@ See [workflow.md](workflow.md) for session align, agent clone paths, and full gi
 - Copy-only: it does not edit the consumer or commit in the agentstartstack clone. After it copies, review + commit in the agentstartstack clone and hand off with `nut`; if `<src>` was a fork created in the consumer, delete it there.
 - Stamps `Dropit-Id: <session-guid>` on single-file drops (when missing) and appends to `.agentstartstack-dropits` in the consumer. See [Dropit + GUID](workflow.md#dropit--guid-traceable-upstream-handoff) in `workflow.md`.
 
-## nutup trim
+## nutup trim (consolidate and prune)
 
-`nutup trim` archives stale agent **session clones** for a consumer: each selected clone becomes a verified `.tar.gz`, then the source directory is removed. Uncommitted work in older clones is **rolled over** into the newest kept clone before archiving (unless `--no-rollover`). Clones with commits not yet in `origin/main` are **kept** and reported for cherry-pick.
+`nutup trim` **consolidates and prunes** stale agent **session clones** for a consumer.
+**Consolidate** rolls uncommitted work from older clones into the newest kept clone
+(unless `--no-rollover`). **Prune** archives each stale clone as a verified `.tar.gz`,
+then removes the source directory. Clones with commits not yet in `origin/main` are
+**kept** and reported for cherry-pick.
 
 ```bash
 nutup trim                 # consumer inferred from pwd
@@ -104,11 +108,11 @@ nutup trim --yes           # skip confirmation prompt
 nutup trim --keep-latest 2 # keep two newest clones
 ```
 
-Before archiving anything, trim prints **pwd**, the **canonical** repo, every **session clone**
-for that consumer (HEAD, `.git` mtime, dirty/unlanded flags), and a **keep/archive plan**.
-Run it from the session clone you want to **keep** so pwd protects that clone; running from
-canonical alone keeps only the newest `.git` mtime. Clones are removed only after `--yes` or
-an interactive `y` at the prompt (not on `--dry-run`).
+Before consolidating or pruning anything, trim prints **pwd**, the **canonical** repo, every
+**session clone** for that consumer (HEAD, `.git` mtime, dirty/unlanded flags), and a
+**keep/prune plan**. Run it from the session clone you want to **keep** so pwd protects that
+clone; running from canonical alone keeps only the newest `.git` mtime. Clones are consolidated
+and pruned only after `--yes` or an interactive `y` at the prompt (not on `--dry-run`).
 
 `nutupyall` calls `nutup trim --yes` for each consumer as its final step (opt out with `NUTUPYALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 

@@ -383,7 +383,7 @@ nutup -- local-sync with canonical local repo, then git push origin main
   nutup               infer repo from pwd
   nutup <name>        e.g. nutup printstack, nutup wrtstack
   nutup -f            only session clones initialized after the last nut, then push
-  nutup trim          prune stale session clones (see: nutup trim --help)
+  nutup trim          consolidate and prune stale session clones (see: nutup trim --help)
 
 -f, --force  See nut --help. Prefer this when handing off from a session started
              after the previous nut so older session clones are not selected.
@@ -513,7 +513,7 @@ EOF
   echo "dropit: review + commit in the agentstartstack clone, then nut."
 }
 
-# nutup trim -- archive stale agent session clones for a consumer.
+# nutup trim -- consolidate and prune stale agent session clones for a consumer.
 # See agentstartstack/nut.md and workflow.md.
 
 _nutup_trim_load_env() {
@@ -643,7 +643,7 @@ _nutup_trim_archive_clone() {
   dest="${archive_dir}/${harness}-${base}-${shortsha}-${datestamp}.tar.gz"
 
   if [[ "$dry_run" == 1 ]]; then
-    echo "nutup trim:   [dry-run] archive ${clone} -> ${dest}"
+    echo "nutup trim:   [dry-run] prune ${clone} -> ${dest}"
     echo "nutup trim:   [dry-run] rm -rf ${clone}"
     return 0
   fi
@@ -660,7 +660,7 @@ _nutup_trim_archive_clone() {
     return 1
   fi
   rm -rf "$clone"
-  echo "nutup trim:   archived ${clone} -> ${tarball}"
+  echo "nutup trim:   pruned ${clone} -> ${tarball}"
   return 0
 }
 
@@ -798,19 +798,19 @@ _nutup_trim_one() {
       continue
     fi
     if [[ "$dry_run" == 1 ]]; then
-      printf 'nutup trim:   archive (dry-run): %s\n' "$clone"
+      printf 'nutup trim:   prune (dry-run): %s\n' "$clone"
     else
-      printf 'nutup trim:   archive: %s\n' "$clone"
+      printf 'nutup trim:   prune: %s\n' "$clone"
     fi
   done
-  printf 'nutup trim:   rollover target: %s\n' "$rollover_target"
+  printf 'nutup trim:   consolidation target: %s\n' "$rollover_target"
 
   if [[ "$dry_run" == 1 ]]; then
-    echo "nutup trim: dry-run -- no clones removed (re-run without --dry-run to confirm)"
+    echo "nutup trim: dry-run -- not consolidated or pruned (re-run without --dry-run to confirm)"
   elif [[ "$yes" != 1 ]]; then
-    read -r -p "nutup trim: archive ${#to_archive[@]} clone(s) for ${name}? [y/N] " line
+    read -r -p "nutup trim: consolidate and prune ${#to_archive[@]} session clone(s) for ${name}? [y/N] " line
     [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || {
-      echo "nutup trim: aborted (no clones removed)"
+      echo "nutup trim: aborted (not consolidated or pruned)"
       return 1
     }
   fi
@@ -836,13 +836,13 @@ _nutup_trim_one() {
         continue
       fi
       if [[ "$dry_run" == 1 ]]; then
-        echo "nutup trim:   [dry-run] would roll over dirty: ${clone} -> ${rollover_target}"
+        echo "nutup trim:   [dry-run] would consolidate dirty: ${clone} -> ${rollover_target}"
       else
         read -r files conflicts < <(_nutup_trim_rollover "$clone" "$rollover_target")
         if [[ "$conflicts" == 1 ]]; then
-          echo "nutup trim:   rolled over: ${clone} (${files} file(s); conflicts left for agent)"
+          echo "nutup trim:   consolidated: ${clone} (${files} file(s); conflicts left for agent)"
         else
-          echo "nutup trim:   rolled over: ${clone} (${files} file(s))"
+          echo "nutup trim:   consolidated: ${clone} (${files} file(s))"
         fi
         rolled=$((rolled + 1))
       fi
@@ -856,10 +856,10 @@ _nutup_trim_one() {
   done
 
   if [[ "$dry_run" == 1 ]]; then
-    echo "nutup trim: ${name} -- dry-run: ${archived} would archive, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+    echo "nutup trim: ${name} -- dry-run: ${archived} would prune, ${rolled} would consolidate -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
   else
-    echo "nutup trim: ${name} -- ${archived} archived, ${rolled} rolled over -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
-    echo "nutup trim:   archives in ${archive_dir}"
+    echo "nutup trim: ${name} -- consolidated and pruned: ${rolled} consolidated -> ${rollover_target}, ${archived} pruned, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+    echo "nutup trim:   prune archives in ${archive_dir}"
   fi
   return 0
 }
@@ -870,20 +870,20 @@ nutup_trim() {
 
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-nutup trim -- archive stale agent session clones for a consumer
+nutup trim -- consolidate and prune stale agent session clones for a consumer
 
   nutup trim                 infer consumer from pwd
   nutup trim <project>       named consumer
   nutup trim --all           every configured consumer
-  nutup trim --dry-run       print plan only (never removes clones)
-  nutup trim --yes           skip confirmation prompt (still removes clones)
-  nutup trim --no-rollover   keep dirty older clones instead of rolling over
+  nutup trim --dry-run       print plan only (never consolidates or prunes)
+  nutup trim --yes           skip confirmation prompt (still consolidates/prunes)
+  nutup trim --no-rollover   keep dirty older clones instead of consolidating
   nutup trim --keep-latest N keep N newest clones (default 1)
   nutup trim --archive-dir <path>
 
-Archives verified .tar.gz files, then removes source clones. Un-landed clones
-(commits not in origin/main) are kept for agent cherry-pick. Dirty older clones
-roll uncommitted work into the newest kept clone before archiving.
+Consolidates uncommitted work from older clones into the kept clone, then prunes
+stale clones (verified .tar.gz archive, then remove source dir). Un-landed clones
+(commits not in origin/main) are kept for agent cherry-pick.
 EOF
     return 0
   fi
@@ -1166,7 +1166,7 @@ EOF
 
     if _nutup_trim_autotrim_enabled "$host"; then
       if nutup_trim "$name" --yes; then
-        echo "nutupyall: ${name} -- trim ok" >&2
+        echo "nutupyall: ${name} -- consolidated and pruned" >&2
       else
         echo "nutupyall: ${name} -- trim failed (logged; continuing)" >&2
         failed=$((failed + 1))
