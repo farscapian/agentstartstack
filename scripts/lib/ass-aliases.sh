@@ -1429,7 +1429,7 @@ _ass_handoff_preflight() {
 _ass_push() {
   local sync_target="$1"
   local force="${2:-0}" handle_stashes="${3:-0}"
-  local origin_target best_dir="" commit repo_name
+  local origin_target best_dir="" commit repo_name ahead pushed=0
 
   sync_target=$(readlink -f "$sync_target")
   [[ -d "${sync_target}/.git" ]] || {
@@ -1454,7 +1454,13 @@ _ass_push() {
   _ass_canonical_move_wip_to_clone "$sync_target" "$best_dir" "$handle_stashes" || return 1
   _ass_handoff_preflight "$best_dir" "$sync_target" || return 1
 
+  ahead=$(_ass_clone_ahead_of_canonical "$best_dir" "$sync_target")
   _ass_print_handoff_report "$sync_target" "$origin_target" "$repo_name" "$best_dir"
+
+  if [[ "$ahead" == 0 ]]; then
+    _ass_info "ass: nothing to handoff (no session clone ahead of canonical)"
+    return 0
+  fi
 
   if git -C "$best_dir" remote get-url local-sync >/dev/null 2>&1; then
     git -C "$best_dir" remote set-url local-sync "$sync_target"
@@ -1466,8 +1472,14 @@ _ass_push() {
   echo "ass: ${commit}"
   echo "ass: ${best_dir} -> ${sync_target}"
   git -C "$best_dir" push local-sync main
+  pushed=1
 
   date +%s > "${sync_target}/.git/agentstartstack-ass-last"
+
+  # Handoff advances canonical; other session clones may now be behind.
+  if [[ "$pushed" == 1 ]]; then
+    _ass_auto_sync_all_clones_behind_canonical "$sync_target" "$origin_target" || return 1
+  fi
 }
 
 _ass_resolve_sync_target() {

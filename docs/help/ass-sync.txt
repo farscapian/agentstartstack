@@ -1,8 +1,9 @@
 ass sync -- local-sync handoff (session clone -> canonical)
 
 Pwd-oriented: cd to the canonical repo or a session clone, then run ass sync.
-Auto-syncs any session clone behind canonical, checks canonical vs origin/main,
-picks the session clone farthest ahead of canonical, and pushes to local-sync.
+Auto-syncs session clones behind canonical (before and after handoff), checks
+canonical vs origin/main, picks the session clone farthest ahead of canonical,
+and pushes to local-sync. Exits cleanly when nothing is ahead of canonical.
 
 Usage:
   ass sync
