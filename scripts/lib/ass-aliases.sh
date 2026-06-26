@@ -48,6 +48,10 @@ _ass_cat_help() {
     return 1
   fi
   cat "$file"
+  # Ensure help menus end with a newline (prompt-friendly in the terminal).
+  if [[ -s "$file" ]] && [[ -n $(tail -c 1 "$file" | tr -d '\n') ]]; then
+    printf '\n'
+  fi
 }
 
 _ass_help_requested() {
