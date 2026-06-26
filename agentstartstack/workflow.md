@@ -14,6 +14,7 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Generic agent guidance | `<repo>/agentstartstack/agentstartstack/` |
 | Project agent guidance | `<repo>/docs/` |
 | CONSUMER-ACTION watermark | `<repo>/.agentstartstack-action-seen` (tracked; consumer only) |
+| Dropit ledger | `<repo>/.agentstartstack-dropits` (tracked; consumer only) |
 
 Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. The `<project>` path component above is only a convention -- `nut` matches a clone to its canonical repo by **git origin URL**, searching the dirs in `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`), so the worktree directory name is not significant.
 
@@ -47,6 +48,29 @@ When you spot a generic improvement while working in a consumer project:
 3. Let the human carry it upstream; it returns through the normal bump, and its commit message tells you what to run (see [Acting on the bump delta](#acting-on-the-bump-delta-mandatory)).
 
 If you have actually produced the generic content (a file or doc), use **`dropit <src> [<dest>]`** from this consumer clone to copy it into agentstartstack's latest session clone -- where it can be reviewed, committed, and flow upstream -- instead of forking it here. `dropit` runs only from a consumer session clone and never edits the consumer or the agentstartstack clone's history (see [nut.md](nut.md)).
+
+#### Dropit + GUID: traceable upstream handoff
+
+Flagging a generic improvement can go further than a verbal note: a consumer-side agent may **drop** a written spec/proposal file into an upstream `agentstartstack` session clone for the agent of record to implement (a "dropit"). To make the round trip traceable, the dropit carries a correlation handle.
+
+**When a dropit occurs, the consumer agent SHALL:**
+
+1. **Do NOT generate a new GUID** (no `uuidgen`). Reference the agent's **own session GUID** -- the `<session-id>` already embedded in its session clone path (`~/<harness>/worktrees/<project>/<session-id>`). That id already uniquely identifies the originating agent session, and reusing it is what lets the *same* agent recognize its own dropit when the implementation returns. Stamp it on the dropped file as a header line:
+   ```
+   Dropit-Id: <session-guid>
+   ```
+   (`dropit` stamps this automatically on single-file drops when missing.)
+2. Record the same session GUID in a **tracked** consumer-side ledger at the consumer repo root -- `.agentstartstack-dropits` -- one line per outstanding dropit: `<session-guid>  <short description>`. This is the consumer agent's memory that an upstream request is in flight. (`dropit` appends this line automatically.)
+
+**When `agentstartstack` implements the functionality**, the producer commit that lands it SHALL reference the same GUID in its message:
+```
+Resolves-Dropit: <guid>
+```
+(one self-contained line per resolved dropit, on the commit that introduces the implementation -- same discipline as `CONSUMER-ACTION:`).
+
+**On the consumer's next bump**, while walking the producer commits in the delta (see [Acting on the bump delta](#acting-on-the-bump-delta-mandatory)), the consumer agent matches any `Resolves-Dropit: <guid>` against its `.agentstartstack-dropits` ledger. A match means the requested work has **landed upstream**: the consumer agent SHALL then **reconcile** -- remove any local stopgap it was carrying, adopt the upstream implementation, and delete the satisfied line from `.agentstartstack-dropits`.
+
+**`agentstartstack` is authoritative.** If the landed implementation diverges from the dropped spec, the upstream version wins; the consumer reconciles to it rather than re-litigating the spec. The dropit is a request and a trace handle, not a contract.
 
 Rule of thumb: if the change would help the next project too, it belongs in the template. Flag it; do not fork it.
 
@@ -223,7 +247,7 @@ Step 2 of the obligation above has you read every producer commit in `$OLD..$NEW
 git -C .agentstartstack log --reverse --format='%H%n%B%n----' "$OLD..$NEW"  # full messages, oldest first
 ```
 
-For each commit, in order: perform its `CONSUMER-ACTION` exactly if present; otherwise the reconciliation in step 3 applies (or the commit needs nothing). Fold every follow-up into the same consumer commit as the bump.
+For each commit, in order: perform its `CONSUMER-ACTION` exactly if present; match any `Resolves-Dropit: <guid>` against `.agentstartstack-dropits` and reconcile satisfied dropits; otherwise the reconciliation in step 3 applies (or the commit needs nothing). Fold every follow-up into the same consumer commit as the bump.
 
 #### CONSUMER-ACTION watermark (mandatory)
 

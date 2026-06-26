@@ -27,9 +27,13 @@ nutup               # local-sync, then git push origin main
 nutup -f            # as nut -f, then push
 nutup iotstack      # local-sync for iotstack, then push
 nutupyall           # nutup agentstartstack, refresh consumer submodules
+nutup trim          # archive stale session clones (see nutup trim --help)
+dropit <src>        # from a consumer clone: stash generic work upstream
 nut --help
 nutup --help
+nutup trim --help
 nutupyall --help
+dropit --help
 ```
 
 **`nut`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
@@ -85,12 +89,28 @@ See [workflow.md](workflow.md) for session align, agent clone paths, and full gi
 - Runs **only** from a consumer session clone (under `AGENT_SESSION_CLONE_PARENT`, with a `.agentstartstack` submodule). Refuses from a canonical repo or from agentstartstack's own clone.
 - `<dest>` defaults to `<src>`'s path relative to the consumer clone root.
 - Copy-only: it does not edit the consumer or commit in the agentstartstack clone. After it copies, review + commit in the agentstartstack clone and hand off with `nut`; if `<src>` was a fork created in the consumer, delete it there.
+- Stamps `Dropit-Id: <session-guid>` on single-file drops (when missing) and appends to `.agentstartstack-dropits` in the consumer. See [Dropit + GUID](workflow.md#dropit--guid-traceable-upstream-handoff) in `workflow.md`.
+
+## nutup trim
+
+`nutup trim` archives stale agent **session clones** for a consumer: each selected clone becomes a verified `.tar.gz`, then the source directory is removed. Uncommitted work in older clones is **rolled over** into the newest kept clone before archiving (unless `--no-rollover`). Clones with commits not yet in `origin/main` are **kept** and reported for cherry-pick.
+
+```bash
+nutup trim                 # consumer inferred from pwd
+nutup trim iotstack        # named consumer
+nutup trim --all           # every configured consumer
+nutup trim --dry-run       # plan only
+nutup trim --yes           # skip confirmation
+nutup trim --keep-latest 2 # keep two newest clones
+```
+
+`nutupyall` calls `nutup trim --yes` for each consumer as its final step (opt out with `NUTUPYALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 
 ## Source
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/nut-aliases.sh`](../scripts/lib/nut-aliases.sh) -- `_nut_*` helpers,
-`nut`, `nutup`, `nutitup`, and `nutupyall`. That file is the single source of
+`nut`, `nutup`, `nutup_trim`, `nutitup`, `nutupyall`, and `dropit`. That file is the single source of
 truth; this page documents usage only.
 
 Install / update them in your shell:

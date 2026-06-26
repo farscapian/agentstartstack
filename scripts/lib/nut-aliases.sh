@@ -326,6 +326,12 @@ EOF
 
 nutup()
 {
+  if [[ "${1:-}" == "trim" ]]; then
+    shift
+    nutup_trim "$@"
+    return $?
+  fi
+
   _nut_parse_args "$@" || return 1
 
   if [[ "$_NUT_PARSE_HELP" == 1 ]]; then
@@ -335,6 +341,7 @@ nutup -- local-sync with canonical local repo, then git push origin main
   nutup               infer repo from pwd
   nutup <name>        e.g. nutup printstack, nutup wrtstack
   nutup -f            only session clones initialized after the last nut, then push
+  nutup trim          prune stale session clones (see: nutup trim --help)
 
 -f, --force  See nut --help. Prefer this when handing off from a session started
              after the previous nut so older session clones are not selected.
@@ -438,8 +445,405 @@ EOF
   local target="${best}/${dest}"
   mkdir -p "$(dirname "$target")"
   cp -r "$abs_src" "$target"
+
+  # Stamp Dropit-Id and update the consumer ledger for traceable round-trips.
+  local session_guid desc ledger="${here}/.agentstartstack-dropits"
+  session_guid=$(basename "$here")
+  desc="$(basename "$src")"
+
+  if [[ -f "$target" ]]; then
+    if ! grep -q '^Dropit-Id:' "$target" 2>/dev/null; then
+      { printf 'Dropit-Id: %s\n\n' "$session_guid"; cat "$target"; } > "${target}.dropit-tmp"
+      mv "${target}.dropit-tmp" "$target"
+    fi
+  else
+    echo "dropit: note -- multi-file drop; ensure each file carries Dropit-Id: ${session_guid}" >&2
+  fi
+
+  if [[ -f "$ledger" ]] && grep -qF "$session_guid" "$ledger" 2>/dev/null; then
+    echo "dropit: ledger already lists ${session_guid} in ${ledger}" >&2
+  else
+    printf '%s  %s\n' "$session_guid" "$desc" >> "$ledger"
+    echo "dropit: recorded ${session_guid} in ${ledger} (commit this file in the consumer)" >&2
+  fi
+
   echo "dropit: ${rel}  ->  ${best}/${dest}"
   echo "dropit: review + commit in the agentstartstack clone, then nut."
+}
+
+# nutup trim -- archive stale agent session clones for a consumer.
+# See agentstartstack/nut.md and workflow.md.
+
+_nutup_trim_load_env() {
+  local canonical="$1" env_file="${canonical}/.agentstartstack.env"
+  PROJECT_NAME="$(basename "$canonical")"
+  ACTIVE_GUARD_PGREP=""
+  AGENTSTARTSTACK_CLONE_ARCHIVE_DIR=""
+  NUTUPYALL_AUTOTRIM=1
+  [[ -f "$env_file" ]] || return 0
+  # shellcheck source=/dev/null
+  source "$env_file"
+  return 0
+}
+
+_nutup_trim_autotrim_enabled() {
+  local canonical="$1"
+  _nutup_trim_load_env "$canonical"
+  [[ "${NUTUPYALL_AUTOTRIM:-1}" != "0" ]]
+}
+
+_nutup_trim_guard() {
+  local canonical="$1" name="$2"
+  _nutup_trim_load_env "$canonical" || return 1
+  if [[ -n "${ACTIVE_GUARD_PGREP:-}" ]] \
+     && pgrep -af "$ACTIVE_GUARD_PGREP" >/dev/null 2>&1; then
+    echo "nutup trim: ${name} CLI active (ACTIVE_GUARD_PGREP) -- skipping" >&2
+    return 1
+  fi
+  _nut_guard_active_sessions "$canonical" || return 1
+}
+
+_nutup_trim_clone_mtime() {
+  stat -c %Y "$1/.git" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+_nutup_trim_clone_dirty() {
+  [[ -n "$(git -C "$1" status --porcelain 2>/dev/null)" ]]
+}
+
+_nutup_trim_clone_unlanded() {
+  local clone="$1" canonical="$2" head
+  head=$(git -C "$clone" rev-parse HEAD 2>/dev/null) || return 1
+  git -C "$canonical" fetch -q origin 2>/dev/null || true
+  ! git -C "$canonical" merge-base --is-ancestor "$head" origin/main 2>/dev/null
+}
+
+_nutup_trim_harness() {
+  local clone="$1" parents base
+  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  clone=$(readlink -f "$clone")
+  local IFS=:
+  for base in $parents; do
+    [[ -n "$base" ]] || continue
+    if [[ "$clone" == "$base"/* ]]; then
+      case "$base" in
+        */.claude/worktrees) printf 'claude'; return 0 ;;
+        */.grok/worktrees) printf 'grok'; return 0 ;;
+        *claude*) printf 'claude'; return 0 ;;
+        *grok*) printf 'grok'; return 0 ;;
+      esac
+    fi
+  done
+  printf 'agent'
+}
+
+_nutup_trim_resolve_archive_dir() {
+  local canonical="$1" override="$2" name
+  _nutup_trim_load_env "$canonical"
+  name="${PROJECT_NAME:-$(basename "$canonical")}"
+  if [[ -n "$override" ]]; then
+    printf '%s\n' "$override"
+    return 0
+  fi
+  if [[ -n "${AGENTSTARTSTACK_CLONE_ARCHIVE_DIR:-}" ]]; then
+    printf '%s\n' "${AGENTSTARTSTACK_CLONE_ARCHIVE_DIR}"
+    return 0
+  fi
+  printf '%s\n' "${HOME}/.agentstartstack/archives/${name}/agent_clones"
+}
+
+_nutup_trim_rollover() {
+  local old="$1" target="$2"
+  local patch tmp relpath files=0 conflicts=0
+
+  patch=$(mktemp "${TMPDIR:-/tmp}/nutup-trim-patch.XXXXXX")
+  git -C "$old" diff HEAD > "$patch"
+  if [[ -s "$patch" ]]; then
+    if git -C "$target" apply --3way "$patch" 2>/dev/null; then
+      files=$(grep -c '^diff --git' "$patch" 2>/dev/null || echo 0)
+    else
+      git -C "$target" apply --reject "$patch" 2>/dev/null || true
+      conflicts=1
+    fi
+  fi
+  rm -f "$patch"
+
+  while IFS= read -r relpath; do
+    [[ -n "$relpath" ]] || continue
+    mkdir -p "$(dirname "${target}/${relpath}")"
+    if [[ -e "${target}/${relpath}" ]]; then
+      conflicts=1
+    else
+      cp -n "$old/$relpath" "${target}/${relpath}" 2>/dev/null \
+        || { cp "$old/$relpath" "${target}/${relpath}"; conflicts=1; }
+      files=$((files + 1))
+    fi
+  done < <(git -C "$old" ls-files --others --exclude-standard 2>/dev/null)
+
+  printf '%s %s\n' "$files" "$conflicts"
+}
+
+_nutup_trim_archive_clone() {
+  local clone="$1" archive_dir="$2" dry_run="$3"
+  local parent base harness shortsha datestamp dest tarball
+
+  clone=$(readlink -f "$clone")
+  parent=$(dirname "$clone")
+  base=$(basename "$clone")
+  [[ -d "${clone}/.git" ]] || {
+    echo "nutup trim:   ERROR ${clone} has no .git directory -- refusing" >&2
+    return 1
+  }
+
+  harness=$(_nutup_trim_harness "$clone")
+  shortsha=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo unknown)
+  datestamp=$(date +%Y%m%d)
+  dest="${archive_dir}/${harness}-${base}-${shortsha}-${datestamp}.tar.gz"
+
+  if [[ "$dry_run" == 1 ]]; then
+    echo "nutup trim:   [dry-run] archive ${clone} -> ${dest}"
+    echo "nutup trim:   [dry-run] rm -rf ${clone}"
+    return 0
+  fi
+
+  mkdir -p "$archive_dir"
+  tarball="$dest"
+  if ! tar czf "$tarball" -C "$parent" "$base"; then
+    echo "nutup trim:   ERROR archiving ${clone}" >&2
+    return 1
+  fi
+  if ! tar tzf "$tarball" >/dev/null 2>&1; then
+    echo "nutup trim:   ERROR verifying ${tarball} -- source left in place" >&2
+    rm -f "$tarball"
+    return 1
+  fi
+  rm -rf "$clone"
+  echo "nutup trim:   archived ${clone} -> ${tarball}"
+  return 0
+}
+
+_nutup_trim_resolve_invoked_from() {
+  local canonical="$1" here in_clone=0 base
+  here=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+  here=$(readlink -f "$here")
+  local IFS=:
+  for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
+    [[ -n "$base" ]] || continue
+    [[ "$here" == "$base"/* ]] && { in_clone=1; break; }
+  done
+  unset IFS
+  [[ "$in_clone" == 1 ]] || return 0
+  if [[ "$(_nut_sync_target_from_worktree "$here" 2>/dev/null || true)" == "$(readlink -f "$canonical")" ]]; then
+    printf '%s\n' "$here"
+  fi
+}
+
+_nutup_trim_one() {
+  local name="$1" dry_run="$2" yes="$3" no_rollover="$4" keep_latest="$5" archive_override="$6"
+  local canonical archive_dir invoked_from rollover_target
+  local -a all_clones=() kept=() to_archive=()
+  local clone mtime t dirty unlanded archived=0 rolled=0 kept_unlanded=0 kept_dirty=0
+  local files conflicts subjects line skip k
+
+  canonical=$(_nut_sync_root "$name") || {
+    echo "nutup trim: no canonical local repo for: ${name}" >&2
+    return 1
+  }
+  canonical=$(readlink -f "$canonical")
+
+  _nutup_trim_guard "$canonical" "$name" || return 1
+
+  archive_dir=$(_nutup_trim_resolve_archive_dir "$canonical" "$archive_override")
+  invoked_from=$(_nutup_trim_resolve_invoked_from "$canonical" || true)
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    all_clones+=("$(readlink -f "$clone")")
+  done < <(_nutupyall_session_clones "$name")
+
+  if [[ "${#all_clones[@]}" -eq 0 ]]; then
+    echo "nutup trim: ${name} -- no session clones found"
+    return 0
+  fi
+
+  # Build kept set: invoked clone + N most-recently-modified clones.
+  if [[ -n "$invoked_from" ]]; then
+    kept+=("$invoked_from")
+  fi
+
+  mapfile -t all_clones < <(
+    for clone in "${all_clones[@]}"; do
+      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
+    done | sort -rn -k1,1 | awk '{print $2}'
+  )
+
+  t=0
+  for clone in "${all_clones[@]}"; do
+    [[ "$t" -ge "$keep_latest" ]] && break
+    kept+=("$clone")
+    t=$((t + 1))
+  done
+
+  # Rollover target = newest clone in kept set.
+  rollover_target=$(
+    for clone in "${kept[@]}"; do
+      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
+    done | sort -rn -k1,1 | head -1 | awk '{print $2}'
+  )
+
+  # Classify clones outside the kept set (oldest first for rollover ordering).
+  to_archive=()
+  for clone in "${all_clones[@]}"; do
+    skip=0
+    for k in "${kept[@]}"; do
+      [[ "$clone" == "$k" ]] && { skip=1; break; }
+    done
+    [[ "$skip" == 1 ]] && continue
+    to_archive+=("$clone")
+  done
+  mapfile -t to_archive < <(
+    for clone in "${to_archive[@]}"; do
+      printf '%s %s\n' "$(_nutup_trim_clone_mtime "$clone")" "$clone"
+    done | sort -n -k1,1 | awk '{print $2}'
+  )
+
+  git -C "$canonical" fetch -q origin 2>/dev/null || true
+
+  if [[ "$dry_run" != 1 && "$yes" != 1 ]]; then
+    echo "nutup trim: ${name} -- plan: keep ${#kept[@]} clone(s), archive ${#to_archive[@]}"
+    printf 'nutup trim:   rollover target: %s\n' "$rollover_target"
+    read -r -p "nutup trim: proceed? [y/N] " line
+    [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || {
+      echo "nutup trim: aborted"
+      return 1
+    }
+  fi
+
+  for clone in "${to_archive[@]}"; do
+    dirty=0
+    unlanded=0
+    _nutup_trim_clone_dirty "$clone" && dirty=1
+    _nutup_trim_clone_unlanded "$clone" "$canonical" && unlanded=1
+
+    if [[ "$unlanded" == 1 ]]; then
+      subjects=$(git -C "$clone" log --oneline origin/main..HEAD 2>/dev/null | head -5)
+      echo "nutup trim:   kept (unlanded): ${clone}"
+      [[ -n "$subjects" ]] && echo "nutup trim:     ${subjects}"
+      kept_unlanded=$((kept_unlanded + 1))
+      continue
+    fi
+
+    if [[ "$dirty" == 1 ]]; then
+      if [[ "$no_rollover" == 1 ]]; then
+        echo "nutup trim:   kept (dirty, --no-rollover): ${clone}"
+        kept_dirty=$((kept_dirty + 1))
+        continue
+      fi
+      read -r files conflicts < <(_nutup_trim_rollover "$clone" "$rollover_target")
+      if [[ "$conflicts" == 1 ]]; then
+        echo "nutup trim:   rolled over: ${clone} (${files} file(s); conflicts left for agent)"
+      else
+        echo "nutup trim:   rolled over: ${clone} (${files} file(s))"
+      fi
+      rolled=$((rolled + 1))
+    fi
+
+    if _nutup_trim_archive_clone "$clone" "$archive_dir" "$dry_run"; then
+      archived=$((archived + 1))
+    else
+      return 1
+    fi
+  done
+
+  echo "nutup trim: ${name} -- ${archived} archived, ${rolled} rolled over -> ${rollover_target}, ${kept_unlanded} kept (unlanded), ${kept_dirty} kept (dirty)"
+  [[ "$dry_run" != 1 ]] && echo "nutup trim:   archives in ${archive_dir}"
+  return 0
+}
+
+nutup_trim() {
+  local repo="" all=0 dry_run=0 yes=0 no_rollover=0 keep_latest=1 archive_dir=""
+  local name host failed=0 ok=0
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+nutup trim -- archive stale agent session clones for a consumer
+
+  nutup trim                 infer consumer from pwd
+  nutup trim <project>       named consumer
+  nutup trim --all           every configured consumer
+  nutup trim --dry-run       print plan only
+  nutup trim --yes           skip confirmation
+  nutup trim --no-rollover   keep dirty older clones instead of rolling over
+  nutup trim --keep-latest N keep N newest clones (default 1)
+  nutup trim --archive-dir <path>
+
+Archives verified .tar.gz files, then removes source clones. Un-landed clones
+(commits not in origin/main) are kept for agent cherry-pick. Dirty older clones
+roll uncommitted work into the newest kept clone before archiving.
+EOF
+    return 0
+  fi
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all) all=1 ;;
+      --dry-run) dry_run=1 ;;
+      --yes) yes=1 ;;
+      --no-rollover) no_rollover=1 ;;
+      --keep-latest)
+        shift
+        keep_latest="${1:-}"
+        [[ "$keep_latest" =~ ^[0-9]+$ ]] || {
+          echo "nutup trim: --keep-latest requires a number" >&2
+          return 1
+        }
+        ;;
+      --archive-dir)
+        shift
+        archive_dir="${1:-}"
+        [[ -n "$archive_dir" ]] || {
+          echo "nutup trim: --archive-dir requires a path" >&2
+          return 1
+        }
+        ;;
+      -*)
+        echo "nutup trim: unknown option: $1 (try: nutup trim --help)" >&2
+        return 1
+        ;;
+      *)
+        if [[ -n "$repo" ]]; then
+          echo "nutup trim: unexpected argument: $1" >&2
+          return 1
+        fi
+        repo="$1"
+        ;;
+    esac
+    shift
+  done
+
+  if [[ "$all" == 1 ]]; then
+    while IFS= read -r host; do
+      [[ -n "$host" ]] || continue
+      name=$(basename "$host")
+      if _nutup_trim_one "$name" "$dry_run" "$yes" "$no_rollover" "$keep_latest" "$archive_dir"; then
+        ok=$((ok + 1))
+      else
+        failed=$((failed + 1))
+      fi
+    done < <(_nutupyall_consumer_roots | sort -u)
+    echo "nutup trim: done -- ${ok} ok, ${failed} failed"
+    [[ "$failed" -eq 0 ]]
+    return $?
+  fi
+
+  if [[ -z "$repo" ]]; then
+    repo=$(_nut_resolve_sync_target "" 2>/dev/null | xargs basename 2>/dev/null) || {
+      echo "nutup trim: not in a git repo (try: nutup trim <name>)" >&2
+      return 1
+    }
+  fi
+
+  _nutup_trim_one "$repo" "$dry_run" "$yes" "$no_rollover" "$keep_latest" "$archive_dir"
 }
 
 # Run only from agentstartstack canonical local repo; nutup template, refresh consumers.
@@ -617,52 +1021,55 @@ EOF
         [[ -n "$iclone" ]] && echo "nutupyall:   in-flight: ${iclone} (${ireason})" >&2
       done <<< "$busy"
       flagged=$((flagged + 1))
-      continue
+    else
+      old_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
+      echo "nutupyall: ${name} -- submodule update --remote .agentstartstack"
+      if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
+        echo "nutupyall:   ERROR updating submodule in ${name}" >&2
+        failed=$((failed + 1))
+      elif [[ -z "$(git -C "$host" status --porcelain -- .agentstartstack 2>/dev/null)" ]]; then
+        echo "nutupyall:   ${name} already current"
+        current=$((current + 1))
+      else
+        new_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
+
+        # Action-aware (see workflow.md): a blind pointer bump must NOT skip the
+        # CONSUMER-ACTION clauses in the delta. If any producer commit in old..new
+        # carries one, do NOT auto-commit -- restore the submodule to its committed
+        # SHA and defer to an agent session, which reads the delta and reconciles.
+        # Only an action-free delta is safe to auto-commit here.
+        if git -C "${host}/.agentstartstack" log --format='%B' "${old_sha}..${new_sha}" 2>/dev/null \
+             | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
+          git -C "$host" submodule update --init --recursive .agentstartstack >/dev/null 2>&1
+          echo "nutupyall:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
+          echo "nutupyall:     start an agent session for ${name} so it reads the delta and reconciles." >&2
+          needs_agent=$((needs_agent + 1))
+        else
+          sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
+          echo "nutupyall:   committing bump to ${sub_sha} in ${name} (action-free delta)"
+          if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
+            echo "nutupyall:   ERROR committing bump in ${name}" >&2
+            failed=$((failed + 1))
+          elif ! git -C "$host" push origin main; then
+            echo "nutupyall:   WARN committed bump but origin push failed in ${name}" >&2
+            failed=$((failed + 1))
+          else
+            bumped=$((bumped + 1))
+          fi
+        fi
+      fi
     fi
 
-    old_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
-    echo "nutupyall: ${name} -- submodule update --remote .agentstartstack"
-    if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
-      echo "nutupyall:   ERROR updating submodule in ${name}" >&2
-      failed=$((failed + 1))
-      continue
+    if _nutup_trim_autotrim_enabled "$host"; then
+      if nutup_trim "$name" --yes; then
+        echo "nutupyall: ${name} -- trim ok" >&2
+      else
+        echo "nutupyall: ${name} -- trim failed (logged; continuing)" >&2
+        failed=$((failed + 1))
+      fi
+    else
+      echo "nutupyall: ${name} -- autotrim disabled (NUTUPYALL_AUTOTRIM=0)" >&2
     fi
-
-    if [[ -z "$(git -C "$host" status --porcelain -- .agentstartstack 2>/dev/null)" ]]; then
-      echo "nutupyall:   ${name} already current"
-      current=$((current + 1))
-      continue
-    fi
-
-    new_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
-
-    # Action-aware (see workflow.md): a blind pointer bump must NOT skip the
-    # CONSUMER-ACTION clauses in the delta. If any producer commit in old..new
-    # carries one, do NOT auto-commit -- restore the submodule to its committed
-    # SHA and defer to an agent session, which reads the delta and reconciles.
-    # Only an action-free delta is safe to auto-commit here.
-    if git -C "${host}/.agentstartstack" log --format='%B' "${old_sha}..${new_sha}" 2>/dev/null \
-         | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
-      git -C "$host" submodule update --init --recursive .agentstartstack >/dev/null 2>&1
-      echo "nutupyall:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
-      echo "nutupyall:     start an agent session for ${name} so it reads the delta and reconciles." >&2
-      needs_agent=$((needs_agent + 1))
-      continue
-    fi
-
-    sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
-    echo "nutupyall:   committing bump to ${sub_sha} in ${name} (action-free delta)"
-    if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
-      echo "nutupyall:   ERROR committing bump in ${name}" >&2
-      failed=$((failed + 1))
-      continue
-    fi
-    if ! git -C "$host" push origin main; then
-      echo "nutupyall:   WARN committed bump but origin push failed in ${name}" >&2
-      failed=$((failed + 1))
-      continue
-    fi
-    bumped=$((bumped + 1))
   done < <(_nutupyall_consumer_roots | sort -u)
 
   echo "nutupyall: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${failed} failed"
