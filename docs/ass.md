@@ -172,7 +172,8 @@ per-clone fast-forward during a session.
 ## ass status (agent session clones)
 
 `ass status` lists **agent session clones only** (newest first) — not canonical.
-Each row shows ahead/behind vs **`origin/main`** and vs **canonical/main**. Reference
+Each row shows ahead/behind vs **canonical/main**, then **`-->`** (canonical pushes to
+`origin/main`), then vs **`origin/main`**. Reference
 SHAs appear in the INFO line and in the table header (not as a data row). Run from the
 canonical repo or any session clone (pwd-oriented).
 
@@ -185,8 +186,9 @@ ass status
 | **#** | Session clone index (newest first, same order as `ass list`) |
 | **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
 | **wip** | Uncommitted work not yet in canonical: `-` (clean) or `dirty` |
-| **ahead / behind** (first pair) | Vs `origin/main` (ref in INFO line) |
-| **ahead / behind** (second pair) | Vs canonical/main (ref in header) |
+| **ahead / behind** (first pair) | Vs canonical/main (ref in INFO line) |
+| **-->** | Canonical pushes to `origin/main` (visual separator) |
+| **ahead / behind** (second pair) | Vs `origin/main` (ref in INFO line) |
 | **HEAD** | This clone's `main` |
 | **path** | Clone directory |
 

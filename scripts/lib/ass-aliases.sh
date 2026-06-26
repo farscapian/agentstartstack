@@ -305,16 +305,16 @@ _ass_status_wip_column() {
   fi
 }
 
-# Column layout: # agent wip | origin ahead/behind | canonical ahead/behind | HEAD path
+# Column layout: # agent wip | canonical ahead/behind | --> | origin ahead/behind | HEAD path
 # Count cols are width 7 (fits git short SHA on the reference row).
 _ass_status_format_header_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %-7s %-7s  %-7s %-7s  %-9s  %s\n' "$@"
+  printf '%-3s %-7s %-7s %-7s %-7s  %-5s  %-7s %-7s  %-9s  %s\n' "$@"
 }
 
 _ass_status_format_row() {
   # shellcheck disable=SC2059
-  printf '%-3s %-7s %-7s %7s %7s  %7s %7s  %-9s  %s' "$@"
+  printf '%-3s %-7s %-7s %7s %7s  %-5s  %7s %7s  %-9s  %s' "$@"
 }
 
 _ass_status_print_row() {
@@ -327,7 +327,7 @@ _ass_status_print_row() {
   wip=$(_ass_status_wip_column "$path")
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  _ass_status_format_row "$idx" "$agent" "$wip" "$ahead" "$behind" "$can_ahead" "$can_behind" "$head" "$path"
+  _ass_status_format_row "$idx" "$agent" "$wip" "$can_ahead" "$can_behind" "-->" "$ahead" "$behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -350,10 +350,11 @@ Columns (each clone row):
   #       session clone index (newest first)
   agent   grok / claude
   wip     uncommitted work not in canonical (- or dirty)
-  ahead   commits on this clone not on origin/main
-  behind  commits on origin/main not on this clone
   ahead   commits on this clone not on canonical main
   behind  commits on canonical main not on this clone
+  -->     canonical pushes to origin/main (visual separator)
+  ahead   commits on this clone not on origin/main
+  behind  commits on origin/main not on this clone
   HEAD    this clone's main
   path
 
@@ -382,11 +383,11 @@ EOF
   can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
 
   _ass_info "ass status: ${repo_name} (agent session clones)"
-  _ass_info "vs origin/main @ ${origin_head}  vs canonical/main @ ${can_head}"
+  _ass_info "vs canonical/main @ ${can_head}  -->  origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "ahead" "behind" "HEAD" "path"
-  _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-------" "-------" "---------" "----"
+  _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
+  _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-->" "-------" "-------" "---------" "----"
 
   mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
 
@@ -403,8 +404,9 @@ EOF
 
   echo ""
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
-  _ass_info "1st ahead/behind pair: vs origin/main @ ${origin_head}"
-  _ass_info "2nd ahead/behind pair: vs canonical/main @ ${can_head}"
+  _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
+  _ass_info "--> = canonical pushes to origin/main"
+  _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
   return 0
 }
 
