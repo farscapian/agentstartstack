@@ -622,6 +622,7 @@ ass -- AgentStartStack handoff CLI
 Pwd-oriented: cd to the canonical repo or a session clone, then run a subcommand.
 
   ass                         show this help
+  ass help                    same as bare ass (main menu)
   ass sync                    local-sync handoff (session clone -> canonical)
   ass sync -f                 only post-last-ass session clones
   ass sync --stashes          opt in: move canonical stashes to session clone
@@ -1308,7 +1309,7 @@ ass()
 
   for arg in "${_ass_argv[@]}"; do
     case "$arg" in
-      -h|--help) _ass_main_usage; return 0 ;;
+      -h|--help|help) _ass_main_usage; return 0 ;;
     esac
   done
 
@@ -1317,7 +1318,7 @@ ass()
     return 0
   fi
 
-  _ass_err "ass: use a subcommand (try: ass --help)"
+  _ass_err "ass: use a subcommand (try: ass help)"
   return 1
 }
 

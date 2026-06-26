@@ -57,7 +57,7 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 
 | Command | Description |
 |---------|-------------|
-| `ass` | Show main help menu |
+| `ass` / `ass help` | Show main help menu |
 | `ass sync` | Local-sync session clone -> canonical (pick farthest ahead; auto-sync behind clones) |
 | `ass sync -f` | Same, but ignore session clones initialized before the last `ass` |
 | `ass sync --stashes` | Opt in: prompt to move canonical stashes into the session clone |
@@ -99,7 +99,9 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 ### Help
 
 ```bash
+ass help
 ass --help
+ass help sync
 ass new --help
 ass up --help
 ass up trim --help

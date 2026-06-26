@@ -18,6 +18,7 @@ Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `ass push`.
 
 ```bash
 ass                 # main help menu
+ass help            # same as bare ass
 ass sync            # local-sync handoff (pwd: canonical or session clone)
 ass sync -f         # handoff only from a post-last-ass session clone
 ass sync --stashes  # opt in: prompt to move canonical stashes to session clone
@@ -40,7 +41,9 @@ ass up --stashes    # as ass sync --stashes, then push
 ass up trim         # consolidate and prune stale session clones
 ass up --all        # ass up agentstartstack, refresh consumer submodules
 ass dropit <src>    # from a consumer clone: stash generic work upstream
+ass help
 ass --help
+ass help sync
 ass up --help
 ass up trim --help
 ass up --all --help

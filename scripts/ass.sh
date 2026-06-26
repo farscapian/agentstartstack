@@ -99,12 +99,12 @@ main() {
       if _ass_cli_is_sync_flag "$cmd"; then
         ass_sync "$@"
       else
-        printf '[ERR]  ass: unknown option: %s (try: ass --help)\n' "$cmd" >&2
+        printf '[ERR]  ass: unknown option: %s (try: ass help)\n' "$cmd" >&2
         return 1
       fi
       ;;
     *)
-      printf '[ERR]  ass: unknown command: %s (try: ass --help)\n' "$cmd" >&2
+      printf '[ERR]  ass: unknown command: %s (try: ass help)\n' "$cmd" >&2
       return 1
       ;;
   esac
