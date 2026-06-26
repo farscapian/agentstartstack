@@ -77,7 +77,7 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 | `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
 | `ass info <n>` | Plain-language summary for session #n (from `ass status`; includes dirty-work analysis) |
 
-| `ass prune [<path>]` | Consolidate one clone into the newest, then archive + remove it |
+| `ass drop` | Archive all session clones except #1 (collapse into one) |
 | `ass drop <n>` | Archive and remove session clone #n (index from `ass list`) |
 | `ass drop <src> [dest]` | From a consumer session clone: copy generic work into agentstartstack |
 

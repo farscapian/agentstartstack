@@ -418,69 +418,7 @@ _ass_debugf() { _as_cli_debugf "$@"; }
     body = body.replace('(try: nut --help)', '(try: ass --help)')
     body = body.replace('(try: nut <name>)', '(pwd-oriented -- cd to the repo first)')
 
-    ASS_PRUNE = r'''
-# ass prune -- consolidate one session clone into the newest, then prune it.
-
-_ass_prune_resolve_target() {
-  local arg="${1:-}" here
-  if [[ -n "$arg" ]]; then
-    [[ -d "$arg" ]] || { _ass_err "ass prune: not found: $arg"; return 1; }
-    readlink -f "$arg"
-    return 0
-  fi
-  here=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    _ass_err "ass prune: not in a git repo (pass clone path)"
-    return 1
-  }
-  readlink -f "$here"
-}
-
-ass_prune() {
-  local target="${1:-}" clone canonical name survivor archive_dir
-  local -a all=()
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass prune -- consolidate one session clone into the newest, then remove it
-
-  ass prune                 pwd must be a session clone
-  ass prune <clone-path>    explicit clone to prune
-
-Refuses unlanded clones (commits not in origin/main). Dirty work is rolled into
-the survivor (newest commit on main, same rule as ass handoff).
-EOF
-    return 0
-  fi
-  clone=$(_ass_prune_resolve_target "$target") || return 1
-  canonical=$(_ass_sync_target_from_worktree "$clone") || {
-    _ass_err "ass prune: cannot resolve canonical from: $clone"
-    return 1
-  }
-  canonical=$(readlink -f "$canonical")
-  name=$(basename "$canonical")
-  if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
-    _ass_err "ass prune: clone has unlanded commits -- cherry-pick or ass handoff first"
-    return 1
-  fi
-  while IFS= read -r c; do
-    [[ -n "$c" ]] || continue
-    all+=("$(readlink -f "$c")")
-  done < <(_ass_session_clones_for_consumer "$name")
-  mapfile -t all < <(
-    for c in "${all[@]}"; do
-      printf '%s %s\n' "$(git -C "$c" log -1 --format=%ct main 2>/dev/null || echo 0)" "$c"
-    done | sort -rn -k1,1 | awk '{print $2}'
-  )
-  survivor="${all[0]:-}"
-  [[ -n "$survivor" ]] || { _ass_err "ass prune: no session clones for ${name}"; return 1; }
-  [[ "$clone" != "$survivor" ]] || { _ass_info "ass prune: clone is already the newest"; return 0; }
-  if _ass_up_trim_clone_dirty "$clone"; then
-    _ass_info "ass prune: consolidating dirty work: ${clone} -> ${survivor}"
-    read -r _f _c < <(_ass_up_trim_rollover "$clone" "$survivor")
-  fi
-  archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "")
-  _ass_up_trim_archive_clone "$clone" "$archive_dir" 0
-}
-
+    ASS_NEW = r'''
 ass_new() {
   local agent="" canonical origin parent session_id clone_path script_dir
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -530,7 +468,7 @@ EOF
                 dropit_anchor,
                 dropit_anchor.replace(
                     "}\n\n# ass up trim",
-                    "}\n\n" + ASS_PRUNE + "# ass up trim",
+                    "}\n\n" + ASS_NEW + "# ass up trim",
                     1,
                 ),
                 1,
@@ -631,11 +569,12 @@ After install-shell-aliases.sh, only a thin ass() wrapper is installed.
 
   ass.sh [-f]                     local-sync handoff (ass)
   ass.sh new --grok|--claude      create + align a session clone (canonical pwd)
-  ass.sh prune [<clone-path>]     consolidate one clone into the newest, then remove it
+  ass.sh drop                     archive all session clones except #1
+  ass.sh drop <n>                 archive and remove session clone #n
   ass.sh up [-f]                  local-sync, then git push origin main
   ass.sh up trim [options]        consolidate and prune stale session clones
   ass.sh up --all                 ass up agentstartstack, refresh consumer submodules
-  ass.sh dropit <src> [dest]      copy generic work into agentstartstack session clone
+  ass.sh drop <src> [dest]        copy generic work into agentstartstack session clone
 
 Global flags: -v, -q, --timestamp, --log-id=ID, --create-log (see docs/cli.md)
 EOF
@@ -645,11 +584,10 @@ _ass_cli_subcommand_help() {
   local sub="${1:-}"
   case "$sub" in
     new)    ass_new --help ;;
-    prune)  ass_prune --help ;;
+    drop)   ass_drop --help ;;
     up)     ass_up --help ;;
     trim)   ass_up_trim --help ;;
     all)    ass_up_all --help ;;
-    dropit) dropit --help ;;
     ""|handoff|ass) ass --help ;;
     *)
       printf '[ERR]  ass.sh: unknown help topic: %s\n' "$sub" >&2
@@ -675,7 +613,7 @@ main() {
       fi
       ;;
     new) shift; ass_new "$@" ;;
-    prune) shift; ass_prune "$@" ;;
+    drop)  shift; ass_drop "$@" ;;
     up)
       shift
       if [[ "${1:-}" == trim ]]; then
@@ -686,7 +624,7 @@ main() {
         ass_up "$@"
       fi
       ;;
-    dropit) shift; dropit "$@" ;;
+
     *) ass "$@" ;;
   esac
 }

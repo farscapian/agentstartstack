@@ -24,8 +24,7 @@ How `ass` structures terminal help (iotstack-style). Help text lives in
 | `docs/help/ass-list.txt` | `ass list help`, `ass help list` |
 | `docs/help/ass-status.txt` | `ass status help`, `ass help status` |
 | `docs/help/ass-info.txt` | `ass info help`, `ass help info` |
-| `docs/help/ass-prune.txt` | `ass prune help`, `ass help prune` |
-| `docs/help/ass-drop.txt` | `ass drop help`, `ass help drop` (clone #n + upstream copy) |
+| `docs/help/ass-drop.txt` | `ass drop help`, `ass help drop` (collapse all, clone #n, upstream copy) |
 | `docs/help/ass-up.txt` | `ass up help`, `ass help up` |
 | `docs/help/ass-up-trim.txt` | `ass up trim help`, `ass help up trim` |
 | `docs/help/ass-up-all.txt` | `ass up --all help`, `ass help up --all` |
@@ -98,9 +97,10 @@ Each subcommand file should include as needed:
 Nested files (`ass-sync-all.txt`, `ass-up-trim.txt`) follow the same sections but
 omit unrelated subcommands.
 
-**Dual-mode commands:** `ass-drop.txt` documents two behaviors in one file
-(`ass drop <n>` vs `ass drop <src> [<dest>]`), selected at runtime by argument
-shape. Do not split into separate top-level commands on the main menu.
+**Multi-mode commands:** `ass-drop.txt` documents three behaviors in one file
+(bare `ass drop`, `ass drop <n>`, `ass drop <src> [<dest>]`), selected at
+runtime by argument shape. Do not split into separate top-level commands on the
+main menu.
 
 ## Adding a new subcommand
 

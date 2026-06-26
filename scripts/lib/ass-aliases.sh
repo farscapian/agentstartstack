@@ -68,7 +68,6 @@ ass_help_new() { _ass_cat_help ass-new.txt; }
 ass_help_list() { _ass_cat_help ass-list.txt; }
 ass_help_status() { _ass_cat_help ass-status.txt; }
 ass_help_info() { _ass_cat_help ass-info.txt; }
-ass_help_prune() { _ass_cat_help ass-prune.txt; }
 ass_help_drop() { _ass_cat_help ass-drop.txt; }
 ass_help_up() { _ass_cat_help ass-up.txt; }
 ass_help_up_trim() { _ass_cat_help ass-up-trim.txt; }
@@ -97,7 +96,6 @@ ass_help_topic() {
     list) ass_help_list ;;
     status) ass_help_status ;;
     info) ass_help_info ;;
-    prune) ass_help_prune ;;
     drop) ass_help_drop ;;
     trim) ass_help_up_trim ;;
     *)
@@ -1639,64 +1637,109 @@ _ass_drop_upstream() {
   return 0
 }
 
-# ass prune -- consolidate one session clone into the newest, then prune it.
+# Archive and remove one session clone; roll dirty work into survivor when set.
+_ass_drop_session_clone() {
+  local clone="$1" survivor="$2" canonical="$3"
+  local archive_dir detail
 
-_ass_prune_resolve_target() {
-  local arg="${1:-}" here
-  if [[ -n "$arg" ]]; then
-    [[ -d "$arg" ]] || { _ass_err "ass prune: not found: $arg"; return 1; }
-    readlink -f "$arg"
-    return 0
-  fi
-  here=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    _ass_err "ass prune: not in a git repo (pass clone path)"
-    return 1
-  }
-  readlink -f "$here"
-}
+  clone=$(readlink -f "$clone")
+  [[ -n "$survivor" ]] && survivor=$(readlink -f "$survivor")
 
-ass_prune() {
-  local target="${1:-}" clone canonical name survivor archive_dir
-  local -a all=()
-  if _ass_help_requested "${1:-}"; then
-    ass_help_prune
-    return 0
-  fi
-  clone=$(_ass_prune_resolve_target "$target") || return 1
-  canonical=$(_ass_sync_target_from_worktree "$clone") || {
-    _ass_err "ass prune: cannot resolve canonical from: $clone"
+  if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
+    _ass_err "ass drop: cannot remove clone with an active agent session"
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && _ass_err "ass drop:   ${line}"
+    done <<<"$detail"
+    _ass_err "ass drop:   ${clone}"
     return 1
-  }
-  canonical=$(readlink -f "$canonical")
-  name=$(basename "$canonical")
+  fi
+
   if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
-    _ass_err "ass prune: clone has unlanded commits -- cherry-pick or ass handoff first"
+    _ass_err "ass drop: clone has unlanded commits -- cherry-pick or ass handoff first"
+    _ass_err "ass drop:   ${clone}"
     return 1
   fi
-  while IFS= read -r c; do
-    [[ -n "$c" ]] || continue
-    all+=("$(readlink -f "$c")")
-  done < <(_ass_session_clones_for_consumer "$name")
-  mapfile -t all < <(
-    for c in "${all[@]}"; do
-      printf '%s %s\n' "$(git -C "$c" log -1 --format=%ct main 2>/dev/null || echo 0)" "$c"
-    done | sort -rn -k1,1 | awk '{print $2}'
-  )
-  survivor="${all[0]:-}"
-  [[ -n "$survivor" ]] || { _ass_err "ass prune: no session clones for ${name}"; return 1; }
-  [[ "$clone" != "$survivor" ]] || { _ass_info "ass prune: clone is already the newest"; return 0; }
+
   if _ass_up_trim_clone_dirty "$clone"; then
-    _ass_info "ass prune: consolidating dirty work: ${clone} -> ${survivor}"
+    if [[ -z "$survivor" ]]; then
+      _ass_err "ass drop: only session clone and dirty -- commit or clear work first"
+      _ass_err "ass drop:   ${clone}"
+      return 1
+    fi
+    _ass_info "ass drop: consolidating dirty work -> ${survivor}"
     read -r _f _c < <(_ass_up_trim_rollover "$clone" "$survivor")
   fi
+
   archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "")
-  _ass_up_trim_archive_clone "$clone" "$archive_dir" 0
+  _ass_up_trim_archive_clone "$clone" "$archive_dir" 0 \
+    || { _ass_err "ass drop: archive failed -- clone left in place"; return 1; }
+  return 0
 }
 
-# ass drop -- archive session clone #n, or copy generic work upstream (consumer pwd).
+# ass drop (no args) -- archive every session clone except #1 (collapse into one).
+_ass_drop_all() {
+  local canonical origin repo_name pwd_here survivor
+  local -a clones=()
+  local clone agent head idx line
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  if [[ "$pwd_here" != "$canonical" ]]; then
+    _ass_warn "ass drop: pwd is not canonical -- dropping clones for ${repo_name} anyway"
+    _ass_warn "ass drop:   canonical: ${canonical}"
+    _ass_warn "ass drop:   pwd:       ${pwd_here}"
+  fi
+
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass drop: canonical has no origin remote"
+    return 1
+  }
+
+  mapfile -t clones < <(agent_session_clones_list "$origin")
+  if [[ ${#clones[@]} -eq 0 ]]; then
+    _ass_info "ass drop: no session clones for ${repo_name}"
+    return 0
+  fi
+  if [[ ${#clones[@]} -eq 1 ]]; then
+    _ass_info "ass drop: one session clone already (#1) -- nothing to drop"
+    return 0
+  fi
+
+  survivor=$(readlink -f "${clones[0]}")
+  agent=$(_ass_session_agent_kind "$survivor")
+  head=$(git -C "$survivor" rev-parse --short HEAD 2>/dev/null || echo '?')
+  _ass_info "ass drop: keeping #1 ${agent} @ ${head}"
+  _ass_info "ass drop:   ${survivor}"
+  _ass_info "ass drop: removing ${#clones[@]} other session clone(s)"
+
+  read -r -p "ass drop: remove $(( ${#clones[@]} - 1 )) session clone(s), keep #1? [y/N] " line
+  [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || {
+    _ass_info "ass drop: aborted"
+    return 1
+  }
+
+  for ((idx=${#clones[@]}-1; idx>=1; idx--)); do
+    clone=$(readlink -f "${clones[idx]}")
+    agent=$(_ass_session_agent_kind "$clone")
+    head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+    _ass_info "ass drop: #$((idx + 1)) ${agent} @ ${head}"
+    _ass_info "ass drop:   ${clone}"
+    _ass_drop_session_clone "$clone" "$survivor" "$canonical" || return 1
+    dropped=$((dropped + 1))
+    _ass_ok "ass drop: removed #$((idx + 1)) (${agent})"
+  done
+
+  _ass_ok "ass drop: collapsed to one session clone (#1)"
+  return 0
+}
+
+# ass drop -- archive session clone(s), or copy generic work upstream (consumer pwd).
 ass_drop() {
   local -a _ass_argv clones=()
-  local index canonical origin repo_name pwd_here clone survivor archive_dir
+  local index canonical origin repo_name pwd_here clone survivor
   local agent head
 
   if _ass_help_requested "${1:-}"; then
@@ -1706,15 +1749,15 @@ ass_drop() {
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
   if [[ ${#_ass_argv[@]} -eq 0 ]]; then
-    _ass_err "ass drop: usage: ass drop <n> | ass drop <src> [<dest>]"
-    return 1
+    _ass_drop_all
+    return $?
   fi
   if [[ ${#_ass_argv[@]} -le 2 && ! "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
     _ass_drop_upstream "${_ass_argv[@]}"
     return $?
   fi
   if [[ ${#_ass_argv[@]} -ne 1 ]]; then
-    _ass_err "ass drop: usage: ass drop <n> | ass drop <src> [<dest>]"
+    _ass_err "ass drop: usage: ass drop | ass drop <n> | ass drop <src> [<dest>]"
     return 1
   fi
   index="${_ass_argv[0]}"
@@ -1753,32 +1796,8 @@ ass_drop() {
   _ass_info "ass drop: #${index} ${agent} @ ${head}"
   _ass_info "ass drop:   ${clone}"
 
-  if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
-    _ass_err "ass drop: cannot remove clone with an active agent session"
-    while IFS= read -r line; do
-      [[ -n "$line" ]] && _ass_err "ass drop:   ${line}"
-    done <<<"$detail"
-    _ass_err "ass drop:   ${clone}"
-    return 1
-  fi
-
-  if _ass_up_trim_clone_unlanded "$clone" "$canonical"; then
-    _ass_err "ass drop: clone has unlanded commits -- cherry-pick or ass handoff first"
-    return 1
-  fi
-
-  if _ass_up_trim_clone_dirty "$clone"; then
-    survivor=$(_ass_drop_rollover_survivor "$clone" "${clones[@]}") || {
-      _ass_err "ass drop: only session clone and dirty -- commit or clear work first"
-      return 1
-    }
-    _ass_info "ass drop: consolidating dirty work -> ${survivor}"
-    read -r _f _c < <(_ass_up_trim_rollover "$clone" "$survivor")
-  fi
-
-  archive_dir=$(_ass_up_trim_resolve_archive_dir "$canonical" "")
-  _ass_up_trim_archive_clone "$clone" "$archive_dir" 0 \
-    || { _ass_err "ass drop: archive failed -- clone left in place"; return 1; }
+  survivor=$(_ass_drop_rollover_survivor "$clone" "${clones[@]}") || survivor=""
+  _ass_drop_session_clone "$clone" "$survivor" "$canonical" || return 1
   _ass_ok "ass drop: removed #${index} (${agent})"
   return 0
 }

@@ -1,20 +1,31 @@
-ass drop -- archive a session clone, or copy generic work upstream
+ass drop -- archive session clone(s), or copy generic work upstream
 
-Two modes (disambiguated by argument shape and pwd):
+Three modes (disambiguated by argument shape and pwd):
 
-1) Archive and remove session clone #n (canonical pwd)
+1) Collapse to one session clone (canonical pwd, no args)
 
-Run from the canonical local repo. Index matches ass list / ass status (# column,
-newest clone = 1). Archives to a verified .tar.gz first (HARD RULE), then removes
-the clone directory. Dirty work is rolled into another session clone when one exists.
+Run from the canonical local repo. Archives and removes every session clone
+except #1 (newest commit on main). Dirty work from dropped clones rolls into #1.
+Prompts for confirmation when more than one clone would be removed.
 
 Usage:
-  ass drop <n>
+  ass drop
 
 Refuses clones with commits not yet on origin/main (unlanded).
 Refuses clones with an active grok/claude session (quit the session first).
 
-2) Copy generic work into agentstartstack (consumer session clone pwd)
+2) Archive and remove session clone #n (canonical pwd)
+
+Index matches ass list / ass status (# column, newest clone = 1). Archives to a
+verified .tar.gz first (HARD RULE), then removes the clone directory. Dirty work
+rolls into another session clone when one exists.
+
+Usage:
+  ass drop <n>
+
+Same refusal rules as mode 1.
+
+3) Copy generic work into agentstartstack (consumer session clone pwd)
 
 Run from a CONSUMER session clone (has .agentstartstack submodule). Copies a file
 or directory that belongs upstream in agentstartstack into that repo's newest

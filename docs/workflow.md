@@ -20,7 +20,7 @@ These rules are non-negotiable for humans and agents working with agentstartstac
    to ff-only merge `origin/main` if it does.
 
 4. **Session clones SHALL only be removed after archive.** The only permitted way to delete
-   a session-clone directory is via `ass up trim` or `ass prune`, which create a verified
+   a session-clone directory is via `ass drop` or `ass up trim`, which create a verified
    `.tar.gz` under `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` (or the default archive path) and
    remove the source only after `tar tzf` succeeds. **Never** `rm -rf` a session clone by
    hand, and never delete a clone directory to "sync" or "clean up" canonical. If a clone
@@ -425,8 +425,9 @@ The init scripts **align** an existing clone; they do **not** create one. Creati
 
 Session-clone directories are **archived, not deleted outright**. Use:
 
+- `ass drop` -- archive every session clone except #1 (collapse into one; run from canonical)
+- `ass drop <n>` -- archive one clone by index from `ass list` / `ass status`
 - `ass up trim` -- batch consolidate + archive stale clones (typical; run from canonical)
-- `ass prune [<clone-path>]` -- archive one explicit clone after consolidating into the newest
 
 Both call the same archive path: tarball under `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` (default
 `~/.agentstartstack/archives/<project>/agent_clones/`), verify the archive, then remove the
@@ -436,7 +437,7 @@ the clone directory itself.
 
 **Never** delete a session-clone folder to fix canonical/session drift, and never remove a
 clone while a Grok/Claude session is still open on that path -- restart or close the session
-first, then `ass up trim` or `ass prune`.
+first, then `ass drop` or `ass up trim`.
 
 ### Listing clones
 

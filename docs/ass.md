@@ -31,7 +31,7 @@ ass new --claude    # force Claude Code session clone
 # left monitor, maximized, Claude Code extension opened); else grok/claude from PATH.
 # Optional: ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y override monitor origin.
 # ass new prompts to install wmctrl (apt) when missing, for left-monitor placement.
-ass prune           # consolidate one session clone into the newest, then remove it
+ass drop            # archive all session clones except #1 (collapse into one)
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass drop <src>      # from consumer clone: copy generic work upstream
 ass status          # ahead/behind origin/main for canonical and session clones
@@ -128,7 +128,7 @@ then removes the source directory. Clones with commits not yet in `origin/main` 
 **kept** and reported for cherry-pick.
 
 **HARD RULE:** session clones may only be removed after archive (see [workflow.md](workflow.md)
-HARD RULES). `ass up trim` and `ass prune` are the **only** supported removal paths -- never
+HARD RULES). `ass drop` and `ass up trim` are the **only** supported removal paths -- never
 `rm -rf` a session clone by hand.
 
 ```bash
@@ -226,36 +226,33 @@ ass status
 ass info 2
 ```
 
-## ass prune (archive one clone)
+## ass drop (archive session clones)
 
-`ass prune` consolidates dirty work from one session clone into the newest clone for the
-same consumer, **archives** the target as a verified `.tar.gz`, then removes it. Same
-archive-first rule as trim -- if archiving or verification fails, the clone is left in place.
-
-```bash
-ass prune                 # pwd must be a session clone to remove
-ass prune <clone-path>    # explicit clone to archive and remove
-```
-
-## ass drop (archive by index)
-
-`ass drop <n>` archives and removes the session clone at index **`n`** from `ass list` /
-`ass status` (newest = 1). Run from the **canonical** repo. Same archive-first HARD RULE
-as `ass prune` and `ass up trim`. Dirty work is rolled into another session clone when
-one exists; refuses unlanded commits. **Refuses clones with an active grok or Claude
-session** (detected via running `grok --resume` for that workspace, or a `claude` process
-with cwd in the clone) -- quit or close the agent session first.
+`ass drop` archives and removes session clones from the **canonical** repo. Same
+archive-first HARD RULE as `ass up trim` -- if archiving or verification fails, the clone
+is left in place. Dirty work rolls into another session clone when one exists; refuses
+unlanded commits. **Refuses clones with an active grok or Claude session** (detected via
+running `grok --resume` for that workspace, or a `claude` process with cwd in the clone) --
+quit or close the agent session first.
 
 ```bash
+ass drop                  # archive all clones except #1 (collapse into one)
 ass list                  # see # column
 ass drop 2                # archive and remove clone #2
 ```
+
+Bare `ass drop` keeps session clone **#1** (newest commit on `main`) and archives every
+other clone, rolling dirty work into #1. Prompts for confirmation when removing more than
+one clone.
+
+From a **consumer** session clone, `ass drop <src> [<dest>]` copies generic work upstream
+into agentstartstack (see `docs/help/ass-drop.txt`).
 
 ## Source
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
-functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`,
+functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_new`,
 `ass_status`, `ass_info`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 

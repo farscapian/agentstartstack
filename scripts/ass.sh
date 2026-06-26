@@ -33,7 +33,6 @@ main() {
       _ass_cli_usage
       ;;
     new) shift; ass_new "$@" ;;
-    prune) shift; ass_prune "$@" ;;
     drop)  shift; ass_drop "$@" ;;
     up)
       shift

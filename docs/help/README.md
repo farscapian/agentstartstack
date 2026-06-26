@@ -14,8 +14,7 @@ Structure and naming rules: [docs/cli-help.md](../cli-help.md).
 - **ass-list.txt** -- list session clones
 - **ass-status.txt** -- ahead/behind report
 - **ass-info.txt** -- plain-language session summary by index
-- **ass-prune.txt** -- archive and remove one clone
-- **ass-drop.txt** -- archive clone by index, or copy generic work upstream
+- **ass-drop.txt** -- collapse to one clone, archive by index, or copy work upstream
 - **ass-up.txt** -- handoff + push origin main
 - **ass-up-trim.txt** -- consolidate and prune stale clones
 - **ass-up-all.txt** -- publish agentstartstack to consumers
