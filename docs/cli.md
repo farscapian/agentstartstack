@@ -17,7 +17,7 @@ Tags are colored on a TTY (iotstack-style): blue `[INFO]`, green `[OK]`, yellow
 `[WARN]`, red `[ERR]`, dim `[DEBUG]`. Set `NO_COLOR=1` or `AS_CLI_COLOR=0` to
 disable. Log files (`--log-id`) always store plain ASCII tags without escapes.
 
-## Global flags (ass / ass up)
+## Global flags (ass sync / ass up)
 
 Parsed **before** subcommands and passed through nested calls where applicable:
 
@@ -31,9 +31,9 @@ Parsed **before** subcommands and passed through nested calls where applicable:
 Examples:
 
 ```bash
-ass -v
+ass sync -v
 ass up --timestamp
-ass --log-id=handoff-20260626
+ass sync --log-id=handoff-20260626
 bash scripts/ass.sh up trim --dry-run -v
 ```
 

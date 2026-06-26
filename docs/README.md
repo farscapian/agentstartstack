@@ -20,7 +20,7 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 ## Publish (end of session)
 
 1. Commit in the session clone
-2. **Handoff** -- human runs `ass` (or `ass up`); see `ass.md`
+2. **Handoff** -- human runs `ass sync` (or `ass up`); see `ass.md`
 
 ## Suggested load patterns
 

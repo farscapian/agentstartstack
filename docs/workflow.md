@@ -491,7 +491,7 @@ Pre-commit runs `shellcheck -x -S error` on staged `.sh` files. See [code-qualit
 
 ## Git and commit policy
 
-**Agent default:** commit when a task is complete. Human runs `ass` when ready; `ass` may refuse while CLI is running. Never push to origin.
+**Agent default:** commit when a task is complete. Human runs `ass sync` when ready; `ass sync` may refuse while CLI is running. Never push to origin.
 
 **Correctness bar:** real hardware / integration testing remains the human's validation standard. Note untested areas in commit messages when relevant.
 

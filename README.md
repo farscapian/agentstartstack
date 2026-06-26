@@ -45,7 +45,7 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 
 1. **New session** -- from the canonical local repo: `ass new` (infers grok/claude from PATH)
 2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo
-3. **Handoff** -- human runs `ass` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
+3. **Handoff** -- human runs `ass sync` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
 
 Full details: [`docs/workflow.md`](docs/workflow.md) and [`docs/ass.md`](docs/ass.md).
 
@@ -57,12 +57,14 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 
 | Command | Description |
 |---------|-------------|
-| `ass` | Local-sync session clone -> canonical (pick farthest ahead; auto-sync behind clones) |
-| `ass -f` | Same, but ignore session clones initialized before the last `ass` |
-| `ass --stashes` | Opt in: prompt to move canonical stashes into the session clone |
-| `ass up` | `ass`, then `git push origin main` |
-| `ass up -f` | `ass -f`, then push |
-| `ass up --stashes` | `ass --stashes`, then push |
+| `ass` | Show main help menu |
+| `ass sync` | Local-sync session clone -> canonical (pick farthest ahead; auto-sync behind clones) |
+| `ass sync -f` | Same, but ignore session clones initialized before the last `ass` |
+| `ass sync --stashes` | Opt in: prompt to move canonical stashes into the session clone |
+| `ass sync all` | Align every session clone behind canonical (`--dry-run` to preview) |
+| `ass up` | `ass sync`, then `git push origin main` |
+| `ass up -f` | `ass sync -f`, then push |
+| `ass up --stashes` | `ass sync --stashes`, then push |
 
 ### Session clones
 
@@ -73,7 +75,7 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 | `ass new --claude` | Force Claude Code session |
 | `ass list` | List session clones for this project (by origin URL) |
 | `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
-| `ass sync` | Align behind session clones to canonical (`--dry-run` to preview) |
+
 | `ass prune [<path>]` | Consolidate one clone into the newest, then archive + remove it |
 | `ass drop <n>` | Archive and remove session clone #n (index from `ass list`) |
 

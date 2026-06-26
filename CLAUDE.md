@@ -13,7 +13,7 @@ Host projects that include this repo as a submodule should use their own root `C
 - Agents work in session clones, NOT in the canonical local repo (see `docs/workflow.md`)
 - New Grok session: run host project's `scripts/init_grok_session.sh` (wraps `agentstartstack/scripts/`)
 - New Claude Code session: run host project's `scripts/init_claude_session.sh`
-- After changes: commit in session clone; human runs `ass` then `git push origin main` (or `ass up`). NEVER `git push origin` from agents (see `docs/ass.md`)
+- After changes: commit in session clone; human runs `ass sync` then `git push origin main` (or `ass up`). NEVER `git push origin` from agents (see `docs/ass.md`)
 
 ## Topic index
 

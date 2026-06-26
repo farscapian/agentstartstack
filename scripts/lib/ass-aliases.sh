@@ -294,11 +294,11 @@ _ass_parse_args() {
         return 0
         ;;
       -*)
-        echo "ass: unknown option: $1 (try: ass --help)" >&2
+        echo "ass sync: unknown option: $1 (try: ass sync --help)" >&2
         return 1
         ;;
       *)
-        _ass_err "ass: unexpected argument: $1 (pwd-oriented -- cd to the repo first)"
+        _ass_err "ass sync: unexpected argument: $1 (pwd-oriented -- cd to the repo first)"
         return 1
         ;;
     esac
@@ -614,8 +614,39 @@ EOF
   return 0
 }
 
-# ass sync -- align every session clone that is behind canonical (pwd = canonical).
-ass_sync() {
+# Top-level ass help (bare `ass` shows this menu, iotstack-style).
+_ass_main_usage() {
+  cat <<'EOF'
+ass -- AgentStartStack handoff CLI
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run a subcommand.
+
+  ass                         show this help
+  ass sync                    local-sync handoff (session clone -> canonical)
+  ass sync -f                 only post-last-ass session clones
+  ass sync --stashes          opt in: move canonical stashes to session clone
+  ass sync all                align every session clone behind canonical
+  ass sync all --dry-run      plan only (no clone changes)
+  ass new [--grok|--claude]   create + align a session clone (canonical pwd)
+  ass list                    session clones for pwd (by origin URL)
+  ass status                  ahead/behind for canonical + session clones
+  ass prune [<clone-path>]    consolidate one clone into newest, then remove
+  ass drop <n>                archive and remove session clone #n (see ass list)
+  ass up                      ass sync, then git push origin main
+  ass up trim [options]       consolidate and prune stale session clones
+  ass up --all                ass up agentstartstack, refresh consumer submodules
+  ass dropit <src> [dest]     copy generic work into agentstartstack session clone
+
+  ass <subcommand> --help     detailed help for one subcommand
+
+Global flags: -v, -q, --timestamp, --log-id=ID (see docs/cli.md)
+Repo roots:   $AGENTSTARTSTACK_PROJECT_ROOTS
+Session:      clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
+EOF
+}
+
+# ass sync all -- align every session clone that is behind canonical.
+ass_sync_all() {
   local -a _ass_argv clones=()
   local canonical origin repo_name pwd_here clone script_dir
   local behind ahead synced=0 skipped=0 failed=0 would_sync=0 dry_run=0
@@ -623,7 +654,7 @@ ass_sync() {
 
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<'EOF'
-ass sync -- align session clones to canonical (pwd)
+ass sync all -- align session clones to canonical (pwd)
 
 Run from the canonical local repo. For each session clone discovered by git
 origin URL, if it is behind canonical main, fast-forward or rebase it onto
@@ -631,11 +662,11 @@ local-sync/main so it picks up every canonical commit.
 
 Dirty clones are auto-committed first (see workflow.md HARD RULES). Clones
 already at canonical (0 behind) are skipped. Clones only ahead of canonical
-(agent work not yet handed off) are left unchanged. `ass` / `ass up` run this
+(agent work not yet handed off) are left unchanged. ass sync / ass up run this
 automatically for every clone behind canonical before handoff.
 
-  ass sync
-  ass sync --dry-run    plan only; do not modify clones
+  ass sync all
+  ass sync all --dry-run    plan only; do not modify clones
 EOF
     return 0
   fi
@@ -645,7 +676,7 @@ EOF
     case "${_ass_argv[0]}" in
       --dry-run) dry_run=1; _ass_argv=("${_ass_argv[@]:1}") ;;
       *)
-        _ass_err "ass sync: unexpected argument: ${_ass_argv[0]} (run from canonical pwd)"
+        _ass_err "ass sync all: unexpected argument: ${_ass_argv[0]}"
         return 1
         ;;
     esac
@@ -658,20 +689,20 @@ EOF
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
 
   if [[ "$pwd_here" != "$canonical" ]]; then
-    _ass_warn "ass sync: pwd is not canonical -- syncing clones for ${repo_name} anyway"
-    _ass_warn "ass sync:   canonical: ${canonical}"
-    _ass_warn "ass sync:   pwd:       ${pwd_here}"
+    _ass_warn "ass sync all: pwd is not canonical -- syncing clones for ${repo_name} anyway"
+    _ass_warn "ass sync all:   canonical: ${canonical}"
+    _ass_warn "ass sync all:   pwd:       ${pwd_here}"
   fi
 
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
-    _ass_err "ass sync: canonical has no origin remote"
+    _ass_err "ass sync all: canonical has no origin remote"
     return 1
   }
 
   can_head=$(git -C "$canonical" rev-parse --short main 2>/dev/null || echo '?')
-  _ass_info "ass sync: ${repo_name} @ ${can_head}"
+  _ass_info "ass sync all: ${repo_name} @ ${can_head}"
   _ass_info "canonical: ${canonical}"
-  [[ "$dry_run" == 1 ]] && _ass_info "ass sync: dry-run (no changes)"
+  [[ "$dry_run" == 1 ]] && _ass_info "ass sync all: dry-run (no changes)"
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
@@ -679,7 +710,7 @@ EOF
   done < <(_agentstartstack_clones_for_origin "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
-    _ass_info "ass sync: no session clones"
+    _ass_info "ass sync all: no session clones"
     return 0
   fi
 
@@ -691,44 +722,82 @@ EOF
 
     if [[ "$behind" == 0 || "$behind" == '?' ]]; then
       if _ass_clone_has_dirty_worktree "$clone"; then
-        _ass_info "ass sync: ${clone}"
-        _ass_info "ass sync:   HEAD ${head}  0 behind  dirty -- would auto-commit only"
+        _ass_info "ass sync all: ${clone}"
+        _ass_info "ass sync all:   HEAD ${head}  0 behind  dirty -- would auto-commit only"
         if [[ "$dry_run" == 0 ]]; then
           "${script_dir}/auto-commit-session-work.sh" "$clone" || true
         fi
       else
-        _ass_info "ass sync: ${clone}"
-        _ass_info "ass sync:   HEAD ${head}  already aligned (0 behind)"
+        _ass_info "ass sync all: ${clone}"
+        _ass_info "ass sync all:   HEAD ${head}  already aligned (0 behind)"
       fi
       skipped=$((skipped + 1))
       continue
     fi
 
-    _ass_info "ass sync: ${clone}"
-    _ass_info "ass sync:   HEAD ${head}  ${behind} behind canonical  ${ahead} ahead"
+    _ass_info "ass sync all: ${clone}"
+    _ass_info "ass sync all:   HEAD ${head}  ${behind} behind canonical  ${ahead} ahead"
     if [[ "$dry_run" == 1 ]]; then
-      _ass_info "ass sync:   (dry-run) would fast-forward or rebase onto local-sync/main"
+      _ass_info "ass sync all:   (dry-run) would fast-forward or rebase onto local-sync/main"
       would_sync=$((would_sync + 1))
       continue
     fi
 
     if _ass_sync_clone_behind_canonical "$clone" "$canonical"; then
       head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
-      _ass_ok "ass sync: aligned ${clone} @ ${head}"
+      _ass_ok "ass sync all: aligned ${clone} @ ${head}"
       synced=$((synced + 1))
     else
-      _ass_err "ass sync: failed ${clone} (resolve conflicts or .agentstartstack-bump, then re-run)"
+      _ass_err "ass sync all: failed ${clone} (resolve conflicts or .agentstartstack-bump, then re-run)"
       failed=$((failed + 1))
     fi
   done
 
   echo ""
   if [[ "$dry_run" == 1 ]]; then
-    _ass_info "ass sync: would_sync=${would_sync} skipped=${skipped}"
+    _ass_info "ass sync all: would_sync=${would_sync} skipped=${skipped}"
   else
-    _ass_info "ass sync: synced=${synced} skipped=${skipped} failed=${failed}"
+    _ass_info "ass sync all: synced=${synced} skipped=${skipped} failed=${failed}"
   fi
   [[ "$failed" -eq 0 ]]
+}
+
+# ass sync -- local-sync handoff (session clone -> canonical). Former bare `ass`.
+ass_sync() {
+  local -a _ass_argv sync_target
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+ass sync -- local-sync handoff (session clone -> canonical)
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass sync.
+Auto-syncs any session clone behind canonical, checks canonical vs origin/main,
+picks the session clone farthest ahead of canonical, and pushes to local-sync.
+
+  ass sync                 handoff (default)
+  ass sync -f              only post-last-ass session clones
+  ass sync --stashes       opt in: move canonical stashes to session clone
+  ass sync all             align every clone behind canonical (see: ass sync all --help)
+
+-f, --force   Ignore session clones initialized before the last ass; among the
+              rest, pick farthest ahead of canonical (tie: newest commit on main).
+--stashes     Opt in to canonical stash prompts during handoff.
+EOF
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+
+  if [[ "${_ass_argv[0]:-}" == "all" ]]; then
+    ass_sync_all "${_ass_argv[@]:1}"
+    return $?
+  fi
+
+  _ass_parse_args "${_ass_argv[@]}" || return 1
+  [[ "$_ASS_PARSE_HELP" == 1 ]] && { ass_sync --help; return 0; }
+
+  sync_target=$(_ass_resolve_sync_target "") || return 1
+  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_STASHES"
 }
 
 _ass_print_handoff_report() {
@@ -1234,46 +1303,22 @@ _ass_resolve_sync_target() {
 ass()
 {
   local -a _ass_argv
+  local arg
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
-  _ass_parse_args "${_ass_argv[@]}" || return 1
 
-  if [[ "$_ASS_PARSE_HELP" == 1 ]]; then
-    cat <<'EOF'
-ass -- AgentStartStack handoff (local-sync)
+  for arg in "${_ass_argv[@]}"; do
+    case "$arg" in
+      -h|--help) _ass_main_usage; return 0 ;;
+    esac
+  done
 
-Perform local-sync with the canonical local repo (session clone -> local-sync remote).
-Prints pwd, canonical repo, every session clone, and how far behind canonical each is.
-
-  ass                 pwd-oriented handoff (cd to canonical or session clone)
-  ass -f              only session clones initialized after the last ass
-  ass --stashes          prompt to move canonical stashes to session clone
-  ass up                 local-sync, then git push origin main
-  ass up -f              as ass -f, then push
-  ass up --stashes       as ass --stashes, then push
-  ass up trim         consolidate and prune stale session clones
-  ass up --all        ass up agentstartstack, refresh consumer submodules
-  ass dropit <src>    copy generic work into agentstartstack session clone
-
-Repo roots:  $AGENTSTARTSTACK_PROJECT_ROOTS (colon-separated dirs holding <name>/)
-Session:     clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
-             (matched to a canonical repo by git origin URL, any dir name)
-
--f, --force  Ignore session clones initialized before the last ass; among the
-             remaining clones, pick the one farthest ahead of canonical (tie:
-             newest commit on main). Use after starting a fresh session
-             (init_*_session.sh) so an older stale clone cannot win.
-
-Before handoff, ass auto-syncs any session clone behind canonical (no prompt).
-Canonical must not be behind origin/main; ass prompts to ff-only merge if it is.
---stashes         Opt in to canonical stash prompts (move stashes to session clone).
-                  Default: leave canonical stashes and uncommitted work in place.
-EOF
+  if [[ ${#_ass_argv[@]} -eq 0 ]]; then
+    _ass_main_usage
     return 0
   fi
 
-  local sync_target
-  sync_target=$(_ass_resolve_sync_target "") || return 1
-  _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_STASHES"
+  _ass_err "ass: use a subcommand (try: ass --help)"
+  return 1
 }
 
 ass_up()
@@ -1298,9 +1343,8 @@ ass up -- local-sync with canonical local repo, then git push origin main
   ass up --stashes       as ass --stashes, then push
   ass up trim             consolidate and prune stale session clones (see: ass up trim --help)
 
--f, --force  See ass --help. Prefer this when handing off from a session started
-             after the previous ass so older session clones are not selected.
---stashes    See ass --help. Opt in to canonical stash prompts during handoff.
+-f, --force  See ass sync --help. Prefer when handing off from a fresh session.
+--stashes    See ass sync --help. Opt in to canonical stash prompts during handoff.
 EOF
     return 0
   fi

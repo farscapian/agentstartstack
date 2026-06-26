@@ -1,6 +1,6 @@
 # ass -- local-sync with canonical local repo
 
-Human-side helper for the AI git workflow step **local-sync** (session clone -> canonical local repo via the `local-sync` remote). Agents commit in the session clone; the human runs `ass` to local-sync with the canonical local repo, reviews, then `git push origin main`.
+Human-side helper for the AI git workflow step **local-sync** (session clone -> canonical local repo via the `local-sync` remote). Agents commit in the session clone; the human runs `ass sync` to local-sync with the canonical local repo, reviews, then `git push origin main`. Bare `ass` shows the main help menu (iotstack-style).
 
 **Canonical source:** [`scripts/ass.sh`](../scripts/ass.sh) and [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) (tracked). Install the thin `ass()` wrapper with [`scripts/install-shell-aliases.sh`](../scripts/install-shell-aliases.sh) (both `init_*_session.sh` call it). Do **not** hand-edit the managed block in `~/.bash_aliases`.
 
@@ -8,7 +8,7 @@ Human-side helper for the AI git workflow step **local-sync** (session clone -> 
 
 Canonical backronym: **A**gent**S**tart**S**tack. Short, memorable, and deliberately cheeky (same spirit as the retired `nut` name).
 
-Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`CANONICAL_LOCAL_REPO` in host `.agentstartstack.env`; defaults to the repo root). **Pwd-oriented:** `cd` to the canonical repo or a session clone, then run `ass` or `ass up` -- no repo-name argument.
+Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`CANONICAL_LOCAL_REPO` in host `.agentstartstack.env`; defaults to the repo root). **Pwd-oriented:** `cd` to the canonical repo or a session clone, then run `ass sync` or `ass up` -- no repo-name argument.
 
 **Canonical entry:** [`scripts/ass.sh`](../scripts/ass.sh) (tracked), with implementation in [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh). After `install-shell-aliases.sh`, your shell defines only a thin `ass()` wrapper that runs `bash scripts/ass.sh`.
 
@@ -17,9 +17,12 @@ Retired names: `s2s`, `land`, `s2ps`, `s2is`, `push`, `ass push`.
 ## Usage
 
 ```bash
-ass                 # local-sync handoff (pwd: canonical or session clone)
-ass -f              # handoff only from a post-last-ass session clone
-ass --stashes         # opt in: prompt to move canonical stashes to session clone
+ass                 # main help menu
+ass sync            # local-sync handoff (pwd: canonical or session clone)
+ass sync -f         # handoff only from a post-last-ass session clone
+ass sync --stashes  # opt in: prompt to move canonical stashes to session clone
+ass sync all        # align every session clone behind canonical
+ass sync all --dry-run
 ass new             # create + align a session clone (infers agent; see below)
 ass new --grok      # force Grok / Cursor session clone
 ass new --claude    # force Claude Code session clone
@@ -31,10 +34,9 @@ ass prune           # consolidate one session clone into the newest, then remove
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass status          # ahead/behind origin/main for canonical and session clones
 ass list            # session clones for canonical pwd (by origin URL)
-ass sync            # align behind session clones to canonical (canonical pwd)
-ass up              # local-sync, then git push origin main
-ass up -f           # as ass -f, then push
-ass up --stashes       # as ass --stashes, then push
+ass up              # ass sync, then git push origin main
+ass up -f           # as ass sync -f, then push
+ass up --stashes    # as ass sync --stashes, then push
 ass up trim         # consolidate and prune stale session clones
 ass up --all        # ass up agentstartstack, refresh consumer submodules
 ass dropit <src>    # from a consumer clone: stash generic work upstream
@@ -45,17 +47,19 @@ ass up --all --help
 ass dropit --help
 ```
 
-**`ass`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
+**`ass`** -- show the main help menu (no subcommand). Same pattern as iotstack.
+
+**`ass sync`** -- local-sync handoff: session clone -> canonical local repo. Human reviews before publishing.
 Before handoff, **auto-syncs** any session clone behind canonical (no prompt), checks that
 canonical is not behind `origin/main` (prompts to ff-only merge if it is), then picks the
 session clone **farthest ahead of canonical** for handoff. Prints **pwd**, canonical, every
 session clone (ahead/behind canonical), and which clone is selected.
 
-**`ass up`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `ass up` themselves.
+**`ass up`** -- full human handoff: `ass sync`, then publish to `origin/main`. Agents never run `ass up` themselves.
 
-**`-f` / `--force`** -- among session clones for the repo, ignore any initialized **before** the last successful `ass` (tracked in the canonical repo as `.git/agentstartstack-ass-last`). Among the remaining clones, pick the one **farthest ahead of canonical** (tie: newest commit on `main`) -- same rule as default `ass`, but stale pre-ass sessions cannot win. `init_*_session.sh` stamps each align as `.git/agentstartstack-session-init` in the clone. Use when you started a fresh session after the previous ass and an older session clone still exists on disk.
+**`-f` / `--force`** (on `ass sync` / `ass up`) -- among session clones for the repo, ignore any initialized **before** the last successful `ass` (tracked in the canonical repo as `.git/agentstartstack-ass-last`). Among the remaining clones, pick the one **farthest ahead of canonical** (tie: newest commit on `main`). Use when you started a fresh session after the previous ass and an older session clone still exists on disk.
 
-**`--stashes`** -- opt in to canonical stash prompts during handoff (stash uncommitted canonical work, select git stashes to move to the session clone). **Default:** `ass` leaves canonical stashes and uncommitted work in place. Works with `ass` and `ass up` (e.g. `ass --stashes`, `ass up --stashes`, `ass -f --stashes`).
+**`--stashes`** -- opt in to canonical stash prompts during handoff. Works with `ass sync` and `ass up` (e.g. `ass sync --stashes`, `ass up --stashes`, `ass sync -f --stashes`).
 
 **`ass up --all`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
 
@@ -73,11 +77,11 @@ The loop is per-consumer resilient: one failure (update, commit, or push) is log
 | Session clones | `~/.claude/worktrees/<name>/*` |
 | | `~/.grok/worktrees/<name>/*` |
 
-Session clones are matched by `origin` URL so repos cannot cross-contaminate. Handoff selects the clone **farthest ahead of canonical** (tie: newest commit on `main`). Session clones must never stay behind canonical -- `ass` auto-syncs them before selecting; use `ass sync` to align manually from canonical pwd. Canonical must not lag `origin/main`; `ass` warns and prompts to ff-only merge if it does. With `-f` / `--force`, clones whose session-init stamp is not after the canonical last-ass stamp are excluded first.
+Session clones are matched by `origin` URL so repos cannot cross-contaminate. Handoff selects the clone **farthest ahead of canonical** (tie: newest commit on `main`). Session clones must never stay behind canonical -- `ass sync` auto-syncs them before handoff; use `ass sync all` to align every clone manually from canonical pwd. Canonical must not lag `origin/main`; `ass sync` warns and prompts to ff-only merge if it does.
 
 ## Guards
 
-`ass` refuses to run while long-running tools are active on the canonical local repo (local-sync updates its working tree via `receive.denyCurrentBranch = updateInstead`):
+`ass sync` refuses to run while long-running tools are active on the canonical local repo (local-sync updates its working tree via `receive.denyCurrentBranch = updateInstead`):
 
 | Repo | Blocks while |
 |------|----------------|
@@ -90,10 +94,10 @@ To add a guard for a new project, extend `_ass_guard_active_sessions` in `script
 ## Workflow
 
 1. Agent commits in session clone
-2. Human reviews (optional): `ass` local-syncs with the canonical local repo
+2. Human reviews (optional): `ass sync` local-syncs with the canonical local repo
 3. Human publishes: `git push origin main` from the canonical local repo, or combine: `ass up`
 
-Agents never run `ass` or `ass up` unless the human explicitly asks.
+Agents never run `ass sync` or `ass up` unless the human explicitly asks.
 
 See [workflow.md](workflow.md) for session align, agent clone paths, and full git policy.
 
@@ -150,15 +154,15 @@ Shows agent kind (`grok` / `claude` from `.git/agentstartstack-session-agent`), 
 commits **behind canonical**, and path. Newest clone first. Use `ass status` for
 ahead/behind counts vs `origin/main`.
 
-## ass sync (align clones to canonical)
+## ass sync all (align clones to canonical)
 
-After you commit or `ass up` from the **canonical** repo, run `ass sync` to pull
+After you commit or `ass up` from the **canonical** repo, run `ass sync all` to pull
 those commits into every session clone that is **behind canonical**. Run from the
 canonical local repo:
 
 ```bash
-ass sync
-ass sync --dry-run    # plan only
+ass sync all
+ass sync all --dry-run    # plan only
 ```
 
 For each clone discovered by origin URL:
@@ -230,7 +234,7 @@ ass drop 2                # archive and remove clone #2
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
 functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`,
-`ass_status`, `ass_list`, `ass_sync`, `ass_drop`, `dropit`).
+`ass_status`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`, `dropit`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 
 Install / update the thin `ass()` wrapper in your shell:
