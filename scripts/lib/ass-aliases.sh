@@ -519,11 +519,12 @@ _ass_status_display_path() {
   fi
 }
 
-# ass status # column: 1 = newest (rollover target); ^ = rolls into #1 on trim/drop.
+# ass status # column: 1* = primary (newest) clone, the rollover target;
+# ^ = rolls into #1 on trim/drop.
 _ass_status_index_display() {
   local i="$1"
   if [[ "$i" -eq 1 ]]; then
-    printf '1'
+    printf '1*'
   else
     printf '^'
   fi
@@ -537,7 +538,8 @@ _ass_status_print_row() {
   read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
   wip=$(_ass_status_wip_column "$path")
   sync_col=""
-  [[ "$idx" == "1" ]] && sync_col="-->"
+  # idx is the display string from _ass_status_index_display: "1*" = primary (#1).
+  [[ "$idx" == "1*" ]] && sync_col="-->"
   notes=$(_ass_status_notes "$path" "$pwd_here")
   disp_path=$(_ass_status_display_path "$path")
 
@@ -599,6 +601,7 @@ ass_status() {
   fi
 
   echo ""
+  _ass_info "1* = primary (newest) agent clone -- #1, the rollover target"
   _ass_info "^ = rolls into #1 on trim/drop (ass list shows numeric index for ass drop)"
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
   _ass_info "--> (after wip) = session #1 local-syncs to canonical (ass sync handoff)"

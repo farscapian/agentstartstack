@@ -5,8 +5,8 @@ Fetches origin/main quietly before counting. Lists agent session clones only
 (not canonical). Reference SHAs appear in the table group-title row.
 
 Columns (each clone row):
-  #       1 = newest clone (rollover target); ^ = rolls into #1 on trim/drop
-          (ass list shows 1,2,3,... for ass drop / ass info index)
+  #       1* = primary (newest) clone (rollover target); ^ = rolls into #1 on
+          trim/drop (ass list shows 1,2,3,... for ass drop / ass info index)
   agent   grok / claude
   wip     uncommitted work not in canonical (- or dirty)
   -->     session #1 local-syncs to canonical (ass sync); blank on other rows

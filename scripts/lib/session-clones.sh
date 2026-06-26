@@ -52,11 +52,28 @@ _agent_session_clone_is_valid() {
   return 0
 }
 
+# Session-age key for tiebreaking agent_session_clones_list (newest session first):
+# the init-marker time, else a numeric clone-dir basename (ass new session id),
+# else the .git mtime. Returns a single integer.
+_agent_session_clone_sort_key() {
+  local clone="$1"
+  local v base marker="${clone}/.git/agentstartstack-session-init"
+  if [[ -f "$marker" ]]; then
+    v=$(tr -d '[:space:]' < "$marker" 2>/dev/null)
+    [[ "$v" =~ ^[0-9]+$ ]] && { printf '%s\n' "$v"; return 0; }
+  fi
+  base=$(basename "$clone")
+  if [[ "$base" =~ ^[0-9]+$ ]]; then printf '%s\n' "$base"; return 0; fi
+  stat -c %Y "${clone}/.git" 2>/dev/null || echo 0
+}
+
 # agent_session_clones_list WANT
 #
 # WANT: canonical git origin URL (exact string match to each clone's origin remote).
 # Prints absolute clone paths, one per line, newest commit on main first. Deduped.
 # Only full session clones (.git directory); not nested .agentstartstack submodules.
+# Ties on commit time (e.g. all clones aligned to the same canonical HEAD) break by
+# newest session, so ass status #1 is the active/most-recent clone.
 agent_session_clones_list() {
   local want="$1" parents base candidate got gitdir
   declare -A seen=()
@@ -93,6 +110,9 @@ agent_session_clones_list() {
   [[ ${#clones[@]} -gt 0 ]] || return 0
 
   for candidate in "${clones[@]}"; do
-    printf '%s %s\n' "$(git -C "$candidate" log -1 --format=%ct main 2>/dev/null || echo 0)" "$candidate"
-  done | sort -rn -k1,1 | awk '{print $2}'
+    printf '%s %s %s\n' \
+      "$(git -C "$candidate" log -1 --format=%ct main 2>/dev/null || echo 0)" \
+      "$(_agent_session_clone_sort_key "$candidate")" \
+      "$candidate"
+  done | sort -rn -k1,1 -k2,2 | awk '{print $3}'
 }
