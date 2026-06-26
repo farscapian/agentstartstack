@@ -17,6 +17,47 @@ unset -f land s2s s2ps s2is push 2>/dev/null
 : "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 export AGENT_SESSION_CLONE_PARENT
 
+# True if $1 lies under any AGENT_SESSION_CLONE_PARENT entry (session clones must
+# not be used as AGENTSTARTSTACK_PROJECT_ROOTS -- canonical repos live elsewhere).
+_agentstartstack_under_session_clone_parent() {
+  local path="$1" parents base
+  [[ -n "$path" ]] || return 1
+  path="$(readlink -f "$path" 2>/dev/null || echo "$path")"
+  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  local IFS=:
+  for base in $parents; do
+    [[ -n "$base" ]] || continue
+    base="$(readlink -f "$base" 2>/dev/null || echo "$base")"
+    [[ "$path" == "$base" || "$path" == "$base"/* ]] && return 0
+  done
+  return 1
+}
+
+# True if colon-separated $1 is a valid AGENTSTARTSTACK_PROJECT_ROOTS value.
+_agentstartstack_project_roots_valid() {
+  local roots="$1" r
+  [[ -n "$roots" ]] || return 1
+  local IFS=:
+  for r in $roots; do
+    [[ -n "$r" ]] || continue
+    _agentstartstack_under_session_clone_parent "$r" && return 1
+  done
+  return 0
+}
+
+_agentstartstack_guard_project_roots() {
+  local roots="${AGENTSTARTSTACK_PROJECT_ROOTS:-}"
+  [[ -n "$roots" ]] || return 0
+  _agentstartstack_project_roots_valid "$roots" && return 0
+  printf 'nut: AGENTSTARTSTACK_PROJECT_ROOTS must not point under AGENT_SESSION_CLONE_PARENT (%s)\n' \
+    "$roots" >&2
+  printf 'nut:   export AGENTSTARTSTACK_PROJECT_ROOTS to the dir holding canonical checkouts (e.g. ~/Sync/mini_projects)\n' >&2
+  printf 'nut:   then re-run scripts/install-shell-aliases.sh and source ~/.bashrc\n' >&2
+  return 1
+}
+
+_agentstartstack_guard_project_roots || true
+
 # nut / nutup -- Newest commit Until Transferred
 #
 # Usage:
@@ -42,6 +83,7 @@ _nut_sync_root() {
   local IFS=:
 
   [[ -n "$roots" ]] || return 1
+  _agentstartstack_project_roots_valid "$roots" || return 1
   for root in $roots; do
     [[ -n "$root" ]] || continue
     if [[ -d "${root}/${repo_name}/.git" ]]; then
