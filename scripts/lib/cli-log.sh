@@ -127,6 +127,7 @@ _as_cli_debugf() {
 # Returns 1 on invalid flag combinations.
 _as_cli_parse_global_flags() {
   local -n _as_cli_out=$1
+  shift
   _as_cli_out=()
   AS_CLI_VERBOSE=0
   AS_CLI_QUIET=0

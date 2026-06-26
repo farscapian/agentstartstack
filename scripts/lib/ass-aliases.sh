@@ -460,7 +460,9 @@ _ass_canonical_move_wip_to_clone() {
   fi
   if [[ "$has_dirty" == 1 ]]; then
     _ass_warn "ass: canonical has uncommitted changes"
-    read -r -p "ass: stash uncommitted canonical work? [y/N] " confirm </dev/tty
+    confirm=""
+    read -r -p "ass: stash uncommitted canonical work? [y/N] " confirm </dev/tty \
+      || { _ass_warn "ass: no tty -- leaving uncommitted canonical work in place"; return 0; }
     if [[ "${confirm,,}" != y && "${confirm,,}" != yes ]]; then
       _ass_info "ass: leaving uncommitted canonical work in place"
       [[ "$has_stash" == 0 ]] && return 0
@@ -651,7 +653,7 @@ ass()
 {
   local -a _ass_argv
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
-  _ass_parse_args "${_ass_argv[@]}" "$@" || return 1
+  _ass_parse_args "${_ass_argv[@]}" || return 1
 
   if [[ "$_ASS_PARSE_HELP" == 1 ]]; then
     cat <<'EOF'
