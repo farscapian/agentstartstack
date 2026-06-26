@@ -16,7 +16,7 @@ AS_CLI_LOG_FILE=""
 # Host projects override in .agentstartstack.env or before sourcing:
 #   AGENTSTARTSTACK_CLI_LOG_DIR   (default: ~/.docs/logs)
 #   AGENTSTARTSTACK_CLI_LOG_PREFIX (default: cli) -> <prefix>-<id>.log
-: "${AGENTSTARTSTACK_CLI_LOG_DIR:=${HOME}/.docs/logs}"
+: "${AGENTSTARTSTACK_CLI_LOG_DIR:=${HOME}/.agentstartstack/logs}"
 : "${AGENTSTARTSTACK_CLI_LOG_PREFIX:=cli}"
 
 _as_cli_resolve_log_file() {
@@ -25,7 +25,7 @@ _as_cli_resolve_log_file() {
   safe="${id//\//-}"
   safe="${safe#-}"
   [[ -n "$safe" ]] || return 1
-  dir="${AGENTSTARTSTACK_CLI_LOG_DIR:-${HOME}/.docs/logs}"
+  dir="${AGENTSTARTSTACK_CLI_LOG_DIR:-${HOME}/.agentstartstack/logs}"
   prefix="${AGENTSTARTSTACK_CLI_LOG_PREFIX:-cli}"
   printf '%s/%s-%s.log' "$dir" "$prefix" "$safe"
 }
