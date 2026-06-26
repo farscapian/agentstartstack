@@ -37,6 +37,8 @@ dropit --help
 ```
 
 **`nut`** -- local-sync only: session clone -> canonical local repo. Human reviews before publishing.
+Before handoff, prints **pwd**, the **canonical** repo, every **session clone** for that consumer,
+and how many commits each clone is **behind canonical** on `main` (plus which clone is selected).
 
 **`nutup`** -- full human handoff: local-sync with the canonical local repo, then publish to `origin/main`. Agents never run `nutup` themselves.
 

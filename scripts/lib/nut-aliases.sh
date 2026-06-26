@@ -219,6 +219,54 @@ _nut_parse_args() {
   return 0
 }
 
+# Echo how many commits on canonical main are not in the clone's main.
+_nut_clone_behind_canonical() {
+  local clone="$1" canonical="$2" can_head
+  can_head=$(git -C "$canonical" rev-parse main 2>/dev/null) || {
+    printf '?'
+    return 0
+  }
+  git -C "$clone" rev-list --count "main..${can_head}" 2>/dev/null || printf '?'
+}
+
+_nut_print_handoff_report() {
+  local sync_target="$1" origin_target="$2" repo_name="$3" selected="${4:-}"
+  local pwd_here clone head behind sel
+  local -a clones=()
+
+  sync_target=$(readlink -f "$sync_target")
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  echo "nut: pwd: ${pwd_here}"
+  echo "nut: canonical (${repo_name}): ${sync_target}"
+  if [[ "$pwd_here" == "$sync_target" ]]; then
+    echo "nut: pwd is canonical"
+  fi
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    clones+=("$(readlink -f "$clone")")
+  done < <(_agentstartstack_clones_for_origin "$origin_target")
+
+  echo "nut: session clones (${#clones[@]}):"
+  if [[ "${#clones[@]}" -eq 0 ]]; then
+    echo "nut:   (none)"
+    return 0
+  fi
+
+  for clone in "${clones[@]}"; do
+    head=$(git -C "$clone" log -1 --oneline main 2>/dev/null \
+      || git -C "$clone" log -1 --oneline 2>/dev/null \
+      || echo "(no commits)")
+    behind=$(_nut_clone_behind_canonical "$clone" "$sync_target")
+    sel=""
+    [[ -n "$selected" && "$clone" == "$(readlink -f "$selected")" ]] \
+      && sel="  [selected for handoff]"
+    printf 'nut:   %s%s\n' "$clone" "$sel"
+    printf 'nut:     HEAD %s  behind canonical: %s commit(s)\n' "$head" "$behind"
+  done
+}
+
 _nut_push() {
   local sync_target="$1"
   local force="${2:-0}"
@@ -280,6 +328,8 @@ _nut_push() {
     echo "nut: --force: ignored ${skipped} session clone(s) initialized before last nut" >&2
   fi
 
+  _nut_print_handoff_report "$sync_target" "$origin_target" "$repo_name" "$best_dir"
+
   if git -C "$best_dir" remote get-url local-sync >/dev/null 2>&1; then
     git -C "$best_dir" remote set-url local-sync "$sync_target"
   else
@@ -340,6 +390,7 @@ nut()
 nut -- Newest commit Until Transferred
 
 Perform local-sync with the canonical local repo (session clone -> local-sync remote).
+Prints pwd, canonical repo, every session clone, and how far behind canonical each is.
 
   nut                 infer repo from pwd
   nut <name>          e.g. nut printstack, nut iotstack, nut wrtstack
