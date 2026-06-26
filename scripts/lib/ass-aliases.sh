@@ -307,6 +307,11 @@ _ass_status_wip_column() {
 
 # Column layout: # agent wip | canonical ahead/behind | --> | origin ahead/behind | HEAD path
 # Count cols are width 7 (fits git short SHA on the reference row).
+_ass_status_format_group_title_row() {
+  # shellcheck disable=SC2059
+  printf '%-3s %-7s %-7s %-15s  %-5s  %-15s  %-9s  %s\n' "$@"
+}
+
 _ass_status_format_header_row() {
   # shellcheck disable=SC2059
   printf '%-3s %-7s %-7s %-7s %-7s  %-5s  %-7s %-7s  %-9s  %s\n' "$@"
@@ -386,6 +391,7 @@ EOF
   _ass_info "vs canonical/main @ ${can_head}  -->  origin/main @ ${origin_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
+  _ass_status_format_group_title_row "" "" "" "canonical" "" "origin/main" "" ""
   _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
   _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-->" "-------" "-------" "---------" "----"
 
