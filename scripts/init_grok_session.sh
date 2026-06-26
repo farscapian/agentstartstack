@@ -110,9 +110,9 @@ if git remote get-url origin &>/dev/null; then
   git remote set-url --push origin DISABLED
 fi
 
-# Surface a pending agentstartstack bump dropped by nutupyall (see workflow.md).
+# Surface a pending agentstartstack bump dropped by ass up --all (see workflow.md).
 # Backstop: if there is no watch file but the .agentstartstack submodule is behind
-# its remote (e.g. nutupyall deferred an action-bearing bump), surface it anyway.
+# its remote (e.g. ass up --all deferred an action-bearing bump), surface it anyway.
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
   warn "  Read the producer commits and reconcile this consumer before committing"
@@ -174,7 +174,7 @@ AI GIT WORKFLOW (authorized)
   2. Handoff       -- human runs ass (never git push origin from agents)
 
 GUIDANCE LOCATIONS
-  Generic:  ${GENERIC_GUIDANCE_DIR}/  (workflow, nut, conventions, security)
+  Generic:  ${GENERIC_GUIDANCE_DIR}/  (workflow, ass, conventions, security)
   Project:  ${PROJECT_GUIDANCE_DIR}/   (CLI, architecture, gotchas)
 
 FIRST MESSAGE (copy/paste template below)
@@ -194,15 +194,15 @@ WHAT TO READ (pick 1-3)
 TOKEN TIPS
   - Session align once per session (this script), not before every task.
   - Give concrete errors, paths, and constraints up front.
-  - End of session: commit in session clone; human runs nut.
+  - End of session: commit in session clone; human runs ass.
 
 DO NOT
   - Start a session without session align (stale clone -> wrong fixes).
   - Push to origin (git push origin main) -- HUMAN ONLY.
   - ass while CLI is running: ${GUARD_TIP}
 
-WHEN HUMAN SAYS "sync" or "nut"
-  ass ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/ass.md
+WHEN HUMAN SAYS "sync" or "ass"
+  cd ${CANONICAL_LOCAL_REPO} && ass    # see ${GENERIC_GUIDANCE_DIR}/ass.md
 
 ================================================================================
 Suggested first message to paste into the agent:

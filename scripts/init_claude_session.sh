@@ -109,9 +109,9 @@ if git remote get-url origin &>/dev/null; then
   git remote set-url --push origin DISABLED
 fi
 
-# Surface a pending agentstartstack bump dropped by nutupyall (see workflow.md).
+# Surface a pending agentstartstack bump dropped by ass up --all (see workflow.md).
 # Backstop: if there is no watch file but the .agentstartstack submodule is behind
-# its remote (e.g. nutupyall deferred an action-bearing bump), surface it anyway.
+# its remote (e.g. ass up --all deferred an action-bearing bump), surface it anyway.
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
   warn "  Read the producer commits and reconcile this consumer before committing"
@@ -190,8 +190,8 @@ DO NOT
   - Push to origin (git push origin main) -- HUMAN ONLY.
   - ass while CLI is running: ${GUARD_TIP}
 
-WHEN HUMAN SAYS "sync" or "nut"
-  ass ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/ass.md
+WHEN HUMAN SAYS "sync" or "ass"
+  cd ${CANONICAL_LOCAL_REPO} && ass    # see ${GENERIC_GUIDANCE_DIR}/ass.md
 
 ================================================================================
 Suggested first message to paste into the agent:
