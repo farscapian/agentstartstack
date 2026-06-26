@@ -261,6 +261,112 @@ _ass_clone_behind_canonical() {
   git -C "$canonical" rev-list --count "${clone_head}..${can_head}" 2>/dev/null || printf '?'
 }
 
+# Echo "ahead behind" commit counts for $1's HEAD vs origin/main (after fetch).
+_ass_origin_ahead_behind() {
+  local repo="$1" behind ahead
+
+  git -C "$repo" fetch -q origin main 2>/dev/null || true
+  if read behind ahead _ < <(git -C "$repo" rev-list --left-right --count origin/main...HEAD 2>/dev/null); then
+    printf '%s %s\n' "$ahead" "$behind"
+    return 0
+  fi
+  printf '? ?\n'
+}
+
+_ass_status_notes() {
+  local path="$1" pwd_here="$2"
+  local -a notes=()
+
+  _ass_clone_has_dirty_worktree "$path" && notes+=("dirty")
+  [[ "$(readlink -f "$path")" == "$pwd_here" ]] && notes+=("pwd")
+  read -r _st_ahead _st_behind < <(_ass_origin_ahead_behind "$path") || true
+  [[ "${_st_ahead:-0}" -gt 0 && "${_st_behind:-0}" -gt 0 ]] && notes+=("diverged")
+  (IFS=', '; echo "${notes[*]}")
+}
+
+_ass_status_print_row() {
+  local role="$1" path="$2" pwd_here="$3"
+  local ahead behind head notes
+
+  read ahead behind < <(_ass_origin_ahead_behind "$path")
+  head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
+  notes=$(_ass_status_notes "$path" "$pwd_here")
+
+  printf '%-20s %5s %6s  %-9s  %s' "$role" "$ahead" "$behind" "$head" "$path"
+  [[ -n "$notes" ]] && printf '  (%s)' "$notes"
+  printf '\n'
+}
+
+# ass status -- show canonical + session clones vs origin/main (fixed reference).
+ass_status() {
+  local -a _ass_argv clones=()
+  local sync_target canonical origin repo_name pwd_here origin_head
+  local clone i
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cat <<'EOF'
+ass status -- commit counts vs origin/main (fixed reference)
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
+Fetches origin/main quietly before counting.
+
+Columns (reference = origin/main on main):
+  ahead   commits on this tree not on origin/main
+  behind  commits on origin/main not on this tree
+
+  ass status
+EOF
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -gt 0 ]]; then
+    _ass_err "ass status: unexpected argument: ${_ass_argv[0]} (pwd-oriented -- cd to the repo first)"
+    return 1
+  fi
+
+  sync_target=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$sync_target")
+  repo_name=$(basename "$canonical")
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass status: canonical has no origin remote"
+    return 1
+  }
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  git -C "$canonical" fetch -q origin main 2>/dev/null || true
+  origin_head=$(git -C "$canonical" rev-parse --short origin/main 2>/dev/null || echo '?')
+
+  _ass_info "ass status: ${repo_name}"
+  _ass_info "reference: origin/main @ ${origin_head}"
+  _ass_info "pwd: ${pwd_here}"
+  echo ""
+  printf '%-20s %5s %6s  %-9s  %s\n' "tree" "ahead" "behind" "HEAD" "path"
+  printf '%-20s %5s %6s  %-9s  %s\n' "--------------------" "-----" "------" "---------" "----"
+  printf '%-20s %5s %6s  %-9s  %s\n' "origin/main (ref)" "0" "0" "$origin_head" "origin/main"
+  _ass_status_print_row "canonical" "$canonical" "$pwd_here"
+
+  while IFS= read -r clone; do
+    [[ -n "$clone" ]] || continue
+    clones+=("$(readlink -f "$clone")")
+  done < <(_agentstartstack_clones_for_origin "$origin")
+
+  if [[ ${#clones[@]} -eq 0 ]]; then
+    echo "session clones: (none)"
+  else
+    i=1
+    for clone in "${clones[@]}"; do
+      _ass_status_print_row "session clone ${i}" "$clone" "$pwd_here"
+      i=$((i + 1))
+    done
+  fi
+
+  echo ""
+  _ass_info "ahead  = commits here not yet on origin/main"
+  _ass_info "behind = commits on origin/main not yet here"
+  return 0
+}
+
 _ass_print_handoff_report() {
   local sync_target="$1" origin_target="$2" repo_name="$3" selected="${4:-}"
   local pwd_here clone head behind sel

@@ -19,6 +19,7 @@ After install-shell-aliases.sh, only a thin ass() wrapper is installed.
   ass.sh up [-f]                  local-sync, then git push origin main
   ass.sh up trim [options]        consolidate and prune stale session clones
   ass.sh up --all                 ass up agentstartstack, refresh consumer submodules
+  ass.sh status                   ahead/behind origin/main for canonical + session clones
   ass.sh dropit <src> [dest]      copy generic work into agentstartstack session clone
 
 Global flags: -v, -q, --timestamp, --log-id=ID, --create-log (see docs/cli.md)
@@ -33,6 +34,7 @@ _ass_cli_subcommand_help() {
     up)     ass_up --help ;;
     trim)   ass_up_trim --help ;;
     all)    ass_up_all --help ;;
+    status) ass_status --help ;;
     dropit) dropit --help ;;
     ""|handoff|ass) ass --help ;;
     *)
@@ -71,6 +73,7 @@ main() {
       fi
       ;;
     dropit) shift; dropit "$@" ;;
+    status) shift; ass_status "$@" ;;
     *) ass "$@" ;;
   esac
 }
