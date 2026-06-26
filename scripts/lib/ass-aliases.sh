@@ -421,11 +421,12 @@ _ass_status_wip_column() {
 # --> (after wip): session #1 local-syncs to canonical (data only on row 1).
 # Group title row shows canonical (SHA) --> origin/main (SHA); ahead columns align
 # under those words (gap computed from label widths).
-_ASS_STATUS_PREFIX_W=26
-_ASS_STATUS_CAN_AHEAD_W=9
+_ASS_STATUS_PREFIX_W=27
+_ASS_STATUS_CAN_AHEAD_W=6
 _ASS_STATUS_CAN_BEHIND_W=6
-_ASS_STATUS_ORIG_AHEAD_W=9
-_ASS_STATUS_ORIG_BEHIND_W=9
+_ASS_STATUS_ORIG_AHEAD_W=6
+_ASS_STATUS_ORIG_BEHIND_W=6
+_ASS_STATUS_COUNT_SEP='------'
 _ASS_STATUS_ARROW_SEP='   -->   '
 _ASS_STATUS_CAN_LABEL=''
 _ASS_STATUS_ORIG_LABEL=''
@@ -444,46 +445,55 @@ _ass_status_table_layout() {
   fi
 }
 
+# Left cols (# agent wip sync) then pad to PREFIX_W before count columns.
+_ass_status_format_left_cols() {
+  printf '%-3s %-7s %-7s %-5s' "$1" "$2" "$3" "$4"
+  printf '%*s' $((_ASS_STATUS_PREFIX_W - 25)) ''
+}
+
 _ass_status_format_group_title_row() {
   printf '%*s%s%s%s\n' \
     "$_ASS_STATUS_PREFIX_W" "" \
     "$_ASS_STATUS_CAN_LABEL" "$_ASS_STATUS_ARROW_SEP" "$_ASS_STATUS_ORIG_LABEL"
 }
 
-_ass_status_format_header_row() {
-  local c1="$1" c2="$2" c3="$3" c4="$4" c5="$5" c6="$6" c7="$7" c8="$8" c9="$9"
-  printf '%-3s %-7s %-7s %-5s' "$c1" "$c2" "$c3" "$c4"
-  printf '%-*s' "$_ASS_STATUS_CAN_AHEAD_W" "$c5"
+_ass_status_format_count_header() {
+  printf '%-*s' "$_ASS_STATUS_CAN_AHEAD_W" "$1"
   printf ' '
-  printf '%-*s' "$_ASS_STATUS_CAN_BEHIND_W" "$c6"
+  printf '%-*s' "$_ASS_STATUS_CAN_BEHIND_W" "$2"
   printf '%*s' "$_ASS_STATUS_ORIG_GAP" ''
-  printf '%-*s' "$_ASS_STATUS_ORIG_AHEAD_W" "$c7"
+  printf '%-*s' "$_ASS_STATUS_ORIG_AHEAD_W" "$3"
   printf ' '
-  printf '%-*s' "$_ASS_STATUS_ORIG_BEHIND_W" "$c8"
-  printf '  %s\n' "$c9"
+  printf '%-*s' "$_ASS_STATUS_ORIG_BEHIND_W" "$4"
+}
+
+_ass_status_format_count_row() {
+  printf '%*s' "$_ASS_STATUS_CAN_AHEAD_W" "$1"
+  printf ' '
+  printf '%*s' "$_ASS_STATUS_CAN_BEHIND_W" "$2"
+  printf '%*s' "$_ASS_STATUS_ORIG_GAP" ''
+  printf '%*s' "$_ASS_STATUS_ORIG_AHEAD_W" "$3"
+  printf ' '
+  printf '%*s' "$_ASS_STATUS_ORIG_BEHIND_W" "$4"
+}
+
+_ass_status_format_header_row() {
+  _ass_status_format_left_cols "$1" "$2" "$3" "$4"
+  _ass_status_format_count_header "$5" "$6" "$7" "$8"
+  printf '  %s\n' "$9"
 }
 
 _ass_status_format_row() {
-  printf '%-3s %-7s %-7s %-5s' "$1" "$2" "$3" "$4"
-  printf '%*s' "$_ASS_STATUS_CAN_AHEAD_W" "$5"
-  printf ' '
-  printf '%*s' "$_ASS_STATUS_CAN_BEHIND_W" "$6"
-  printf '%*s' "$_ASS_STATUS_ORIG_GAP" ''
-  printf '%*s' "$_ASS_STATUS_ORIG_AHEAD_W" "$7"
-  printf ' '
-  printf '%*s' "$_ASS_STATUS_ORIG_BEHIND_W" "$8"
+  _ass_status_format_left_cols "$1" "$2" "$3" "$4"
+  _ass_status_format_count_row "$5" "$6" "$7" "$8"
   printf '  %s' "$9"
 }
 
 _ass_status_format_separator_row() {
-  local d_can_ahead d_can_behind d_orig_ahead d_orig_behind
-  d_can_ahead=$(printf '%*s' "$_ASS_STATUS_CAN_AHEAD_W" '' | tr ' ' '-')
-  d_can_behind=$(printf '%*s' "$_ASS_STATUS_CAN_BEHIND_W" '' | tr ' ' '-')
-  d_orig_ahead=$(printf '%*s' "$_ASS_STATUS_ORIG_AHEAD_W" '' | tr ' ' '-')
-  d_orig_behind=$(printf '%*s' "$_ASS_STATUS_ORIG_BEHIND_W" '' | tr ' ' '-')
   _ass_status_format_header_row \
     "---" "-------" "-------" "-----" \
-    "$d_can_ahead" "$d_can_behind" "" "$d_orig_ahead" "$d_orig_behind" "----"
+    "$_ASS_STATUS_COUNT_SEP" "$_ASS_STATUS_COUNT_SEP" \
+    "$_ASS_STATUS_COUNT_SEP" "$_ASS_STATUS_COUNT_SEP" "----"
 }
 
 # Tilde-shorten clone paths under $HOME for the status table.
