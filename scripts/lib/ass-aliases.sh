@@ -667,14 +667,52 @@ _ass_canonical_apply_stash_entry_to_clone() {
   return 1
 }
 
+# Everything after "stash@{n}: " on a git stash list line.
+_ass_stash_title_from_list_line() {
+  local line="$1"
+  if [[ "$line" =~ ^stash@[{][0-9]+[}]:[[:space:]](.*)$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  printf '%s\n' "$line"
+}
+
+# Newest stash@{0} is displayed as 1.
+_ass_stash_display_num_from_ref() {
+  local ref="$1"
+  if [[ "$ref" =~ ^stash@[{]([0-9]+)[}]$ ]]; then
+    printf '%s\n' "$((BASH_REMATCH[1] + 1))"
+    return 0
+  fi
+  return 1
+}
+
+# User-facing stash number (1-based) -> stash@{n}.
+_ass_stash_ref_from_display_num() {
+  local num="$1"
+  [[ "$num" =~ ^[0-9]+$ ]] || return 1
+  [[ "$num" -ge 1 ]] || return 1
+  printf 'stash@{%s}\n' "$((num - 1))"
+}
+
+_ass_stash_display_label() {
+  local canonical="$1" ref="$2"
+  local num line title
+  num=$(_ass_stash_display_num_from_ref "$ref") || { printf '%s\n' "$ref"; return 0; }
+  line=$(git -C "$canonical" stash list 2>/dev/null | grep -F "${ref}:" | head -1)
+  title=$(_ass_stash_title_from_list_line "${line:-$ref}")
+  printf '%s. %s\n' "$num" "$title"
+}
+
 _ass_canonical_normalize_stash_ref() {
-  local token="$1"
+  local token="$1" ref
   if [[ "$token" =~ ^stash@[{][0-9]+[}]$ ]]; then
     printf '%s\n' "$token"
     return 0
   fi
   if [[ "$token" =~ ^[0-9]+$ ]]; then
-    printf 'stash@{%s}\n' "$token"
+    ref=$(_ass_stash_ref_from_display_num "$token") || return 1
+    printf '%s\n' "$ref"
     return 0
   fi
   return 1
@@ -694,7 +732,8 @@ _ass_clone_agent_kind() {
 _ass_canonical_stash_agent_compat_ok() {
   local canonical="$1" clone="$2" stash_ref="$3"
   local script="${_ASS_ALIASES_LIB_DIR}/../ass-stash-compat-check.sh"
-  local reason line confirm
+  local reason line confirm label
+  label=$(_ass_stash_display_label "$canonical" "$stash_ref")
   [[ -x "$script" ]] || script="${_ASS_ALIASES_LIB_DIR}/../ass-stash-compat-check.sh"
   [[ -f "$script" ]] || {
     _ass_warn "ass: stash compat check script missing -- skipping agent review"
@@ -704,15 +743,16 @@ _ass_canonical_stash_agent_compat_ok() {
     return 0
   fi
   reason=$(bash "$script" --clone "$clone" --canonical "$canonical" --stash-ref "$stash_ref" 2>&1 || true)
-  _ass_warn "ass: session-clone agent advises NO for ${stash_ref}:"
+  _ass_warn "ass: session-clone agent advises NO for ${label}:"
   printf '%s\n' "$reason" | while IFS= read -r line; do _ass_warn "ass:   ${line}"; done
-  read -r -p "ass: move ${stash_ref} anyway? [y/N] " confirm </dev/tty
+  read -r -p "ass: move ${label} anyway? [y/N] " confirm </dev/tty
   [[ "${confirm,,}" == y || "${confirm,,}" == yes ]]
 }
 
 _ass_canonical_move_selected_stashes_to_clone() {
   local canonical="$1" clone="$2"
-  local selection token ref line moved=0 idx confirm
+  local selection token ref line moved=0 idx confirm label
+  local display_num=1 title
   local -a refs=() indices=()
   if ! git -C "$canonical" stash list 2>/dev/null | grep -q .; then
     return 0
@@ -720,9 +760,11 @@ _ass_canonical_move_selected_stashes_to_clone() {
   _ass_info "ass: canonical git stashes:"
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
-    _ass_info "ass:   ${line}"
+    title=$(_ass_stash_title_from_list_line "$line")
+    _ass_info "ass:   ${display_num}. ${title}"
+    display_num=$((display_num + 1))
   done < <(git -C "$canonical" stash list 2>/dev/null)
-  read -r -p "ass: stashes to move (comma/space-separated, e.g. 0 2 or stash@{0}; empty=none): " selection </dev/tty
+  read -r -p "ass: stashes to move (comma/space-separated, e.g. 1 3 or all; empty=none): " selection </dev/tty
   selection="${selection//,/ }"
   if [[ -z "${selection// }" ]]; then
     _ass_info "ass: no stashes selected"
@@ -736,11 +778,12 @@ _ass_canonical_move_selected_stashes_to_clone() {
   else
     for token in $selection; do
       ref=$(_ass_canonical_normalize_stash_ref "$token") || {
-        _ass_err "ass: invalid stash token: ${token} (use 0, 1, stash@{0}, or all)"
+        _ass_err "ass: invalid stash number: ${token} (use 1, 2, stash@{0}, or all)"
         return 1
       }
       git -C "$canonical" stash show "$ref" >/dev/null 2>&1 || {
-        _ass_err "ass: no such stash: ${ref}"
+        label=$(_ass_stash_display_label "$canonical" "$ref")
+        _ass_err "ass: no such stash: ${label}"
         return 1
       }
       refs+=("$ref")
@@ -756,17 +799,17 @@ _ass_canonical_move_selected_stashes_to_clone() {
   while IFS= read -r idx; do
     [[ -n "$idx" ]] || continue
     ref="stash@{${idx}}"
-    line=$(git -C "$canonical" stash list 2>/dev/null | grep -F "${ref}:" | head -1)
-    _ass_info "ass: reviewing canonical stash with session-clone agent: ${line:-${ref}}"
+    label=$(_ass_stash_display_label "$canonical" "$ref")
+    _ass_info "ass: reviewing canonical stash with session-clone agent: ${label}"
     if ! _ass_canonical_stash_agent_compat_ok "$canonical" "$clone" "$ref"; then
-      _ass_info "ass: skipped ${ref}"
+      _ass_info "ass: skipped ${label}"
       continue
     fi
-    _ass_info "ass: moving canonical stash to session clone: ${line:-${ref}}"
+    _ass_info "ass: moving canonical stash to session clone: ${label}"
     if _ass_canonical_apply_stash_entry_to_clone "$canonical" "$clone" "$ref"; then
       moved=$((moved + 1))
     else
-      _ass_err "ass: failed to apply ${ref} to session clone"
+      _ass_err "ass: failed to apply ${label} to session clone"
       return 1
     fi
   done < <(printf '%s\n' "${indices[@]}" | sort -rn | uniq)
