@@ -22,6 +22,7 @@ Host projects that include this repo as a submodule should use their own root `C
 | [docs/submodule-integration.md](docs/submodule-integration.md) | Wiring this repo into a host project |
 | [docs/workflow.md](docs/workflow.md) | Repos, agent session clones, git sync, commit policy |
 | [docs/ass.md](docs/ass.md) | `ass` / `ass up` -- AgentStartStack handoff CLI |
+| [docs/cli-help.md](docs/cli-help.md) | `ass` help menu files (`docs/help/*.txt`) |
 | [docs/conventions.md](docs/conventions.md) | Naming, ASCII-only text, script output tags |
 | [docs/terminal.md](docs/terminal.md) | Copy/paste in Cursor/Codium integrated terminal |
 | [docs/security.md](docs/security.md) | Never print secrets; env file hygiene |

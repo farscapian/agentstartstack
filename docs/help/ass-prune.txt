@@ -1,0 +1,13 @@
+ass prune -- archive one session clone, then remove it (after verified .tar.gz)
+
+Usage:
+  ass prune                 pwd must be a session clone
+  ass prune <clone-path>    explicit clone to prune
+
+Archives first (same path as ass up trim); rm -rf runs only after tar tzf
+succeeds. Refuses unlanded clones (commits not in origin/main). Dirty work is
+rolled into the survivor (newest commit on main, same rule as ass handoff).
+
+Help:
+  ass prune help
+  ass help prune

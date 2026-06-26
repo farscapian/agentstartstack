@@ -1,0 +1,23 @@
+ass new -- create and align a new session clone (from canonical pwd)
+
+Usage:
+  ass new
+  ass new --grok
+  ass new --claude
+
+Options:
+  --grok              Force Grok / Cursor session clone
+  --claude            Force Claude Code session clone
+
+Inference order: Codium integrated terminal -> claude (opens Claude Code
+extension); else grok-only on PATH -> grok; claude-only -> claude; both
+installed -> claude. With neither on PATH (and not in Codium), ass new exits
+with an error.
+
+Run from the canonical local repo (host project or agentstartstack template).
+Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env,
+aligns clone to canonical.
+
+Help:
+  ass new help
+  ass help new

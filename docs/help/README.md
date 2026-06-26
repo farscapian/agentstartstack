@@ -1,0 +1,32 @@
+# ass command help files
+
+Terminal help for the `ass` CLI. Each `.txt` file is shown by `ass <topic> help`
+(or `ass help <topic>`). Edit these files to change what users see in the shell.
+
+Structure and naming rules: [docs/cli-help.md](../cli-help.md).
+
+## Files
+
+- **ass.txt** -- main menu (direct subcommands only)
+- **ass-sync.txt** -- local-sync handoff
+- **ass-sync-all.txt** -- align all session clones behind canonical
+- **ass-new.txt** -- create session clone
+- **ass-list.txt** -- list session clones
+- **ass-status.txt** -- ahead/behind report
+- **ass-info.txt** -- plain-language session summary by index
+- **ass-prune.txt** -- archive and remove one clone
+- **ass-drop.txt** -- archive clone by index, or copy generic work upstream
+- **ass-up.txt** -- handoff + push origin main
+- **ass-up-trim.txt** -- consolidate and prune stale clones
+- **ass-up-all.txt** -- publish agentstartstack to consumers
+
+## Usage
+
+```bash
+ass help
+ass sync help
+ass help up trim
+cat docs/help/ass-sync.txt
+```
+
+Workflow and policy (not duplicated here): [docs/ass.md](../ass.md).

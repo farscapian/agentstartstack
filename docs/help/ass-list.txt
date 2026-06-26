@@ -1,0 +1,11 @@
+ass list -- session clones for the canonical repo (pwd)
+
+Run from the canonical local repo. Discovers clones by git origin URL under
+AGENT_SESSION_CLONE_PARENT (not by folder name).
+
+Usage:
+  ass list
+
+Help:
+  ass list help
+  ass help list

@@ -1,0 +1,24 @@
+ass status -- agent session clones vs origin/main and canonical/main
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
+Fetches origin/main quietly before counting. Lists agent session clones only
+(not canonical). References are shown in the INFO line above the table.
+
+Columns (each clone row):
+  #       session clone index (newest first)
+  agent   grok / claude
+  wip     uncommitted work not in canonical (- or dirty)
+  ahead   commits on this clone not on canonical main
+  behind  commits on canonical main not on this clone
+  -->     canonical pushes to origin/main (visual separator)
+  ahead   commits on this clone not on origin/main
+  behind  commits on origin/main not on this clone
+  HEAD    this clone's main
+  path
+
+Usage:
+  ass status
+
+Help:
+  ass status help
+  ass help status

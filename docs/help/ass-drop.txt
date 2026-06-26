@@ -1,0 +1,40 @@
+ass drop -- archive a session clone, or copy generic work upstream
+
+Two modes (disambiguated by argument shape and pwd):
+
+1) Archive and remove session clone #n (canonical pwd)
+
+Run from the canonical local repo. Index matches ass list / ass status (# column,
+newest clone = 1). Archives to a verified .tar.gz first (HARD RULE), then removes
+the clone directory. Dirty work is rolled into another session clone when one exists.
+
+Usage:
+  ass drop <n>
+
+Refuses clones with commits not yet on origin/main (unlanded).
+Refuses clones with an active grok/claude session (quit the session first).
+
+2) Copy generic work into agentstartstack (consumer session clone pwd)
+
+Run from a CONSUMER session clone (has .agentstartstack submodule). Copies a file
+or directory that belongs upstream in agentstartstack into that repo's newest
+session clone -- do not fork it in the consumer.
+
+Usage:
+  ass drop <src> [<dest>]
+
+Arguments:
+  <src>               file/dir in this clone that belongs in agentstartstack
+  <dest>              path relative to the agentstartstack clone root
+                      (default: same relative path as <src> here)
+
+Stamps Dropit-Id on single-file drops (when missing) and appends to
+.agentstartstack-dropits in the consumer. Then review + commit in the
+agentstartstack clone and hand off with ass sync. If <src> was a fork created
+here, delete it from this consumer afterward.
+
+Help:
+  ass drop help
+  ass help drop
+
+See also: docs/ass.md, workflow.md (Dropit + GUID)

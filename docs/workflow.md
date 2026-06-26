@@ -75,7 +75,7 @@ When you spot a generic improvement while working in a consumer project:
 2. Do **not** apply it in the consumer repo (a local doc symptom of the upstream gap can wait for the corrected tool to flow down and sweep it).
 3. Let the human carry it upstream; it returns through the normal bump, and its commit message tells you what to run (see [Acting on the bump delta](#acting-on-the-bump-delta-mandatory)).
 
-If you have actually produced the generic content (a file or doc), use **`dropit <src> [<dest>]`** from this consumer clone to copy it into agentstartstack's latest session clone -- where it can be reviewed, committed, and flow upstream -- instead of forking it here. `dropit` runs only from a consumer session clone and never edits the consumer or the agentstartstack clone's history (see [ass.md](ass.md)).
+If you have actually produced the generic content (a file or doc), use **`ass drop <src> [<dest>]`** from this consumer clone to copy it into agentstartstack's latest session clone -- where it can be reviewed, committed, and flow upstream -- instead of forking it here. Upstream `ass drop` runs only from a consumer session clone and never edits the consumer or the agentstartstack clone's history (see [ass.md](ass.md)).
 
 #### Dropit + GUID: traceable upstream handoff
 
@@ -87,8 +87,8 @@ Flagging a generic improvement can go further than a verbal note: a consumer-sid
    ```
    Dropit-Id: <session-guid>
    ```
-   (`dropit` stamps this automatically on single-file drops when missing.)
-2. Record the same session GUID in a **tracked** consumer-side ledger at the consumer repo root -- `.agentstartstack-dropits` -- one line per outstanding dropit: `<session-guid>  <short description>`. This is the consumer agent's memory that an upstream request is in flight. (`dropit` appends this line automatically.)
+   (`ass drop` stamps this automatically on single-file drops when missing.)
+2. Record the same session GUID in a **tracked** consumer-side ledger at the consumer repo root -- `.agentstartstack-dropits` -- one line per outstanding dropit: `<session-guid>  <short description>`. This is the consumer agent's memory that an upstream request is in flight. (`ass drop` appends this line automatically.)
 
 **When `agentstartstack` implements the functionality**, the producer commit that lands it SHALL reference the same GUID in its message:
 ```

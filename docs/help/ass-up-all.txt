@@ -1,0 +1,20 @@
+ass up --all -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
+
+Run only from the agentstartstack canonical local repo (not a session clone).
+
+For each consumer repo:
+  - No in-flight session clone -> if the delta is action-free, auto-commit the
+    .agentstartstack bump and push origin main. If the delta carries any
+    CONSUMER-ACTION, do NOT auto-commit (would skip the actions); report it under
+    "need agent (actions)" and leave it for an agent session to reconcile.
+  - In-flight session clone(s) (uncommitted changes or ahead of canonical) ->
+    do NOT touch canonical (would non-fast-forward an agent's nut). Instead drop
+    a gitignored .agentstartstack-bump watch file in every clone; the bump rides
+    along on the agent's next commit and reaches canonical via ass.
+
+Usage:
+  ass up --all
+
+Help:
+  ass up --all help
+  ass help up --all

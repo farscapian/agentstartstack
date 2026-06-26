@@ -33,24 +33,29 @@ ass new --claude    # force Claude Code session clone
 # ass new prompts to install wmctrl (apt) when missing, for left-monitor placement.
 ass prune           # consolidate one session clone into the newest, then remove it
 ass drop <n>        # archive and remove session clone #n (see ass list)
+ass drop <src>      # from consumer clone: copy generic work upstream
 ass status          # ahead/behind origin/main for canonical and session clones
+ass info <n>        # plain-language summary for session #n (from ass status)
 ass list            # session clones for canonical pwd (by origin URL)
 ass up              # ass sync, then git push origin main
 ass up -f           # as ass sync -f, then push
 ass up --stashes    # as ass sync --stashes, then push
 ass up trim         # consolidate and prune stale session clones
 ass up --all        # ass up agentstartstack, refresh consumer submodules
-ass dropit <src>    # from a consumer clone: stash generic work upstream
-ass help
-ass --help
-ass help sync
-ass up --help
-ass up trim --help
-ass up --all --help
-ass dropit --help
+ass help            # main menu (direct subcommands only)
+ass help sync       # detailed sync help (external file: docs/help/ass-sync.txt)
+ass sync help       # same as ass help sync
+ass sync all help
+ass up help
+ass up trim help
+ass up --all help
 ```
 
-**`ass`** -- show the main help menu (no subcommand). Same pattern as iotstack.
+**`ass`** -- show the main help menu (direct subcommands only). Nested commands
+(`sync all`, `up trim`, `up --all`) and per-command flags appear in their own
+help files under `docs/help/`. Structure: [cli-help.md](cli-help.md).
+
+Same pattern as iotstack (`iotstack <command> help`, files in `docs/help/`).
 
 **`ass sync`** -- local-sync handoff: session clone -> canonical local repo. Human reviews before publishing.
 Before handoff, **auto-syncs** any session clone behind canonical (no prompt), checks that
@@ -104,13 +109,14 @@ Agents never run `ass sync` or `ass up` unless the human explicitly asks.
 
 See [workflow.md](workflow.md) for session align, agent clone paths, and full git policy.
 
-## dropit
+## ass drop (upstream copy)
 
-`dropit <src> [<dest>]` -- from a **consumer** session clone, copy a generic feature or doc that belongs upstream in agentstartstack into agentstartstack's **latest session clone** (newest by commit, discovered by origin URL), so it can be committed there and flow upstream instead of being forked into the consumer. It implements the "originate upstream, don't fork" rule in [workflow.md](workflow.md).
+`ass drop <src> [<dest>]` -- from a **consumer** session clone, copy a generic feature or doc that belongs upstream in agentstartstack into agentstartstack's **latest session clone** (newest by commit, discovered by origin URL), so it can be committed there and flow upstream instead of being forked into the consumer. It implements the "originate upstream, don't fork" rule in [workflow.md](workflow.md).
 
+- Distinct from `ass drop <n>` (archive session clone by index). Upstream mode is selected when the first argument is not a plain integer.
 - Runs **only** from a consumer session clone (under `AGENT_SESSION_CLONE_PARENT`, with a `.agentstartstack` submodule). Refuses from a canonical repo or from agentstartstack's own clone.
 - `<dest>` defaults to `<src>`'s path relative to the consumer clone root.
-- Copy-only: it does not edit the consumer or commit in the agentstartstack clone. After it copies, review + commit in the agentstartstack clone and hand off with `ass`; if `<src>` was a fork created in the consumer, delete it there.
+- Copy-only: it does not edit the consumer or commit in the agentstartstack clone. After it copies, review + commit in the agentstartstack clone and hand off with `ass sync`; if `<src>` was a fork created in the consumer, delete it there.
 - Stamps `Dropit-Id: <session-guid>` on single-file drops (when missing) and appends to `.agentstartstack-dropits` in the consumer. See [Dropit + GUID](workflow.md#dropit--guid-traceable-upstream-handoff) in `workflow.md`.
 
 ## ass up trim (consolidate and prune)
@@ -207,6 +213,19 @@ ass status
 
 Example: a clone at **1 ahead** of canonical has one commit waiting for `ass` / `ass up`.
 
+## ass info (session summary)
+
+`ass info <n>` prints a short plain-language summary (1-2 paragraphs, no `[INFO]` tags) for
+session clone **`n`** -- same index as the `#` column in `ass status`. Paragraph one covers
+agent kind, init time, HEAD, sync position vs canonical and `origin/main`, and whether the
+worktree is clean. Paragraph two appears when needed: commit subjects not yet in canonical,
+and/or a dirty-work analysis (file counts, diff size, largest edited paths).
+
+```bash
+ass status
+ass info 2
+```
+
 ## ass prune (archive one clone)
 
 `ass prune` consolidates dirty work from one session clone into the newest clone for the
@@ -237,7 +256,7 @@ ass drop 2                # archive and remove clone #2
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
 functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_prune`, `ass_new`,
-`ass_status`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`, `dropit`).
+`ass_status`, `ass_info`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 
 Install / update the thin `ass()` wrapper in your shell:

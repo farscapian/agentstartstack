@@ -75,9 +75,11 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 | `ass new --claude` | Force Claude Code session |
 | `ass list` | List session clones for this project (by origin URL) |
 | `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
+| `ass info <n>` | Plain-language summary for session #n (from `ass status`; includes dirty-work analysis) |
 
 | `ass prune [<path>]` | Consolidate one clone into the newest, then archive + remove it |
 | `ass drop <n>` | Archive and remove session clone #n (index from `ass list`) |
+| `ass drop <src> [dest]` | From a consumer session clone: copy generic work into agentstartstack |
 
 ### Trim and publish
 
@@ -90,23 +92,18 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 | `ass up trim --no-rollover` | Keep dirty older clones instead of rolling work over |
 | `ass up --all` | `ass up` agentstartstack, refresh consumer submodules, auto-trim clones |
 
-### Upstream handoff
-
-| Command | Description |
-|---------|-------------|
-| `ass dropit <src> [dest]` | From a consumer session clone: copy generic work into agentstartstack |
-
 ### Help
+
+Main menu (`ass` / `ass help`) lists **direct subcommands only**. Detailed help
+for each command (and nested topics like `sync all`, `up trim`) lives in
+`docs/help/*.txt`. See [docs/cli-help.md](docs/cli-help.md).
 
 ```bash
 ass help
-ass --help
 ass help sync
-ass new --help
-ass up --help
-ass up trim --help
-ass up --all --help
-ass dropit --help
+ass sync help
+ass up trim help
+ass help up --all
 ```
 
 See [`docs/ass.md`](docs/ass.md) for guards, trim/archive rules, and `ass up --all` bump protocol.

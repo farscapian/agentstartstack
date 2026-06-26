@@ -1,0 +1,19 @@
+ass info -- plain-language summary for one agent session clone
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass info with
+the session index from ass status (# column, newest = 1).
+
+Prints one or two short paragraphs to stdout (no [INFO] tags): session identity,
+sync position vs canonical and origin/main, and when relevant a summary of
+committed work not yet handed off and/or analysis of uncommitted (dirty) changes.
+
+Usage:
+  ass info <n>
+
+Examples:
+  ass status
+  ass info 2
+
+Help:
+  ass info help
+  ass help info

@@ -1,0 +1,28 @@
+ass sync -- local-sync handoff (session clone -> canonical)
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass sync.
+Auto-syncs any session clone behind canonical, checks canonical vs origin/main,
+picks the session clone farthest ahead of canonical, and pushes to local-sync.
+
+Usage:
+  ass sync
+  ass sync -f
+  ass sync --stashes
+
+Subcommands:
+
+  all                 align every session clone behind canonical
+
+Options:
+  -f, --force         Ignore session clones initialized before the last ass;
+                      among the rest, pick farthest ahead of canonical (tie:
+                      newest commit on main).
+  --stashes           Opt in to canonical stash prompts during handoff.
+
+Help:
+  ass sync help
+  ass sync all help
+  ass help sync
+  ass help sync all
+
+See also: docs/help/ass-sync-all.txt, docs/ass.md

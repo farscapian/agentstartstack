@@ -35,6 +35,72 @@ source "${_ASS_ALIASES_LIB_DIR}/cli-log.sh"
 : "${AGENTSTARTSTACK_CLI_LOG_PREFIX:=ass}"
 : "${AGENTSTARTSTACK_CLI_LOG_DIR:=${HOME}/.docs/logs}"
 
+_ASS_REPO_ROOT="$(cd "${_ASS_ALIASES_LIB_DIR}/../.." && pwd)"
+_ASS_HELP_DIR="${_ASS_REPO_ROOT}/docs/help"
+
+# Print a help menu from docs/help/ (iotstack-style external .txt files).
+_ass_cat_help() {
+  local file="${_ASS_HELP_DIR}/$1"
+  if [[ ! -f "$file" ]]; then
+    _ass_err "ass: help file missing: ${file}"
+    return 1
+  fi
+  cat "$file"
+}
+
+_ass_help_requested() {
+  case "${1:-}" in
+    help|-h|--help) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_ass_main_usage() { _ass_cat_help ass.txt; }
+ass_help_sync() { _ass_cat_help ass-sync.txt; }
+ass_help_sync_all() { _ass_cat_help ass-sync-all.txt; }
+ass_help_new() { _ass_cat_help ass-new.txt; }
+ass_help_list() { _ass_cat_help ass-list.txt; }
+ass_help_status() { _ass_cat_help ass-status.txt; }
+ass_help_info() { _ass_cat_help ass-info.txt; }
+ass_help_prune() { _ass_cat_help ass-prune.txt; }
+ass_help_drop() { _ass_cat_help ass-drop.txt; }
+ass_help_up() { _ass_cat_help ass-up.txt; }
+ass_help_up_trim() { _ass_cat_help ass-up-trim.txt; }
+ass_help_up_all() { _ass_cat_help ass-up-all.txt; }
+
+# ass help <topic> and ass help <parent> <nested> (ass.sh entry).
+ass_help_topic() {
+  local topic="${1:-}" nested="${2:-}"
+  case "$topic" in
+    ""|ass|handoff) _ass_main_usage ;;
+    sync)
+      if [[ "$nested" == all ]]; then
+        ass_help_sync_all
+      else
+        ass_help_sync
+      fi
+      ;;
+    up)
+      case "$nested" in
+        trim) ass_help_up_trim ;;
+        --all|all) ass_help_up_all ;;
+        *) ass_help_up ;;
+      esac
+      ;;
+    new) ass_help_new ;;
+    list) ass_help_list ;;
+    status) ass_help_status ;;
+    info) ass_help_info ;;
+    prune) ass_help_prune ;;
+    drop) ass_help_drop ;;
+    trim) ass_help_up_trim ;;
+    *)
+      _ass_err "ass: unknown help topic: ${topic}"
+      return 1
+      ;;
+  esac
+}
+
 _ass_info()   { _as_cli_info "$@"; }
 _ass_ok()     { _as_cli_ok "$@"; }
 _ass_warn()   { _as_cli_warn "$@"; }
@@ -289,12 +355,12 @@ _ass_parse_args() {
       --stashes)
         _ASS_PARSE_STASHES=1
         ;;
-      -h|--help)
+      -h|--help|help)
         _ASS_PARSE_HELP=1
         return 0
         ;;
       -*)
-        echo "ass sync: unknown option: $1 (try: ass sync --help)" >&2
+        echo "ass sync: unknown option: $1 (try: ass sync help)" >&2
         return 1
         ;;
       *)
@@ -402,28 +468,8 @@ ass_status() {
   local sync_target canonical origin repo_name pwd_here origin_head can_head
   local clone i
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass status -- agent session clones vs origin/main and canonical/main
-
-Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
-Fetches origin/main quietly before counting. Lists agent session clones only
-(not canonical). References are shown in the INFO line above the table.
-
-Columns (each clone row):
-  #       session clone index (newest first)
-  agent   grok / claude
-  wip     uncommitted work not in canonical (- or dirty)
-  ahead   commits on this clone not on canonical main
-  behind  commits on canonical main not on this clone
-  -->     canonical pushes to origin/main (visual separator)
-  ahead   commits on this clone not on origin/main
-  behind  commits on origin/main not on this clone
-  HEAD    this clone's main
-  path
-
-  ass status
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_status
     return 0
   fi
 
@@ -472,6 +518,245 @@ EOF
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
   _ass_info "--> = canonical pushes to origin/main"
   _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
+  return 0
+}
+
+# Human-readable ahead/behind phrase for ass info summaries.
+_ass_info_sync_phrase() {
+  local ahead="$1" behind="$2" label="$3"
+
+  if [[ "$ahead" == '?' || "$behind" == '?' ]]; then
+    printf 'position vs %s is unknown' "$label"
+    return 0
+  fi
+  if [[ "$ahead" -eq 0 && "$behind" -eq 0 ]]; then
+    printf 'aligned with %s' "$label"
+  elif [[ "$ahead" -gt 0 && "$behind" -eq 0 ]]; then
+    printf '%s commit(s) ahead of %s' "$ahead" "$label"
+  elif [[ "$ahead" -eq 0 && "$behind" -gt 0 ]]; then
+    printf '%s commit(s) behind %s' "$behind" "$label"
+  else
+    printf '%s ahead and %s behind %s' "$ahead" "$behind" "$label"
+  fi
+}
+
+# Paragraph describing commits on the clone not yet in canonical.
+_ass_info_committed_work_paragraph() {
+  local clone="$1" canonical="$2" ahead="$3"
+  local -a subjects=()
+  local subject_list n
+
+  [[ "$ahead" =~ ^[0-9]+$ && "$ahead" -gt 0 ]] || return 0
+
+  _ass_ensure_local_sync_remote "$clone" "$canonical"
+  git -C "$clone" fetch -q local-sync main 2>/dev/null || true
+  mapfile -t subjects < <(git -C "$clone" log local-sync/main..HEAD --format='%s' 2>/dev/null | head -8)
+
+  if [[ ${#subjects[@]} -eq 0 ]]; then
+    printf 'Committed work not yet in canonical: %s commit(s) on main (details unavailable).' "$ahead"
+    return 0
+  fi
+
+  subject_list="${subjects[0]}"
+  for ((n = 1; n < ${#subjects[@]}; n++)); do
+    subject_list+=", ${subjects[n]}"
+  done
+
+  if [[ "$ahead" -gt ${#subjects[@]} ]]; then
+    printf 'Committed work not yet in canonical (%s commit(s)): %s, and %s more.' \
+      "$ahead" "$subject_list" "$((ahead - ${#subjects[@]}))"
+  else
+    printf 'Committed work not yet in canonical (%s commit(s)): %s.' \
+      "$ahead" "$subject_list"
+  fi
+}
+
+# Paragraph analyzing uncommitted work in the clone worktree.
+_ass_info_dirty_work_paragraph() {
+  local clone="$1"
+  local modified=0 staged=0 deleted=0 untracked=0 renamed=0
+  local line status path
+  local ins=0 del=0 files=0
+  local -a untracked_files=()
+  local top_summary stash_n active=0
+
+  [[ -n "$(git -C "$clone" status --porcelain 2>/dev/null)" ]] || return 0
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    status=${line:0:2}
+    path=${line:3}
+    case "$status" in
+      'M '|'MM'|' M'|'AM') modified=$((modified + 1)) ;;
+      'A '|'AA') staged=$((staged + 1)) ;;
+      'D '|' D'|'AD') deleted=$((deleted + 1)) ;;
+      'R '|'RM') renamed=$((renamed + 1)) ;;
+      '??') untracked=$((untracked + 1)); untracked_files+=("$path") ;;
+      *) modified=$((modified + 1)) ;;
+    esac
+  done < <(git -C "$clone" status --porcelain 2>/dev/null)
+
+  read -r ins del files < <(
+    {
+      git -C "$clone" diff --numstat 2>/dev/null
+      git -C "$clone" diff --cached --numstat 2>/dev/null
+    } | awk '
+      NF >= 2 {
+        add = ($1 == "-" ? 0 : $1 + 0)
+        rem = ($2 == "-" ? 0 : $2 + 0)
+        ins += add
+        del += rem
+        files++
+      }
+      END { printf "%d %d %d\n", ins + 0, del + 0, files + 0 }
+    '
+  )
+
+  top_summary=$(
+    {
+      git -C "$clone" diff --numstat 2>/dev/null
+      git -C "$clone" diff --cached --numstat 2>/dev/null
+    } | awk '
+      NF >= 2 {
+        add = ($1 == "-" ? 0 : $1 + 0)
+        rem = ($2 == "-" ? 0 : $2 + 0)
+        $1 = $2 = ""
+        sub(/^[ \t]+/, "")
+        file = $0
+        total = add + rem
+        if (total > 0 && file != "") printf "%d\t%s\n", total, file
+      }
+    ' | sort -t$'\t' -k1,1nr | head -5 | awk -F'\t' '{
+      printf "%s%s (%s lines)", (n++ ? ", " : ""), $2, $1
+    }'
+  )
+
+  printf 'Uncommitted work in the worktree'
+  local -a parts=()
+  [[ "$modified" -gt 0 ]] && parts+=("${modified} modified")
+  [[ "$staged" -gt 0 ]] && parts+=("${staged} staged new")
+  [[ "$deleted" -gt 0 ]] && parts+=("${deleted} deleted")
+  [[ "$renamed" -gt 0 ]] && parts+=("${renamed} renamed")
+  [[ "$untracked" -gt 0 ]] && parts+=("${untracked} untracked")
+  if [[ ${#parts[@]} -gt 0 ]]; then
+    local IFS=', '
+    printf ' (%s)' "${parts[*]}"
+  fi
+  printf ': '
+
+  if [[ "$files" -gt 0 ]]; then
+    printf 'tracked diff touches %s insertion(s) and %s deletion(s) across %s file(s)' "$ins" "$del" "$files"
+    if [[ -n "$top_summary" ]]; then
+      printf '. Largest edits: %s' "$top_summary"
+      [[ "$files" -gt 5 ]] && printf ', ...'
+    fi
+    printf '.'
+  elif [[ "$untracked" -gt 0 ]]; then
+    printf 'no tracked-line diff; new paths only'
+    if [[ ${#untracked_files[@]} -gt 0 ]]; then
+      printf ' (e.g. %s' "${untracked_files[0]}"
+      [[ ${#untracked_files[@]} -gt 1 ]] && printf ', %s' "${untracked_files[1]}"
+      [[ ${#untracked_files[@]} -gt 2 ]] && printf ', ...'
+      printf ')'
+    fi
+    printf '.'
+  else
+    printf 'worktree is dirty but no line-level diff was produced (check submodules or metadata).'
+  fi
+
+  stash_n=$(git -C "$clone" stash list 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$stash_n" -gt 0 ]]; then
+    printf ' %s stash entr%s also present.' "$stash_n" "$([[ "$stash_n" -eq 1 ]] && echo y || echo ies)"
+  fi
+
+  if _ass_clone_active_agent_session_detail "$clone" >/dev/null 2>&1; then
+    active=1
+  fi
+  if [[ "$active" -eq 1 ]]; then
+    printf ' An agent process appears to be active on this clone.'
+  fi
+}
+
+# ass info -- plain-language summary for one session clone (# from ass status).
+ass_info() {
+  local -a _ass_argv clones=()
+  local index canonical origin repo_name clone agent pwd_here
+  local can_ahead can_behind orig_ahead orig_behind head subject head_when
+  local init_ts init_when dirty=0 can_phrase orig_phrase p1 p2 work_p2
+
+  if _ass_help_requested "${1:-}"; then
+    ass_help_info
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -ne 1 ]] || ! [[ "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
+    _ass_err "ass info: usage: ass info <n>  (n from ass status)"
+    return 1
+  fi
+  index="${_ass_argv[0]}"
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass info: canonical has no origin remote"
+    return 1
+  }
+  pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
+
+  clone=$(_ass_session_clone_at_index "$canonical" "$origin" "$index") || {
+    mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+    _ass_err "ass info: invalid index: ${index} (${#clones[@]} session clone(s); see: ass status)"
+    return 1
+  }
+  clone=$(readlink -f "$clone")
+  agent=$(_ass_session_agent_kind "$clone")
+
+  git -C "$canonical" fetch -q origin main 2>/dev/null || true
+  read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$clone" "$canonical")
+  read -r orig_ahead orig_behind < <(_ass_origin_ahead_behind "$clone")
+  head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
+  subject=$(git -C "$clone" log -1 --format='%s' HEAD 2>/dev/null || echo 'unknown')
+  head_when=$(git -C "$clone" log -1 --format='%ar' HEAD 2>/dev/null || echo 'unknown')
+  _ass_clone_has_dirty_worktree "$clone" && dirty=1
+
+  init_ts=$(_ass_session_init_time "$clone")
+  if [[ "$init_ts" =~ ^[0-9]+$ && "$init_ts" -gt 0 ]]; then
+    init_when=$(date -d "@${init_ts}" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "epoch ${init_ts}")
+  else
+    init_when="unknown time"
+  fi
+
+  can_phrase=$(_ass_info_sync_phrase "$can_ahead" "$can_behind" "canonical/main")
+  orig_phrase=$(_ass_info_sync_phrase "$orig_ahead" "$orig_behind" "origin/main")
+
+  p1="Session #${index} for ${repo_name} is a ${agent} agent clone (initialized ${init_when}). "
+  p1+="HEAD ${head} (${subject}, ${head_when}). "
+  if [[ "$(readlink -f "$clone")" == "$pwd_here" ]]; then
+    p1+="This is your current pwd. "
+  fi
+  p1+="Sync: ${can_phrase}; ${orig_phrase}."
+  if [[ "$dirty" -eq 1 ]]; then
+    p1+=" The worktree has uncommitted changes."
+  elif [[ "$can_ahead" =~ ^[0-9]+$ && "$can_ahead" -gt 0 ]]; then
+    p1+=" The worktree is clean; handoff-ready commits are on main."
+  else
+    p1+=" The worktree is clean."
+  fi
+
+  work_p2=$(_ass_info_committed_work_paragraph "$clone" "$canonical" "$can_ahead")
+  if [[ "$dirty" -eq 1 ]]; then
+    if [[ -n "$work_p2" ]]; then
+      work_p2+=$'\n'
+    fi
+    work_p2+=$(_ass_info_dirty_work_paragraph "$clone")
+  fi
+
+  printf '%s\n' "$p1"
+  if [[ -n "$work_p2" ]]; then
+    printf '\n%s\n' "$work_p2"
+  fi
   return 0
 }
 
@@ -547,15 +832,8 @@ ass_list() {
   local canonical origin repo_name pwd_here clone
   local i agent head behind notes
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass list -- session clones for the canonical repo (pwd)
-
-Run from the canonical local repo. Discovers clones by git origin URL under
-AGENT_SESSION_CLONE_PARENT (not by folder name).
-
-  ass list
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_list
     return 0
   fi
 
@@ -614,38 +892,6 @@ EOF
   return 0
 }
 
-# Top-level ass help (bare `ass` shows this menu, iotstack-style).
-_ass_main_usage() {
-  cat <<'EOF'
-ass -- AgentStartStack handoff CLI
-
-Pwd-oriented: cd to the canonical repo or a session clone, then run a subcommand.
-
-  ass                         show this help
-  ass help                    same as bare ass (main menu)
-  ass sync                    local-sync handoff (session clone -> canonical)
-  ass sync -f                 only post-last-ass session clones
-  ass sync --stashes          opt in: move canonical stashes to session clone
-  ass sync all                align every session clone behind canonical
-  ass sync all --dry-run      plan only (no clone changes)
-  ass new [--grok|--claude]   create + align a session clone (canonical pwd)
-  ass list                    session clones for pwd (by origin URL)
-  ass status                  ahead/behind for canonical + session clones
-  ass prune [<clone-path>]    consolidate one clone into newest, then remove
-  ass drop <n>                archive and remove session clone #n (see ass list)
-  ass up                      ass sync, then git push origin main
-  ass up trim [options]       consolidate and prune stale session clones
-  ass up --all                ass up agentstartstack, refresh consumer submodules
-  ass dropit <src> [dest]     copy generic work into agentstartstack session clone
-
-  ass <subcommand> --help     detailed help for one subcommand
-
-Global flags: -v, -q, --timestamp, --log-id=ID (see docs/cli.md)
-Repo roots:   $AGENTSTARTSTACK_PROJECT_ROOTS
-Session:      clones under ~/.claude/worktrees/ and ~/.grok/worktrees/
-EOF
-}
-
 # ass sync all -- align every session clone that is behind canonical.
 ass_sync_all() {
   local -a _ass_argv clones=()
@@ -653,22 +899,8 @@ ass_sync_all() {
   local behind ahead synced=0 skipped=0 failed=0 would_sync=0 dry_run=0
   local head can_head
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass sync all -- align session clones to canonical (pwd)
-
-Run from the canonical local repo. For each session clone discovered by git
-origin URL, if it is behind canonical main, fast-forward or rebase it onto
-local-sync/main so it picks up every canonical commit.
-
-Dirty clones are auto-committed first (see workflow.md HARD RULES). Clones
-already at canonical (0 behind) are skipped. Clones only ahead of canonical
-(agent work not yet handed off) are left unchanged. ass sync / ass up run this
-automatically for every clone behind canonical before handoff.
-
-  ass sync all
-  ass sync all --dry-run    plan only; do not modify clones
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_sync_all
     return 0
   fi
 
@@ -767,35 +999,24 @@ EOF
 ass_sync() {
   local -a _ass_argv sync_target
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass sync -- local-sync handoff (session clone -> canonical)
-
-Pwd-oriented: cd to the canonical repo or a session clone, then run ass sync.
-Auto-syncs any session clone behind canonical, checks canonical vs origin/main,
-picks the session clone farthest ahead of canonical, and pushes to local-sync.
-
-  ass sync                 handoff (default)
-  ass sync -f              only post-last-ass session clones
-  ass sync --stashes       opt in: move canonical stashes to session clone
-  ass sync all             align every clone behind canonical (see: ass sync all --help)
-
--f, --force   Ignore session clones initialized before the last ass; among the
-              rest, pick farthest ahead of canonical (tie: newest commit on main).
---stashes     Opt in to canonical stash prompts during handoff.
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_sync
     return 0
   fi
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
 
   if [[ "${_ass_argv[0]:-}" == "all" ]]; then
+    if _ass_help_requested "${_ass_argv[1]:-}"; then
+      ass_help_sync_all
+      return 0
+    fi
     ass_sync_all "${_ass_argv[@]:1}"
     return $?
   fi
 
   _ass_parse_args "${_ass_argv[@]}" || return 1
-  [[ "$_ASS_PARSE_HELP" == 1 ]] && { ass_sync --help; return 0; }
+  [[ "$_ASS_PARSE_HELP" == 1 ]] && { ass_help_sync; return 0; }
 
   sync_target=$(_ass_resolve_sync_target "") || return 1
   _ass_push "$sync_target" "$_ASS_PARSE_FORCE" "$_ASS_PARSE_STASHES"
@@ -1327,6 +1548,10 @@ ass_up()
   local -a _ass_argv
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
   set -- "${_ass_argv[@]}"
+  if _ass_help_requested "${1:-}"; then
+    ass_help_up
+    return 0
+  fi
   if [[ "${1:-}" == "trim" ]]; then
     shift
     ass_up_trim "$@"
@@ -1336,17 +1561,7 @@ ass_up()
   _ass_parse_args "$@" || return 1
 
   if [[ "$_ASS_PARSE_HELP" == 1 ]]; then
-    cat <<'EOF'
-ass up -- local-sync with canonical local repo, then git push origin main
-
-  ass up              pwd-oriented (cd to canonical or session clone)
-  ass up -f           only session clones initialized after the last ass, then push
-  ass up --stashes       as ass --stashes, then push
-  ass up trim             consolidate and prune stale session clones (see: ass up trim --help)
-
--f, --force  See ass sync --help. Prefer when handing off from a fresh session.
---stashes    See ass sync --help. Opt in to canonical stash prompts during handoff.
-EOF
+    ass_help_up
     return 0
   fi
 
@@ -1357,42 +1572,17 @@ EOF
   git -C "$sync_target" push origin main
 }
 
-# dropit -- from a CONSUMER session clone, stash a generic feature/doc that
-# belongs upstream in agentstartstack into agentstartstack's latest session clone
-# (so it can be committed there and flow upstream) instead of forking it into the
-# consumer. Runs ONLY from a consumer session clone. Copy-only: it never edits the
-# consumer or the agentstartstack clone's history -- you review and commit there.
-#   dropit <src> [<dest>]
-dropit() {
-  local src="${1:-}" dest="${2:-}"
+# ass drop (upstream) -- copy generic work from a consumer clone into agentstartstack.
+_ass_drop_upstream() {
+  local src="$1" dest="${2:-}" here base in_clone=0 as_origin abs_src rel
+  local best="" best_t=0 cand t target session_guid desc ledger
 
-  if [[ -z "$src" || "$src" == "-h" || "$src" == "--help" ]]; then
-    cat <<'EOF'
-dropit -- stash a generic feature/doc into agentstartstack's latest session clone
-
-Run from a CONSUMER session clone. Copies something that belongs upstream in
-agentstartstack into that repo's newest session clone -- do not fork it here.
-
-  dropit <src> [<dest>]
-    <src>   file/dir in this clone that belongs in agentstartstack
-    <dest>  path relative to the agentstartstack clone root
-            (default: same relative path as <src> here)
-
-Then review + commit in the agentstartstack clone and hand off with ass. If <src>
-was a fork created here, delete it from this consumer afterward.
-EOF
-    return 0
-  fi
-
-  local here
   here=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    echo "dropit: not in a git repo" >&2
+    _ass_err "ass drop: not in a git repo"
     return 1
   }
   here=$(readlink -f "$here")
 
-  # Guard: must be inside an agent session clone (under a clone parent).
-  local base in_clone=0
   local IFS=:
   for base in ${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}; do
     [[ -n "$base" ]] || continue
@@ -1400,30 +1590,23 @@ EOF
   done
   unset IFS
   if [[ "$in_clone" != 1 ]]; then
-    echo "dropit: run only from an agent session clone (under AGENT_SESSION_CLONE_PARENT)" >&2
+    _ass_err "ass drop: upstream drop runs only from a consumer session clone"
     return 1
   fi
 
-  # Guard: must be a CONSUMER (has the .agentstartstack submodule), not
-  # agentstartstack itself. The submodule's origin is the agentstartstack origin.
-  local as_origin
   as_origin=$(git -C "${here}/.agentstartstack" remote get-url origin 2>/dev/null) || {
-    echo "dropit: no .agentstartstack submodule here -- not a consumer clone" >&2
+    _ass_err "ass drop: no .agentstartstack submodule here -- not a consumer clone"
     return 1
   }
 
-  # Resolve <src> and its path relative to this clone root.
-  local abs_src rel
-  abs_src=$(readlink -f "$src" 2>/dev/null) || { echo "dropit: not found: $src" >&2; return 1; }
-  [[ -e "$abs_src" ]] || { echo "dropit: not found: $src" >&2; return 1; }
+  abs_src=$(readlink -f "$src" 2>/dev/null) || { _ass_err "ass drop: not found: $src"; return 1; }
+  [[ -e "$abs_src" ]] || { _ass_err "ass drop: not found: $src"; return 1; }
   case "$abs_src" in
     "$here"/*) rel="${abs_src#"${here}/"}" ;;
-    *) echo "dropit: <src> must be inside this clone: $abs_src" >&2; return 1 ;;
+    *) _ass_err "ass drop: <src> must be inside this clone: $abs_src"; return 1 ;;
   esac
   [[ -n "$dest" ]] || dest="$rel"
 
-  # Find the latest agentstartstack session clone by origin URL (newest commit).
-  local best="" best_t=0 cand t
   while IFS= read -r cand; do
     [[ -n "$cand" ]] || continue
     [[ "$cand" == "$here" ]] && continue
@@ -1435,19 +1618,18 @@ EOF
   done < <(_agentstartstack_clones_for_origin "$as_origin")
 
   if [[ -z "$best" ]]; then
-    echo "dropit: no agentstartstack session clone found (origin: $as_origin)" >&2
-    echo "dropit:   create one (clone agentstartstack into AGENT_SESSION_CLONE_PARENT) and retry" >&2
+    _ass_err "ass drop: no agentstartstack session clone found (origin: $as_origin)"
+    _ass_err "ass drop:   create one (ass new from agentstartstack canonical) and retry"
     return 1
   fi
 
-  local target="${best}/${dest}"
+  target="${best}/${dest}"
   mkdir -p "$(dirname "$target")"
   cp -r "$abs_src" "$target"
 
-  # Stamp Dropit-Id and update the consumer ledger for traceable round-trips.
-  local session_guid desc ledger="${here}/.agentstartstack-dropits"
   session_guid=$(basename "$here")
   desc="$(basename "$src")"
+  ledger="${here}/.agentstartstack-dropits"
 
   if [[ -f "$target" ]]; then
     if ! grep -q '^Dropit-Id:' "$target" 2>/dev/null; then
@@ -1455,20 +1637,20 @@ EOF
       mv "${target}.dropit-tmp" "$target"
     fi
   else
-    echo "dropit: note -- multi-file drop; ensure each file carries Dropit-Id: ${session_guid}" >&2
+    _ass_warn "ass drop: multi-file drop; ensure each file carries Dropit-Id: ${session_guid}"
   fi
 
   if [[ -f "$ledger" ]] && grep -qF "$session_guid" "$ledger" 2>/dev/null; then
-    echo "dropit: ledger already lists ${session_guid} in ${ledger}" >&2
+    _ass_warn "ass drop: ledger already lists ${session_guid} in ${ledger}"
   else
     printf '%s  %s\n' "$session_guid" "$desc" >> "$ledger"
-    echo "dropit: recorded ${session_guid} in ${ledger} (commit this file in the consumer)" >&2
+    _ass_info "ass drop: recorded ${session_guid} in ${ledger} (commit this file in the consumer)"
   fi
 
-  echo "dropit: ${rel}  ->  ${best}/${dest}"
-  echo "dropit: review + commit in the agentstartstack clone, then ass."
+  _ass_info "ass drop: ${rel}  ->  ${best}/${dest}"
+  _ass_info "ass drop: review + commit in the agentstartstack clone, then ass sync."
+  return 0
 }
-
 
 # ass prune -- consolidate one session clone into the newest, then prune it.
 
@@ -1489,17 +1671,8 @@ _ass_prune_resolve_target() {
 ass_prune() {
   local target="${1:-}" clone canonical name survivor archive_dir
   local -a all=()
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass prune -- archive one session clone, then remove it (after verified .tar.gz)
-
-  ass prune                 pwd must be a session clone
-  ass prune <clone-path>    explicit clone to prune
-
-Archives first (same path as ass up trim); rm -rf runs only after tar tzf succeeds.
-Refuses unlanded clones (commits not in origin/main). Dirty work is rolled into
-the survivor (newest commit on main, same rule as ass handoff).
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_prune
     return 0
   fi
   clone=$(_ass_prune_resolve_target "$target") || return 1
@@ -1533,34 +1706,35 @@ EOF
   _ass_up_trim_archive_clone "$clone" "$archive_dir" 0
 }
 
-# ass drop -- archive and remove a session clone by ass list/status index.
+# ass drop -- archive session clone #n, or copy generic work upstream (consumer pwd).
 ass_drop() {
   local -a _ass_argv clones=()
-  local index="${1:-}" canonical origin repo_name pwd_here clone survivor archive_dir
+  local index canonical origin repo_name pwd_here clone survivor archive_dir
   local agent head
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass drop -- archive and remove a session clone by index
-
-Run from the canonical local repo. Index matches ass list / ass status (# column,
-newest clone = 1). Archives to a verified .tar.gz first (HARD RULE), then removes
-the clone directory. Dirty work is rolled into another session clone when one exists.
-
-  ass drop <n>              drop session clone #n
-
-Refuses clones with commits not yet on origin/main (unlanded).
-Refuses clones with an active grok/claude session (quit the session first).
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_drop
     return 0
   fi
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -eq 0 ]]; then
+    _ass_err "ass drop: usage: ass drop <n> | ass drop <src> [<dest>]"
+    return 1
+  fi
+  if [[ ${#_ass_argv[@]} -le 2 && ! "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
+    _ass_drop_upstream "${_ass_argv[@]}"
+    return $?
+  fi
   if [[ ${#_ass_argv[@]} -ne 1 ]]; then
-    _ass_err "ass drop: usage: ass drop <n>  (see: ass list)"
+    _ass_err "ass drop: usage: ass drop <n> | ass drop <src> [<dest>]"
     return 1
   fi
   index="${_ass_argv[0]}"
+  if ! [[ "$index" =~ ^[0-9]+$ ]]; then
+    _ass_err "ass drop: invalid index: ${index} (see: ass list)"
+    return 1
+  fi
 
   canonical=$(_ass_resolve_sync_target "") || return 1
   canonical=$(readlink -f "$canonical")
@@ -1796,21 +1970,8 @@ EOF
 
 ass_new() {
   local agent="" canonical origin parent session_id clone_path script_dir
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass new -- create and align a new session clone (from canonical pwd)
-
-  ass new               infer agent (see below)
-  ass new --grok        force Grok / Cursor session clone
-  ass new --claude      force Claude Code session clone
-
-Inference order: Codium integrated terminal -> claude (opens Claude Code extension);
-else grok-only on PATH -> grok; claude-only -> claude; both installed -> claude.
-With neither on PATH (and not in Codium), ass new exits with an error.
-
-Run from the canonical local repo (host project or agentstartstack template).
-Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env, aligns.
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_new
     return 0
   fi
   while [[ $# -gt 0 ]]; do
@@ -2288,25 +2449,8 @@ ass_up_trim() {
   local repo="" all=0 dry_run=0 yes=0 no_rollover=0 keep_latest=1 archive_dir=""
   local name host failed=0 ok=0
 
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass up trim -- consolidate and prune stale agent session clones for a consumer
-
-  ass up trim                 infer consumer from pwd
-  ass up trim <project>       named consumer
-  ass up trim --all           every configured consumer
-  ass up trim --dry-run       print plan only (never consolidates or prunes)
-  ass up trim --yes           skip confirmation prompt (still consolidates/prunes)
-  ass up trim --no-rollover   keep dirty older clones instead of consolidating
-  ass up trim --keep-latest N keep N most-recently-modified clones (default 1)
-  ass up trim --archive-dir <path>
-
-Run from canonical or a session clone. Kept set = pwd clone (when applicable) plus
---keep-latest N clones by mtime. Rollover target = newest mtime in the kept set.
-Rolls uncommitted work from older clones into the rollover target, then archives
-stale clones (verified .tar.gz, then remove source dir). Un-landed clones
-(commits not in origin/main) are kept for agent cherry-pick.
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_up_trim
     return 0
   fi
 
@@ -2333,7 +2477,7 @@ EOF
         }
         ;;
       -*)
-        echo "ass up trim: unknown option: $1 (try: ass up trim --help)" >&2
+        echo "ass up trim: unknown option: $1 (try: ass up trim help)" >&2
         return 1
         ;;
       *)
@@ -2490,30 +2634,13 @@ EOF
 
 ass_up_all()
 {
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
-ass up --all -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
-
-Run only from the agentstartstack canonical local repo (not a session clone).
-
-For each consumer repo:
-  - No in-flight session clone -> if the delta is action-free, auto-commit the
-    .agentstartstack bump and push origin main. If the delta carries any
-    CONSUMER-ACTION, do NOT auto-commit (would skip the actions); report it under
-    "need agent (actions)" and leave it for an agent session to reconcile.
-  - In-flight session clone(s) (uncommitted changes or ahead of canonical) ->
-    do NOT touch canonical (would non-fast-forward an agent's nut). Instead drop
-    a gitignored .agentstartstack-bump watch file in every clone; the bump rides
-    along on the agent's next commit and reaches canonical via ass.
-
-  ass up --all
-  ass up --all --help
-EOF
+  if _ass_help_requested "${1:-}"; then
+    ass_help_up_all
     return 0
   fi
 
   if [[ -n "${1:-}" ]]; then
-    echo "ass_up_all: takes no arguments (try: ass_up_all --help)" >&2
+    echo "ass_up_all: takes no arguments (try: ass up --all help)" >&2
     return 1
   fi
 

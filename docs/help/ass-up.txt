@@ -1,0 +1,27 @@
+ass up -- local-sync with canonical local repo, then git push origin main
+
+Pwd-oriented: cd to the canonical repo or a session clone, then run ass up.
+Runs ass sync (handoff), then git push origin main from canonical.
+
+Usage:
+  ass up
+  ass up -f
+  ass up --stashes
+
+Subcommands:
+
+  trim                consolidate and prune stale session clones
+  --all               ass up agentstartstack, refresh consumer submodules
+
+Options:
+  -f, --force         See ass sync help. Prefer when handing off from a fresh session.
+  --stashes           See ass sync help. Opt in to canonical stash prompts during handoff.
+
+Help:
+  ass up help
+  ass up trim help
+  ass up --all help
+  ass help up
+  ass help up trim
+
+See also: docs/help/ass-up-trim.txt, docs/help/ass-up-all.txt

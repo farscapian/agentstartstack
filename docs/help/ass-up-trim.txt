@@ -1,0 +1,30 @@
+ass up trim -- consolidate and prune stale agent session clones for a consumer
+
+Usage:
+  ass up trim
+  ass up trim <project>
+  ass up trim --all
+  ass up trim --dry-run
+  ass up trim --yes
+  ass up trim --no-rollover
+  ass up trim --keep-latest N
+  ass up trim --archive-dir <path>
+
+Options:
+  --all               Every configured consumer
+  --dry-run           Print plan only (never consolidates or prunes)
+  --yes               Skip confirmation prompt (still consolidates/prunes)
+  --no-rollover       Keep dirty older clones instead of consolidating
+  --keep-latest N     Keep N most-recently-modified clones (default 1)
+  --archive-dir <path>
+                      Override archive directory for .tar.gz files
+
+Run from canonical or a session clone. Kept set = pwd clone (when applicable) plus
+--keep-latest N clones by mtime. Rollover target = newest mtime in the kept set.
+Rolls uncommitted work from older clones into the rollover target, then archives
+stale clones (verified .tar.gz, then remove source dir). Un-landed clones
+(commits not in origin/main) are kept for agent cherry-pick.
+
+Help:
+  ass up trim help
+  ass help up trim

@@ -1,0 +1,21 @@
+ass sync all -- align session clones to canonical (pwd)
+
+Run from the canonical local repo. For each session clone discovered by git
+origin URL, if it is behind canonical main, fast-forward or rebase it onto
+local-sync/main so it picks up every canonical commit.
+
+Dirty clones are auto-committed first (see workflow.md HARD RULES). Clones
+already at canonical (0 behind) are skipped. Clones only ahead of canonical
+(agent work not yet handed off) are left unchanged. ass sync / ass up run this
+automatically for every clone behind canonical before handoff.
+
+Usage:
+  ass sync all
+  ass sync all --dry-run
+
+Options:
+  --dry-run           Plan only; do not modify clones
+
+Help:
+  ass sync all help
+  ass help sync all
