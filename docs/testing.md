@@ -1,8 +1,8 @@
 # Testing
 
-Generic pre-handoff checklist. Host projects extend this in their own `agentstartstack/testing.md` with hardware-specific steps.
+Generic pre-handoff checklist. Host projects extend this in their own `docs/testing.md` with hardware-specific steps.
 
-## Before human approval or nut
+## Before human approval or ass
 
 ### Shell script validation
 
@@ -11,7 +11,7 @@ Generic pre-handoff checklist. Host projects extend this in their own `agentstar
 bash -n script1.sh script2.sh
 
 # ShellCheck (see code-quality.md)
-find . -name "*.sh" -type f ! -path "./.git/*" ! -path "./agentstartstack/*" -print0 | xargs -0 shellcheck -x
+find . -name "*.sh" -type f ! -path "./.git/*" ! -path "./docs/*" -print0 | xargs -0 shellcheck -x
 ```
 
 ### Git hygiene

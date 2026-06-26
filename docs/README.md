@@ -6,7 +6,7 @@ Generic agent guidance shared across projects via the `.agentstartstack` git sub
 
 | Location | Content |
 |----------|---------|
-| `.agentstartstack/agentstartstack/` | **This directory** -- workflow, nut, conventions, security, etc. |
+| `.docs/` | **This directory** -- workflow, ass, conventions, security, etc. |
 | `docs/` (project root) | Project-specific topics: CLI, architecture, gotchas, devices |
 
 Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for any git or session question.
@@ -20,19 +20,19 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 ## Publish (end of session)
 
 1. Commit in the session clone
-2. **Handoff** -- human runs `nut` (or `nutup`); see `nut.md`
+2. **Handoff** -- human runs `ass` (or `ass up`); see `ass.md`
 
 ## Suggested load patterns
 
 | Task type | Files |
 |-----------|-------|
 | New project / submodule wiring | `submodule-integration.md`, `workflow.md` |
-| Git / session clones / handoff | `workflow.md`, `nut.md` |
+| Git / session clones / handoff | `workflow.md`, `ass.md` |
 | New shell script | `conventions.md`, `code-quality.md`, `implementation.md` |
 | Secrets / env files | `security.md`, `conventions.md` |
 | Cursor terminal / copy-paste | `terminal.md` |
 | CI / commit hygiene | `workflow.md`, `code-quality.md`, `testing.md` |
-| Human local-sync handoff | `nut.md`, `workflow.md` |
+| Human local-sync handoff | `ass.md`, `workflow.md` |
 
 Project-specific tasks (flash, build, provision, etc.) -- load from the host project's `docs/` per its `CLAUDE.md` index.
 
@@ -40,4 +40,4 @@ Project-specific tasks (flash, build, provision, etc.) -- load from the host pro
 
 - Generic changes: edit here, commit in `.agentstartstack` submodule, bump in host projects.
 - Project changes: edit host `docs/` only.
-- New generic topic file: update `.agentstartstack/CLAUDE.md` index and host project `CLAUDE.md` if agents should load it by default.
+- New generic topic file: update `.docs/CLAUDE.md` index and host project `CLAUDE.md` if agents should load it by default.

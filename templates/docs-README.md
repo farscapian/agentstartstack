@@ -1,10 +1,10 @@
 # @DISPLAY_NAME@ -- project agent docs
 
-Project-specific agent guidance for @DISPLAY_NAME@ (this is the `docs/` directory). Generic workflow, nut, conventions, and security live in the **.agentstartstack** submodule:
+Project-specific agent guidance for @DISPLAY_NAME@ (this is the `docs/` directory). Generic workflow, ass, conventions, and security live in the **.agentstartstack** submodule:
 
-- `.agentstartstack/agentstartstack/workflow.md`
-- `.agentstartstack/agentstartstack/nut.md`
-- `.agentstartstack/agentstartstack/conventions.md`
+- `.agentstartstack/docs/workflow.md`
+- `.agentstartstack/docs/ass.md`
+- `.agentstartstack/docs/conventions.md`
 
 ## Session startup
 

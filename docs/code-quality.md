@@ -6,7 +6,7 @@
 
 **Command to validate all scripts:**
 ```bash
-find . -name "*.sh" -type f ! -path "./.git/*" ! -path "./agentstartstack/*" -print0 | xargs -0 shellcheck -x
+find . -name "*.sh" -type f ! -path "./.git/*" ! -path "./docs/*" -print0 | xargs -0 shellcheck -x
 ```
 
 **When to run:**
