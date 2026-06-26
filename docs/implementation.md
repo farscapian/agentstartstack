@@ -94,5 +94,10 @@ agent_session_clones_list "$origin"   # newest main first; ass status #1 = first
 with the same sort order. Do not add alternate discovery or sort paths per command.
 
 Clones are matched by exact `origin` URL under `AGENT_SESSION_CLONE_PARENT`.
+Only **full session clones** qualify: `.git` must be a directory at the clone root,
+and the path must sit under `.../<repo-name>/` (from the origin URL basename, e.g.
+`~/.grok/worktrees/agentstartstack/<session-id>`). Nested `.agentstartstack`
+submodule checkouts and reconcile/aux clones under consumer trees are excluded.
+
 Consumer-scoped callers resolve the canonical repo first, then call the same function
 (see `_ass_session_clones_for_consumer` in `ass-aliases.sh`).

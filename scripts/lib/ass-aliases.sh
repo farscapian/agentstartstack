@@ -1645,6 +1645,13 @@ _ass_drop_session_clone() {
   clone=$(readlink -f "$clone")
   [[ -n "$survivor" ]] && survivor=$(readlink -f "$survivor")
 
+  if ! _agent_session_clone_is_valid "$clone" "$(git -C "$canonical" remote get-url origin 2>/dev/null)"; then
+    _ass_err "ass drop: not a session clone (nested .agentstartstack submodule?)"
+    _ass_err "ass drop:   ${clone}"
+    _ass_err "ass drop: session clones have a .git directory; see: ass list"
+    return 1
+  fi
+
   if detail=$(_ass_clone_active_agent_session_detail "$clone"); then
     _ass_err "ass drop: cannot remove clone with an active agent session"
     while IFS= read -r line; do
