@@ -464,7 +464,7 @@ EOF
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
     all+=("$(readlink -f "$c")")
-  done < <(_ass_up_all_session_clones "$name")
+  done < <(_ass_session_clones_for_consumer "$name")
   mapfile -t all < <(
     for c in "${all[@]}"; do
       printf '%s %s\n' "$(git -C "$c" log -1 --format=%ct main 2>/dev/null || echo 0)" "$c"

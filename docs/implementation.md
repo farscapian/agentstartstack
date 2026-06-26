@@ -78,3 +78,19 @@ Keep inner heredoc delimiters unique (e.g. `TLS_EOF`, `META_EOF`).
 - Prefer `~/.<project>/artifacts/` or system temp dirs over cluttering the repo
 - Clean up on exit via `trap`
 - Name with PID suffix when concurrent runs are possible: `.temp-<purpose>-<PID>`
+
+### Agent session clone discovery
+
+All `ass` / `nut` commands that list session clones MUST call
+`agent_session_clones_list()` from `scripts/lib/session-clones.sh` (sourced by
+`ass-aliases.sh` and `nut-aliases.sh`). Do not duplicate find/glob logic elsewhere.
+
+```bash
+origin=$(git -C "$canonical" remote get-url origin)
+agent_session_clones_list "$origin"              # any order
+agent_session_clones_list "$origin" --sorted     # newest main first (ass status #)
+```
+
+Clones are matched by exact `origin` URL under `AGENT_SESSION_CLONE_PARENT`.
+Consumer-scoped callers resolve the canonical repo first, then call the same function
+(see `_ass_session_clones_for_consumer` in `ass-aliases.sh`).

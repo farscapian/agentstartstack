@@ -17,6 +17,12 @@ unset -f land s2s s2ps s2is push 2>/dev/null
 : "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 export AGENT_SESSION_CLONE_PARENT
 
+_NUT_ALIASES_LIB_DIR=$(
+  cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
+)
+# shellcheck source=session-clones.sh
+source "${_NUT_ALIASES_LIB_DIR}/session-clones.sh"
+
 # True if $1 lies under any AGENT_SESSION_CLONE_PARENT entry (session clones must
 # not be used as AGENTSTARTSTACK_PROJECT_ROOTS -- canonical repos live elsewhere).
 _agentstartstack_under_session_clone_parent() {
@@ -93,27 +99,6 @@ _nut_sync_root() {
   done
 
   return 1
-}
-
-# Echo absolute paths of session clones whose origin URL == $1, one per line.
-# Searches the dirs in AGENT_SESSION_CLONE_PARENT without assuming any naming
-# scheme -- clones are identified by git origin URL, so this works regardless of
-# how the harness names the worktree dir.
-_agentstartstack_clones_for_origin() {
-  local want="$1" parents base candidate got
-  [[ -n "$want" ]] || return 0
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
-  local IFS=:
-  for base in $parents; do
-    [[ -n "$base" ]] || continue
-    [[ -d "$base" ]] || continue
-    for candidate in "$base"/*/ "$base"/*/*/; do
-      [[ -d "${candidate}.git" ]] || continue
-      candidate=$(readlink -f "${candidate%/}")
-      got=$(git -C "$candidate" remote get-url origin 2>/dev/null) || continue
-      [[ "$got" == "$want" ]] && printf '%s\n' "$candidate"
-    done
-  done
 }
 
 # Resolve canonical local repo from a session clone path.
@@ -252,7 +237,7 @@ _nut_print_handoff_report() {
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
     clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin_target")
+  done < <(agent_session_clones_list "$origin_target")
 
   echo "nut: session clones (${#clones[@]}):"
   if [[ "${#clones[@]}" -eq 0 ]]; then
@@ -315,7 +300,7 @@ _nut_push() {
       best_time=$t
       best_dir=$candidate
     fi
-  done < <(_agentstartstack_clones_for_origin "$origin_target")
+  done < <(agent_session_clones_list "$origin_target")
 
   if [[ -z "$best_dir" ]]; then
     if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
@@ -533,7 +518,7 @@ EOF
       best_t=$t
       best="$cand"
     fi
-  done < <(_agentstartstack_clones_for_origin "$as_origin")
+  done < <(agent_session_clones_list "$as_origin")
 
   if [[ -z "$best" ]]; then
     echo "dropit: no agentstartstack session clone found (origin: $as_origin)" >&2
@@ -1103,7 +1088,7 @@ _nutupyall_session_clones() {
   local name="$1" canonical origin
   canonical=$(_nut_sync_root "$name") || return 0
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || return 0
-  _agentstartstack_clones_for_origin "$origin"
+  agent_session_clones_list "$origin"
 }
 
 # Echo in-flight session clones for a consumer, one per line: "<clone><TAB><reason>".

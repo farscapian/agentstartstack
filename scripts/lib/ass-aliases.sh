@@ -30,6 +30,8 @@ export AGENT_SESSION_CLONE_PARENT
 _ASS_ALIASES_LIB_DIR=$(
   cd "$(dirname "${BASH_SOURCE[0]}")" && pwd
 )
+# shellcheck source=session-clones.sh
+source "${_ASS_ALIASES_LIB_DIR}/session-clones.sh"
 # shellcheck source=cli-log.sh
 source "${_ASS_ALIASES_LIB_DIR}/cli-log.sh"
 : "${AGENTSTARTSTACK_CLI_LOG_PREFIX:=ass}"
@@ -191,25 +193,12 @@ _ass_sync_root() {
   return 1
 }
 
-# Echo absolute paths of session clones whose origin URL == $1, one per line.
-# Searches the dirs in AGENT_SESSION_CLONE_PARENT without assuming any naming
-# scheme -- clones are identified by git origin URL, so this works regardless of
-# how the harness names the worktree dir.
-_agentstartstack_clones_for_origin() {
-  local want="$1" parents base candidate got
-  [[ -n "$want" ]] || return 0
-  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
-  local IFS=:
-  for base in $parents; do
-    [[ -n "$base" ]] || continue
-    [[ -d "$base" ]] || continue
-    for candidate in "$base"/*/ "$base"/*/*/; do
-      [[ -d "${candidate}.git" ]] || continue
-      candidate=$(readlink -f "${candidate%/}")
-      got=$(git -C "$candidate" remote get-url origin 2>/dev/null) || continue
-      [[ "$got" == "$want" ]] && printf '%s\n' "$candidate"
-    done
-  done
+# Consumer repo name -> session clones (via agent_session_clones_list).
+_ass_session_clones_for_consumer() {
+  local name="$1" canonical origin
+  canonical=$(_ass_sync_root "$name") || return 0
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || return 0
+  agent_session_clones_list "$origin"
 }
 
 # Resolve canonical local repo from a session clone path.
@@ -500,7 +489,7 @@ ass_status() {
   _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
   _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-->" "-------" "-------" "---------" "----"
 
-  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "agent session clones: (none)"
@@ -705,8 +694,8 @@ ass_info() {
   }
   pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
 
-  clone=$(_ass_session_clone_at_index "$canonical" "$origin" "$index") || {
-    mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  clone=$(_ass_session_clone_at_index "$origin" "$index") || {
+    mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
     _ass_err "ass info: invalid index: ${index} (${#clones[@]} session clone(s); see: ass status)"
     return 1
   }
@@ -783,30 +772,13 @@ _ass_session_agent_kind() {
   printf '?'
 }
 
-# Session clone paths for $1's origin, newest commit on main first (ass list/status index).
-_ass_session_clones_sorted() {
-  local canonical="$1" origin="$2" clone
-  local -a clones=()
-
-  while IFS= read -r clone; do
-    [[ -n "$clone" ]] || continue
-    clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin")
-
-  [[ ${#clones[@]} -gt 0 ]] || return 0
-
-  for clone in "${clones[@]}"; do
-    printf '%s %s\n' "$(git -C "$clone" log -1 --format=%ct main 2>/dev/null || echo 0)" "$clone"
-  done | sort -rn -k1,1 | awk '{print $2}'
-}
-
-# 1-based index into _ass_session_clones_sorted (same numbering as ass list/status).
+# 1-based index into agent_session_clones_list --sorted (ass list/status numbering).
 _ass_session_clone_at_index() {
-  local canonical="$1" origin="$2" index="$3"
+  local origin="$1" index="$2"
   local -a clones=()
 
   [[ "$index" =~ ^[0-9]+$ && "$index" -ge 1 ]] || return 1
-  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
   [[ "$index" -le "${#clones[@]}" ]] || return 1
   printf '%s\n' "${clones[index - 1]}"
 }
@@ -862,7 +834,7 @@ ass_list() {
   _ass_info "ass list: ${repo_name}"
   _ass_info "canonical: ${canonical}"
 
-  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "session clones: (none)"
@@ -940,7 +912,7 @@ ass_sync_all() {
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
     clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin")
+  done < <(agent_session_clones_list "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     _ass_info "ass sync all: no session clones"
@@ -1039,7 +1011,7 @@ _ass_print_handoff_report() {
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
     clones+=("$(readlink -f "$clone")")
-  done < <(_agentstartstack_clones_for_origin "$origin_target")
+  done < <(agent_session_clones_list "$origin_target")
 
   echo "ass: session clones (${#clones[@]}):"
   if [[ "${#clones[@]}" -eq 0 ]]; then
@@ -1332,7 +1304,7 @@ _ass_auto_sync_all_clones_behind_canonical() {
     if ! _ass_sync_clone_behind_canonical "$clone" "$canonical"; then
       failed=1
     fi
-  done < <(_agentstartstack_clones_for_origin "$origin")
+  done < <(agent_session_clones_list "$origin")
 
   [[ "$failed" -eq 0 ]]
 }
@@ -1368,7 +1340,7 @@ _ass_pick_handoff_clone() {
       best_time=$t
       best_dir=$candidate
     fi
-  done < <(_agentstartstack_clones_for_origin "$origin")
+  done < <(agent_session_clones_list "$origin")
 
   if [[ -z "$best_dir" ]]; then
     if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
@@ -1615,7 +1587,7 @@ _ass_drop_upstream() {
       best_t=$t
       best="$cand"
     fi
-  done < <(_agentstartstack_clones_for_origin "$as_origin")
+  done < <(agent_session_clones_list "$as_origin")
 
   if [[ -z "$best" ]]; then
     _ass_err "ass drop: no agentstartstack session clone found (origin: $as_origin)"
@@ -1689,7 +1661,7 @@ ass_prune() {
   while IFS= read -r c; do
     [[ -n "$c" ]] || continue
     all+=("$(readlink -f "$c")")
-  done < <(_ass_up_all_session_clones "$name")
+  done < <(_ass_session_clones_for_consumer "$name")
   mapfile -t all < <(
     for c in "${all[@]}"; do
       printf '%s %s\n' "$(git -C "$c" log -1 --format=%ct main 2>/dev/null || echo 0)" "$c"
@@ -1752,14 +1724,14 @@ ass_drop() {
     return 1
   }
 
-  clone=$(_ass_session_clone_at_index "$canonical" "$origin" "$index") || {
-    mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  clone=$(_ass_session_clone_at_index "$origin" "$index") || {
+    mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
     _ass_err "ass drop: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
     return 1
   }
   clone=$(readlink -f "$clone")
 
-  mapfile -t clones < <(_ass_session_clones_sorted "$canonical" "$origin")
+  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
   agent=$(_ass_session_agent_kind "$clone")
   head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
 
@@ -2294,7 +2266,7 @@ _ass_up_trim_one() {
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
     all_clones_list+=("$(readlink -f "$clone")")
-  done < <(_ass_up_all_session_clones "$name")
+  done < <(_ass_session_clones_for_consumer "$name")
 
   if [[ "${#all_clones_list[@]}" -eq 0 ]]; then
     echo "ass up trim: ${name} -- no session clones found"
@@ -2564,14 +2536,6 @@ _ass_up_all_consumer_roots() {
 # flight). ass_up_all defers a consumer's auto-bump while any of its clones is
 # busy, so committing + pushing the bump cannot diverge the clone (its next ass
 # would otherwise be a non-fast-forward and clobber the agent mid-work).
-# List all session clones for a consumer (one absolute path per line), matched by
-# git origin URL so no worktree directory-naming scheme is assumed.
-_ass_up_all_session_clones() {
-  local name="$1" canonical origin
-  canonical=$(_ass_sync_root "$name") || return 0
-  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || return 0
-  _agentstartstack_clones_for_origin "$origin"
-}
 
 # Echo in-flight session clones for a consumer, one per line: "<clone><TAB><reason>".
 # In-flight = uncommitted changes, or commits ahead of local-sync/main. An
@@ -2600,7 +2564,7 @@ _ass_up_all_busy_sessions() {
     fi
 
     [[ -n "$reason" ]] && printf '%s\t%s\n' "$clone" "$reason"
-  done < <(_ass_up_all_session_clones "$name")
+  done < <(_ass_session_clones_for_consumer "$name")
 }
 
 # Drop a gitignored watch file in a session clone telling its agent to pull the
@@ -2668,7 +2632,7 @@ ass_up_all()
         [[ -n "$clone" ]] || continue
         _ass_up_all_flag_clone "$clone" "$sub_sha"
         n_flag=$((n_flag + 1))
-      done < <(_ass_up_all_session_clones "$name")
+      done < <(_ass_session_clones_for_consumer "$name")
       echo "ass_up_all: ${name} -- in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}, rides along on next agent commit/nut" >&2
       while IFS=$'\t' read -r iclone ireason; do
         [[ -n "$iclone" ]] && echo "ass_up_all:   in-flight: ${iclone} (${ireason})" >&2
