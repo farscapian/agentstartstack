@@ -401,7 +401,7 @@ The init scripts **align** an existing clone; they do **not** create one. Creati
 `nut` discovers clones by origin URL, not folder name:
 
 ```bash
-# from a shell with ~/.bash_aliases sourced
+# after: source ~/.bashrc
 _agentstartstack_clones_for_origin "$(git -C <canonical> remote get-url origin)"
 ```
 

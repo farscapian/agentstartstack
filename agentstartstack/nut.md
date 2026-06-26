@@ -118,8 +118,11 @@ Install / update them in your shell:
 ```bash
 # Both init scripts call this; you can also run it directly.
 scripts/install-shell-aliases.sh
-source ~/.bashrc        # or: source ~/.bash_aliases
+source ~/.bashrc
 ```
+
+(`~/.bashrc` sources `~/.bash_aliases`; always reload via `source ~/.bashrc`, not
+`source ~/.bash_aliases` alone, so anything else your `~/.bashrc` sets up is applied too.)
 
 The installer writes a small managed block into `~/.bash_aliases` that **sources**
 `scripts/lib/nut-aliases.sh` from the agentstartstack canonical repo -- never a
