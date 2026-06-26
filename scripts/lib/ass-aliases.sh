@@ -902,7 +902,7 @@ _ass_drop_rollover_survivor() {
 ass_list() {
   local -a _ass_argv clones=()
   local canonical origin repo_name pwd_here clone
-  local i agent head behind notes
+  local i agent head behind notes disp_path idx_disp
 
   if _ass_help_requested "${1:-}"; then
     ass_help_list
@@ -954,11 +954,16 @@ ass_list() {
     notes=""
     if _ass_clone_has_dirty_worktree "$clone"; then notes=" dirty"; fi
     if [[ "$clone" == "$pwd_here" ]]; then notes="${notes} pwd"; fi
-    printf '%-3s %-7s %-9s %6s  %s%s\n' "$i" "$agent" "$head" "$behind" "$clone" "$notes"
+    disp_path=$(_ass_status_display_path "$clone")
+    # Numeric index for ass drop / ass info; mark the primary (newest) clone 1*.
+    idx_disp="$i"
+    [[ "$i" -eq 1 ]] && idx_disp="1*"
+    printf '%-3s %-7s %-9s %6s  %s%s\n' "$idx_disp" "$agent" "$head" "$behind" "$disp_path" "$notes"
     i=$((i + 1))
   done
 
   echo ""
+  _ass_info "1* = primary (newest) clone; index (1,2,3,...) is the ass drop / ass info arg"
   _ass_info "behind = commits on canonical main not in this clone"
   _ass_info "see also: ass status (vs origin/main)"
   return 0

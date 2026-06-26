@@ -162,7 +162,9 @@ ass list
 ```
 
 Shows agent kind (`grok` / `claude` from `.git/agentstartstack-session-agent`), `HEAD`,
-commits **behind canonical**, and path. Newest clone first. Use `ass status` for
+commits **behind canonical**, and path (`~` shortens `$HOME`). Newest clone first;
+the primary (newest) clone is marked **`1*`**, and the numeric index (`1`, `2`,
+`3`, ...) is the argument for `ass drop` / `ass info`. Use `ass status` for
 ahead/behind counts vs `origin/main`.
 
 ## ass sync all (align clones to canonical)
