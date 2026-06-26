@@ -1577,6 +1577,27 @@ EOF
   return 0
 }
 
+# Infer session agent from installed CLIs: grok only -> grok; claude only -> claude;
+# both -> claude. Explicit --grok/--claude overrides this.
+_ass_detect_installed_agent() {
+  local has_grok=0 has_claude=0
+  command -v grok >/dev/null 2>&1 && has_grok=1
+  command -v claude >/dev/null 2>&1 && has_claude=1
+  if [[ "$has_grok" == 1 && "$has_claude" == 1 ]]; then
+    printf 'claude\n'
+    return 0
+  fi
+  if [[ "$has_claude" == 1 ]]; then
+    printf 'claude\n'
+    return 0
+  fi
+  if [[ "$has_grok" == 1 ]]; then
+    printf 'grok\n'
+    return 0
+  fi
+  return 1
+}
+
 # Pick the grok or claude parent from AGENT_SESSION_CLONE_PARENT (colon-separated).
 _ass_session_parent_for_agent() {
   local agent="$1" parents base fallback=""
@@ -1633,8 +1654,12 @@ ass_new() {
     cat <<'EOF'
 ass new -- create and align a new session clone (from canonical pwd)
 
-  ass new --grok      Grok / Cursor session clone
-  ass new --claude    Claude Code session clone
+  ass new               infer agent from installed CLIs (grok/claude on PATH)
+  ass new --grok        force Grok / Cursor session clone
+  ass new --claude      force Claude Code session clone
+
+When both grok and claude are installed, the default is claude. With neither on
+PATH, ass new exits with an error (install one or pass --grok/--claude after setup).
 
 Run from the canonical local repo (host project or agentstartstack template).
 Creates <agent-parent>/<project>/<timestamp>/, writes .agentstartstack.env, aligns.
@@ -1648,7 +1673,13 @@ EOF
       *) _ass_err "ass new: unknown option: $1"; return 1 ;;
     esac
   done
-  [[ -n "$agent" ]] || { _ass_err "ass new: pass --grok or --claude"; return 1; }
+  if [[ -z "$agent" ]]; then
+    agent=$(_ass_detect_installed_agent) || {
+      _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
+      return 1
+    }
+    _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
+  fi
   canonical=$(git rev-parse --show-toplevel 2>/dev/null) || {
     _ass_err "ass new: run from the canonical local repo"; return 1
   }

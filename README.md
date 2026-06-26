@@ -43,7 +43,7 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 
 ## Agent session workflow (summary)
 
-1. **New session** -- from the canonical local repo: `ass new --grok` or `ass new --claude`
+1. **New session** -- from the canonical local repo: `ass new` (infers grok/claude from PATH)
 2. **Work** -- agent edits only the session clone (`~/.grok/worktrees/...` or `~/.claude/worktrees/...`), never the canonical local repo
 3. **Handoff** -- human runs `ass` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
 
@@ -68,8 +68,9 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 
 | Command | Description |
 |---------|-------------|
-| `ass new --grok` | Clone + align a Grok/Cursor session (run from canonical pwd) |
-| `ass new --claude` | Clone + align a Claude Code session (run from canonical pwd) |
+| `ass new` | Clone + align a session (infers agent: grok-only -> grok, claude-only -> claude, both -> claude) |
+| `ass new --grok` | Force Grok/Cursor session |
+| `ass new --claude` | Force Claude Code session |
 | `ass list` | List session clones for this project (by origin URL) |
 | `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
 | `ass sync` | Align behind session clones to canonical (`--dry-run` to preview) |
@@ -112,7 +113,7 @@ From the **canonical** repo:
 
 ```bash
 cd ~/Sync/mini_projects/agentstartstack   # or your host project canonical
-ass new --grok
+ass new                  # or ass new --grok to force Grok when both are installed
 ```
 
 On success, `ass new` prints the session clone path. Open that folder in Cursor/Grok or `cd` there and paste the path as the workspace. The clone is aligned to canonical `main` and ready for agent work.

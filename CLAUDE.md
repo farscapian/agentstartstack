@@ -4,7 +4,7 @@ Shared agent guidance template. **Load topic files from `docs/` instead of readi
 
 Host projects that include this repo as a submodule should use their own root `CLAUDE.md` as the primary index (generic + project-specific topics). This file documents the template repo itself.
 
-**Template repo sessions:** canonical has no `.agentstartstack.env` (host projects only). Start a Grok/Claude session with `ass new --grok` or `ass new --claude` from canonical pwd -- it clones, writes `.agentstartstack.env` into the session clone, and runs init. Do not run `init_*_session.sh` on canonical directly.
+**Template repo sessions:** canonical has no `.agentstartstack.env` (host projects only). Start a session with `ass new` from canonical pwd (infers grok/claude from installed CLIs; override with `--grok` or `--claude`). It clones, writes `.agentstartstack.env` into the session clone, and runs init. Do not run `init_*_session.sh` on canonical directly.
 
 ## Quick rules
 
