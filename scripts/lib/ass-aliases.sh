@@ -431,17 +431,29 @@ _ASS_STATUS_ARROW_SEP='   -->   '
 _ASS_STATUS_CAN_LABEL=''
 _ASS_STATUS_ORIG_LABEL=''
 _ASS_STATUS_ORIG_GAP=4
+_ASS_STATUS_PATH_GAP=2
+_ASS_STATUS_PATH_MARGIN=2
 
 _ass_status_table_layout() {
   local can_head="$1" origin_head="$2"
-  local can_len arrow_len
+  local can_len arrow_len orig_len count_block_end path_start
   _ASS_STATUS_CAN_LABEL="canonical (${can_head})"
   _ASS_STATUS_ORIG_LABEL="origin/main (${origin_head})"
   can_len=${#_ASS_STATUS_CAN_LABEL}
   arrow_len=${#_ASS_STATUS_ARROW_SEP}
+  orig_len=${#_ASS_STATUS_ORIG_LABEL}
   _ASS_STATUS_ORIG_GAP=$((can_len + arrow_len - _ASS_STATUS_CAN_AHEAD_W - 1 - _ASS_STATUS_CAN_BEHIND_W))
   if [[ "$_ASS_STATUS_ORIG_GAP" -lt 1 ]]; then
     _ASS_STATUS_ORIG_GAP=1
+  fi
+  count_block_end=$((_ASS_STATUS_PREFIX_W
+    + _ASS_STATUS_CAN_AHEAD_W + 1 + _ASS_STATUS_CAN_BEHIND_W
+    + _ASS_STATUS_ORIG_GAP
+    + _ASS_STATUS_ORIG_AHEAD_W + 1 + _ASS_STATUS_ORIG_BEHIND_W))
+  path_start=$((_ASS_STATUS_PREFIX_W + can_len + arrow_len + orig_len + _ASS_STATUS_PATH_MARGIN))
+  _ASS_STATUS_PATH_GAP=$((path_start - count_block_end))
+  if [[ "$_ASS_STATUS_PATH_GAP" -lt 2 ]]; then
+    _ASS_STATUS_PATH_GAP=2
   fi
 }
 
@@ -480,13 +492,13 @@ _ass_status_format_count_row() {
 _ass_status_format_header_row() {
   _ass_status_format_left_cols "$1" "$2" "$3" "$4"
   _ass_status_format_count_header "$5" "$6" "$7" "$8"
-  printf '  %s\n' "$9"
+  printf '%*s%s\n' "$_ASS_STATUS_PATH_GAP" '' "$9"
 }
 
 _ass_status_format_row() {
   _ass_status_format_left_cols "$1" "$2" "$3" "$4"
   _ass_status_format_count_row "$5" "$6" "$7" "$8"
-  printf '  %s' "$9"
+  printf '%*s%s' "$_ASS_STATUS_PATH_GAP" '' "$9"
 }
 
 _ass_status_format_separator_row() {
