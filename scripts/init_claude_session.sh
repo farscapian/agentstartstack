@@ -97,12 +97,13 @@ if [[ -f .gitmodules ]]; then
   git submodule update --init --recursive
 fi
 
-# Stamp session align time so nut -f can prefer this clone over older sessions.
+# Stamp session align time so ass -f can prefer this clone over older sessions.
 date +%s > "${REPO_ROOT}/.git/agentstartstack-session-init"
+printf '%s\n' claude > "${REPO_ROOT}/.git/agentstartstack-session-agent"
 
 # Harden origin to fetch-only: agents hand off via the local-sync remote and must
 # never push to origin. Disabling the push URL makes that structural, not just
-# policy. The fetch URL stays intact so nut can still match this clone to the
+# policy. The fetch URL stays intact so ass can still match this clone to the
 # canonical local repo by origin URL.
 if git remote get-url origin &>/dev/null; then
   git remote set-url --push origin DISABLED
@@ -114,18 +115,18 @@ fi
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
   warn "  Read the producer commits and reconcile this consumer before committing"
-  warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
+  warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
 elif RECONCILE_RANGE=$(agentstartstack_pending_reconcile "$REPO_ROOT"); then
   warn "agentstartstack is behind its remote -- reconcile pending (no watch file): ${RECONCILE_RANGE}"
   warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then bump:"
   warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
-  warn "  (see agentstartstack/workflow.md: 'The .agentstartstack-bump watch file')."
+  warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
 elif ACTION_RANGE=$(agentstartstack_pending_consumer_actions "$REPO_ROOT"); then
   warn "Unapplied CONSUMER-ACTION(s) -- submodule pointer is current but watermark lags: ${ACTION_RANGE}"
   warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then update:"
   warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${ACTION_RANGE}"
-  warn "    .agentstartstack/scripts/record-consumer-action-seen.sh <OLD> <NEW>"
-  warn "  (see agentstartstack/workflow.md: 'CONSUMER-ACTION watermark')."
+  warn "    .docs/scripts/record-consumer-action-seen.sh <OLD> <NEW>"
+  warn "  (see docs/workflow.md: 'CONSUMER-ACTION watermark')."
 fi
 
 # Install the pre-commit guard (blocks commits while .agentstartstack-bump is
@@ -134,11 +135,12 @@ fi
 "${SCRIPT_DIR}/install-precommit-guard.sh" "$REPO_ROOT"
 info "Pre-commit guard active (blocks commits while .agentstartstack-bump pending; chains to shellcheck)."
 
-# Refresh the human-side nut/nutup shell aliases from the canonical
-# lib/nut-aliases.sh (idempotent managed block in ~/.bash_aliases). Machine-global
-# and config-free; non-fatal so a shell-config quirk cannot abort session align.
+# Auto-commit any session work left in the tree (see docs/workflow.md HARD RULES).
+"${SCRIPT_DIR}/auto-commit-session-work.sh" "$REPO_ROOT" || true
+
+# Refresh the human-side ass() wrapper (idempotent managed block in ~/.bash_aliases).
 if "${SCRIPT_DIR}/install-shell-aliases.sh"; then
-  info "Shell aliases (nut/nutup) refreshed; run 'source ~/.bashrc' if they changed."
+  info "Shell alias (ass) refreshed; run 'source ~/.bashrc' if it changed."
 else
   warn "Shell alias install skipped (non-fatal)."
 fi
@@ -168,7 +170,7 @@ Using Claude Code agents efficiently (${DISPLAY_NAME})
 
 AI GIT WORKFLOW (authorized)
   1. Session align -- init_claude_session.sh once per session (you just ran this)
-  2. Handoff       -- human runs nut (never git push origin from agents)
+  2. Handoff       -- human runs ass (never git push origin from agents)
 
 IMPORTANT: Claude Code always edits files in the session clone (under ${AGENT_SESSION_CLONE_PARENT})
   using absolute paths. VS Code opens at ${CANONICAL_LOCAL_REPO} for the human's reference only
@@ -186,10 +188,10 @@ FIRST MESSAGE (copy/paste template below)
 DO NOT
   - Edit files under ${CANONICAL_LOCAL_REPO} -- work only in the session clone.
   - Push to origin (git push origin main) -- HUMAN ONLY.
-  - nut while CLI is running: ${GUARD_TIP}
+  - ass while CLI is running: ${GUARD_TIP}
 
 WHEN HUMAN SAYS "sync" or "nut"
-  nut ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/nut.md
+  ass ${PROJECT_NAME}    # see ${GENERIC_GUIDANCE_DIR}/ass.md
 
 ================================================================================
 Suggested first message to paste into the agent:
