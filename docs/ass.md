@@ -43,18 +43,18 @@ ass up              # ass sync, then git push origin main
 ass up -f           # as ass sync -f, then push
 ass up --stashes    # as ass sync --stashes, then push
 ass up trim         # consolidate and prune stale session clones
-ass up --all        # ass up agentstartstack, refresh consumer submodules
+ass publish         # ass up agentstartstack, then bump .agentstartstack in consumers
 ass help            # main menu (direct subcommands only)
 ass help sync       # detailed sync help (external file: docs/help/ass-sync.txt)
 ass sync help       # same as ass help sync
 ass sync all help
 ass up help
 ass up trim help
-ass up --all help
+ass publish help
 ```
 
 **`ass`** -- show the main help menu (direct subcommands only). Nested commands
-(`sync all`, `up trim`, `up --all`) and per-command flags appear in their own
+(`sync all`, `up trim`) and per-command flags appear in their own
 help files under `docs/help/`. Structure: [cli-help.md](cli-help.md).
 
 Same pattern as iotstack (`iotstack <command> help`, files in `docs/help/`).
@@ -71,10 +71,10 @@ session clone (ahead/behind canonical), and which clone is selected.
 
 **`--stashes`** -- opt in to canonical stash prompts during handoff. Works with `ass sync` and `ass up` (e.g. `ass sync --stashes`, `ass up --stashes`, `ass sync -f --stashes`).
 
-**`ass up --all`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
+**`ass publish`** -- template publish plus submodule refresh and bump. Run only from the agentstartstack canonical local repo (not a session clone, not another repo). Local-sync and push agentstartstack, then for every host canonical local repo whose `.gitmodules` references `farscapian/agentstartstack`:
 
 - **No in-flight session clone** -- `git submodule update --remote` to see the delta it would adopt. If that delta is **action-free** (no `CONSUMER-ACTION:` in any producer commit), **auto-commit** the bump (`Bump .agentstartstack to <sha>`) and `git push origin main`. If the delta **carries a `CONSUMER-ACTION:`**, do **not** auto-commit (a blind pointer move would skip the actions) -- restore the submodule and report the consumer under "need agent (actions)" so an agent session reconciles it. Unchanged consumers report "already current".
-- **In-flight session clone(s)** -- uncommitted changes, or commits ahead of `local-sync/main`. Auto-committing the canonical bump would turn an in-flight clone's next `ass` into a non-fast-forward, so canonical is left untouched. Instead `ass up --all` drops a gitignored **`.agentstartstack-bump` watch file** in every clone of that consumer (see [The .agentstartstack-bump watch file](workflow.md#the-agentstartstack-bump-watch-file)). The bump then **rides along**: the agent applies the submodule update on its next commit, and the bump reaches canonical via that agent's normal `ass` (a fast-forward). Other clones find canonical already current on their next align and just clear the flag.
+- **In-flight session clone(s)** -- uncommitted changes, or commits ahead of `local-sync/main`. Auto-committing the canonical bump would turn an in-flight clone's next `ass` into a non-fast-forward, so canonical is left untouched. Instead `ass publish` drops a gitignored **`.agentstartstack-bump` watch file** in every clone of that consumer (see [The .agentstartstack-bump watch file](workflow.md#the-agentstartstack-bump-watch-file)). The bump then **rides along**: the agent applies the submodule update on its next commit, and the bump reaches canonical via that agent's normal `ass` (a fast-forward). Other clones find canonical already current on their next align and just clear the flag.
 
 The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / flagged (in-flight) / need agent (actions) / failed`.
 
@@ -150,7 +150,7 @@ Before acting, it prints **pwd**, the **canonical** repo, each session clone (HE
 behind-canonical, dirty/unlanded), tarball destinations, and a **keep/prune plan**. Archives
 and removals run only after `--yes` or an interactive `y` (not on `--dry-run`).
 
-`ass up --all` calls `ass up trim --yes` for each consumer as its final step (opt out with `ASS_UP_ALL_AUTOTRIM=0` in `.agentstartstack.env`). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
+`ass publish` calls `ass up trim --yes` for each consumer as its final step (opt out with `ASS_PUBLISH_AUTOTRIM=0` in `.agentstartstack.env`; legacy `ASS_UP_ALL_AUTOTRIM=0` still honored). Set `AGENTSTARTSTACK_CLONE_ARCHIVE_DIR` to control where tarballs land (e.g. `~/.iotstack/archives/agent_clones`).
 
 ## ass list (session clones)
 
@@ -253,7 +253,7 @@ into agentstartstack (see `docs/help/ass-drop.txt`).
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
-functions (`ass`, `ass_up`, `ass_up_trim`, `ass_up_all`, `ass_new`,
+functions (`ass`, `ass_up`, `ass_up_trim`, `ass_publish`, `ass_new`,
 `ass_status`, `ass_info`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 

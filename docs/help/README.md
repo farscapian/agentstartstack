@@ -17,7 +17,7 @@ Structure and naming rules: [docs/cli-help.md](../cli-help.md).
 - **ass-drop.txt** -- collapse to one clone, archive by index, or copy work upstream
 - **ass-up.txt** -- handoff + push origin main
 - **ass-up-trim.txt** -- consolidate and prune stale clones
-- **ass-up-all.txt** -- publish agentstartstack to consumers
+- **ass-publish.txt** -- publish agentstartstack and bump .agentstartstack in consumers
 
 ## Usage
 

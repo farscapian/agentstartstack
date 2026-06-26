@@ -90,7 +90,7 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 | `ass up trim --yes` | Skip confirmation prompt |
 | `ass up trim --keep-latest N` | Keep N most-recently-modified clones (default 1) |
 | `ass up trim --no-rollover` | Keep dirty older clones instead of rolling work over |
-| `ass up --all` | `ass up` agentstartstack, refresh consumer submodules, auto-trim clones |
+| `ass publish` | `ass up` agentstartstack, then bump `.agentstartstack` in consumers, auto-trim clones |
 
 ### Help
 
@@ -103,10 +103,10 @@ ass help
 ass help sync
 ass sync help
 ass up trim help
-ass help up --all
+ass help publish
 ```
 
-See [`docs/ass.md`](docs/ass.md) for guards, trim/archive rules, and `ass up --all` bump protocol.
+See [`docs/ass.md`](docs/ass.md) for guards, trim/archive rules, and the `ass publish` bump protocol.
 
 ### Starting a Grok session (template or host project)
 

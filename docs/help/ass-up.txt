@@ -11,7 +11,6 @@ Usage:
 Subcommands:
 
   trim                consolidate and prune stale session clones
-  --all               ass up agentstartstack, refresh consumer submodules
 
 Options:
   -f, --force         See ass sync help. Prefer when handing off from a fresh session.
@@ -20,8 +19,8 @@ Options:
 Help:
   ass up help
   ass up trim help
-  ass up --all help
   ass help up
   ass help up trim
 
-See also: docs/help/ass-up-trim.txt, docs/help/ass-up-all.txt
+To publish the template and bump consumer repos, see: ass publish
+See also: docs/help/ass-up-trim.txt, docs/help/ass-publish.txt

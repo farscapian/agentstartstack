@@ -1,6 +1,8 @@
-ass up --all -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
+ass publish -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
 
 Run only from the agentstartstack canonical local repo (not a session clone).
+Publishes the template (ass up: ass sync, then git push origin main), then
+propagates the new .agentstartstack pointer to every consumer repo.
 
 For each consumer repo:
   - No in-flight session clone -> if the delta is action-free, auto-commit the
@@ -8,13 +10,16 @@ For each consumer repo:
     CONSUMER-ACTION, do NOT auto-commit (would skip the actions); report it under
     "need agent (actions)" and leave it for an agent session to reconcile.
   - In-flight session clone(s) (uncommitted changes or ahead of canonical) ->
-    do NOT touch canonical (would non-fast-forward an agent's nut). Instead drop
+    do NOT touch canonical (would non-fast-forward an agent's ass). Instead drop
     a gitignored .agentstartstack-bump watch file in every clone; the bump rides
     along on the agent's next commit and reaches canonical via ass.
 
+After each consumer, runs ass up trim --yes unless autotrim is disabled
+(ASS_PUBLISH_AUTOTRIM=0; legacy ASS_UP_ALL_AUTOTRIM=0 still honored).
+
 Usage:
-  ass up --all
+  ass publish
 
 Help:
-  ass up --all help
-  ass help up --all
+  ass publish help
+  ass help publish

@@ -34,12 +34,14 @@ main() {
       ;;
     new) shift; ass_new "$@" ;;
     drop)  shift; ass_drop "$@" ;;
+    publish) shift; ass_publish "$@" ;;
     up)
       shift
       if [[ "${1:-}" == trim ]]; then
         shift; ass_up_trim "$@"
-      elif [[ "${1:-}" == --all ]]; then
-        shift; ass_up_all "$@"
+      elif [[ "${1:-}" == --all || "${1:-}" == all ]]; then
+        printf '[ERR]  ass up --all has been renamed: use "ass publish" (try: ass publish help)\n' >&2
+        return 1
       else
         ass_up "$@"
       fi

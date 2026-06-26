@@ -155,7 +155,7 @@ agentstartstack_resolve_guidance_paths() {
 }
 
 # Backstop for the bump-delta protocol: detect a pending agentstartstack reconcile
-# even when no .agentstartstack-bump watch file is present -- e.g. ass up --all
+# even when no .agentstartstack-bump watch file is present -- e.g. ass publish
 # deferred an action-bearing bump (it does not auto-commit those). Echoes the
 # range "OLD..NEW" and returns 0 if the .agentstartstack submodule is behind its
 # remote; returns 1 (no output) otherwise, including the template repo (no

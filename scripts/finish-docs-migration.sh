@@ -9,7 +9,7 @@ transform_md() {
   sed -i \
     -e 's/nut\.md/ass.md/g' \
     -e 's/`nut`/`ass`/g' \
-    -e 's/nutupyall/ass up --all/g' \
+    -e 's/nutupyall/ass publish/g' \
     -e 's/nutup trim/ass up trim/g' \
     -e 's/nutup/ass up/g' \
     -e 's/agentstartstack\/agentstartstack/docs/g' \

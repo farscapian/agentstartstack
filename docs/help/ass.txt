@@ -11,6 +11,7 @@ Commands:
   info <n>            plain-language summary for session #n (from ass status)
   drop                archive session clone(s) or copy work upstream (consumer)
   up                  ass sync, then git push origin main
+  publish             ass up agentstartstack, then bump .agentstartstack in consumers
 
 Use 'ass <command> help' for detailed help on any command.
 Use 'ass help <command>' as an equivalent form (nested topics use extra words,

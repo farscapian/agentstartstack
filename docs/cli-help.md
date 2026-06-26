@@ -27,7 +27,7 @@ How `ass` structures terminal help (iotstack-style). Help text lives in
 | `docs/help/ass-drop.txt` | `ass drop help`, `ass help drop` (collapse all, clone #n, upstream copy) |
 | `docs/help/ass-up.txt` | `ass up help`, `ass help up` |
 | `docs/help/ass-up-trim.txt` | `ass up trim help`, `ass help up trim` |
-| `docs/help/ass-up-all.txt` | `ass up --all help`, `ass help up --all` |
+| `docs/help/ass-publish.txt` | `ass publish help`, `ass help publish` |
 
 Naming convention (mirrors iotstack `iotstack-<command>.txt`):
 
@@ -49,7 +49,7 @@ ass help sync all
 ass sync all help
 ass help up trim
 ass up trim help
-ass up --all help
+ass publish help
 ```
 
 Router entry points:
@@ -79,7 +79,7 @@ Follow the iotstack main menu shape:
 Do **not** put on the main menu:
 
 - Per-command flags (`-f`, `--stashes`, `--dry-run`, ...)
-- Nested subcommands (`sync all`, `up trim`, `up --all`)
+- Nested subcommands (`sync all`, `up trim`)
 - Usage examples for individual commands
 
 ## Subcommand help format (`ass-<command>.txt`)

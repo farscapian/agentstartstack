@@ -67,7 +67,7 @@ ass_help_info() { _ass_cat_help ass-info.txt; }
 ass_help_drop() { _ass_cat_help ass-drop.txt; }
 ass_help_up() { _ass_cat_help ass-up.txt; }
 ass_help_up_trim() { _ass_cat_help ass-up-trim.txt; }
-ass_help_up_all() { _ass_cat_help ass-up-all.txt; }
+ass_help_publish() { _ass_cat_help ass-publish.txt; }
 
 # ass help <topic> and ass help <parent> <nested> (ass.sh entry).
 ass_help_topic() {
@@ -84,10 +84,10 @@ ass_help_topic() {
     up)
       case "$nested" in
         trim) ass_help_up_trim ;;
-        --all|all) ass_help_up_all ;;
         *) ass_help_up ;;
       esac
       ;;
+    publish) ass_help_publish ;;
     new) ass_help_new ;;
     list) ass_help_list ;;
     status) ass_help_status ;;
@@ -162,7 +162,7 @@ _agentstartstack_guard_project_roots || true
 #   nutup            # local-sync, then git push origin main
 #   nutup -f         # as nut -f, then push
 #   nutup iotstack   # explicit repo + local-sync + push
-#   ass_up_all        # nutup agentstartstack, refresh consumer submodules
+#   ass_publish        # ass up agentstartstack, then refresh consumer submodules
 #
 # Timestamp markers (machine-local, under .git/):
 #   canonical:  .git/agentstartstack-ass-last      (unix time; set after each nut)
@@ -2143,7 +2143,11 @@ _ass_up_trim_load_env() {
   PROJECT_NAME="$(basename "$canonical")"
   ACTIVE_GUARD_PGREP=""
   AGENTSTARTSTACK_CLONE_ARCHIVE_DIR=""
-  ASS_UP_ALL_AUTOTRIM=1
+  # Reset both to empty before sourcing so a value from one consumer's env file
+  # does not leak to the next consumer in the ass publish loop. The default (on)
+  # and legacy fallback are applied in _ass_up_trim_autotrim_enabled.
+  ASS_PUBLISH_AUTOTRIM=""
+  ASS_UP_ALL_AUTOTRIM=""
   [[ -f "$env_file" ]] || return 0
   # shellcheck source=/dev/null
   source "$env_file"
@@ -2153,7 +2157,8 @@ _ass_up_trim_load_env() {
 _ass_up_trim_autotrim_enabled() {
   local canonical="$1"
   _ass_up_trim_load_env "$canonical"
-  [[ "${ASS_UP_ALL_AUTOTRIM:-1}" != "0" ]]
+  # Prefer ASS_PUBLISH_AUTOTRIM; honor legacy ASS_UP_ALL_AUTOTRIM; default on.
+  [[ "${ASS_PUBLISH_AUTOTRIM:-${ASS_UP_ALL_AUTOTRIM:-1}}" != "0" ]]
 }
 
 _ass_up_trim_guard() {
@@ -2612,7 +2617,7 @@ ass_up_trim() {
       else
         failed=$((failed + 1))
       fi
-    done < <(_ass_up_all_consumer_roots | sort -u)
+    done < <(_ass_publish_consumer_roots | sort -u)
     echo "ass up trim: done -- ${ok} ok, ${failed} failed"
     [[ "$failed" -eq 0 ]]
     return $?
@@ -2628,28 +2633,28 @@ ass_up_trim() {
   _ass_up_trim_one "$repo" "$dry_run" "$yes" "$no_rollover" "$keep_latest" "$archive_dir"
 }
 
-# Run only from agentstartstack canonical local repo; nutup template, refresh consumers.
-_ass_up_all_assert_here() {
+# Run only from agentstartstack canonical local repo; ass up template, refresh consumers.
+_ass_publish_assert_here() {
   local here sync_root
 
   here=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    echo "ass_up_all: not in a git repo" >&2
+    echo "ass publish: not in a git repo" >&2
     return 1
   }
   here=$(readlink -f "$here")
 
   sync_root=$(_ass_sync_root agentstartstack) || {
-    echo "ass_up_all: agentstartstack canonical local repo not found" >&2
+    echo "ass publish: agentstartstack canonical local repo not found" >&2
     return 1
   }
 
   if [[ "$here" != "$sync_root" ]]; then
-    echo "ass_up_all: run only from agentstartstack canonical local repo: ${sync_root}" >&2
+    echo "ass publish: run only from agentstartstack canonical local repo: ${sync_root}" >&2
     return 1
   fi
 }
 
-_ass_up_all_consumer_roots() {
+_ass_publish_consumer_roots() {
   local roots="${AGENTSTARTSTACK_PROJECT_ROOTS:-}"
   local search_root candidate gitmodules
   local IFS=:
@@ -2673,16 +2678,16 @@ _ass_up_all_consumer_roots() {
 
 # Echo busy session clones for a consumer, one per line: "<clone><TAB><reason>".
 # Busy = uncommitted changes, or commits ahead of local-sync/main (agent work in
-# flight). ass_up_all defers a consumer's auto-bump while any of its clones is
+# flight). ass_publish defers a consumer's auto-bump while any of its clones is
 # busy, so committing + pushing the bump cannot diverge the clone (its next ass
 # would otherwise be a non-fast-forward and clobber the agent mid-work).
 
 # Echo in-flight session clones for a consumer, one per line: "<clone><TAB><reason>".
 # In-flight = uncommitted changes, or commits ahead of local-sync/main. An
 # in-flight clone would turn into a non-fast-forward on its next ass if canonical
-# advanced, so ass_up_all does not auto-commit a consumer's bump while any of its
-# clones is in-flight -- it drops a watch file instead (see _ass_up_all_flag_clone).
-_ass_up_all_busy_sessions() {
+# advanced, so ass_publish does not auto-commit a consumer's bump while any of its
+# clones is in-flight -- it drops a watch file instead (see _ass_publish_flag_clone).
+_ass_publish_busy_sessions() {
   local name="$1" clone status_out ahead reason
 
   while IFS= read -r clone; do
@@ -2711,7 +2716,7 @@ _ass_up_all_busy_sessions() {
 # pending .agentstartstack bump into the clone before its next commit. The file
 # lives at the clone root and is excluded via .git/info/exclude, so it never
 # shows in git status, is never committed, and survives reset --hard + clean -fd.
-_ass_up_all_flag_clone() {
+_ass_publish_flag_clone() {
   local clone="$1" sha="$2"
   local exclude="${clone}/.git/info/exclude"
   local flag="${clone}/.agentstartstack-bump"
@@ -2732,28 +2737,28 @@ Quick start:
   git submodule update --init --recursive --remote .agentstartstack
   git add .agentstartstack && rm .agentstartstack-bump
 
-Written by ass_up_all at $(date -Is).
+Written by ass publish at $(date -Is).
 EOF
 }
 
-ass_up_all()
+ass_publish()
 {
   if _ass_help_requested "${1:-}"; then
-    ass_help_up_all
+    ass_help_publish
     return 0
   fi
 
   if [[ -n "${1:-}" ]]; then
-    echo "ass_up_all: takes no arguments (try: ass up --all help)" >&2
+    echo "ass publish: takes no arguments (try: ass publish help)" >&2
     return 1
   fi
 
-  _ass_up_all_assert_here || return 1
+  _ass_publish_assert_here || return 1
 
   ass_up || return 1
 
   # Authoritative bump target = agentstartstack canonical HEAD (just pushed by
-  # nutup). The in-flight branch must advertise this, not the consumer's stale
+  # ass up). The in-flight branch must advertise this, not the consumer's stale
   # (and possibly dirty) submodule working-tree HEAD.
   local as_sha
   as_sha=$(git rev-parse --short HEAD) || return 1
@@ -2764,28 +2769,28 @@ ass_up_all()
     [[ -n "$host" ]] || continue
     name=$(basename "$host")
 
-    busy=$(_ass_up_all_busy_sessions "$name")
+    busy=$(_ass_publish_busy_sessions "$name")
     if [[ -n "$busy" ]]; then
       sub_sha="$as_sha"
       n_flag=0
       while IFS= read -r clone; do
         [[ -n "$clone" ]] || continue
-        _ass_up_all_flag_clone "$clone" "$sub_sha"
+        _ass_publish_flag_clone "$clone" "$sub_sha"
         n_flag=$((n_flag + 1))
       done < <(_ass_session_clones_for_consumer "$name")
-      echo "ass_up_all: ${name} -- in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}, rides along on next agent commit/nut" >&2
+      echo "ass publish: ${name} -- in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}, rides along on next agent commit/ass" >&2
       while IFS=$'\t' read -r iclone ireason; do
-        [[ -n "$iclone" ]] && echo "ass_up_all:   in-flight: ${iclone} (${ireason})" >&2
+        [[ -n "$iclone" ]] && echo "ass publish:   in-flight: ${iclone} (${ireason})" >&2
       done <<< "$busy"
       flagged=$((flagged + 1))
     else
       old_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
-      echo "ass_up_all: ${name} -- submodule update --remote .agentstartstack"
+      echo "ass publish: ${name} -- submodule update --remote .agentstartstack"
       if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
-        echo "ass_up_all:   ERROR updating submodule in ${name}" >&2
+        echo "ass publish:   ERROR updating submodule in ${name}" >&2
         failed=$((failed + 1))
       elif [[ -z "$(git -C "$host" status --porcelain -- .agentstartstack 2>/dev/null)" ]]; then
-        echo "ass_up_all:   ${name} already current"
+        echo "ass publish:   ${name} already current"
         current=$((current + 1))
       else
         new_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
@@ -2798,17 +2803,17 @@ ass_up_all()
         if git -C "${host}/.agentstartstack" log --format='%B' "${old_sha}..${new_sha}" 2>/dev/null \
              | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
           git -C "$host" submodule update --init --recursive .agentstartstack >/dev/null 2>&1
-          echo "ass_up_all:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
-          echo "ass_up_all:     start an agent session for ${name} so it reads the delta and reconciles." >&2
+          echo "ass publish:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
+          echo "ass publish:     start an agent session for ${name} so it reads the delta and reconciles." >&2
           needs_agent=$((needs_agent + 1))
         else
           sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
-          echo "ass_up_all:   committing bump to ${sub_sha} in ${name} (action-free delta)"
+          echo "ass publish:   committing bump to ${sub_sha} in ${name} (action-free delta)"
           if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
-            echo "ass_up_all:   ERROR committing bump in ${name}" >&2
+            echo "ass publish:   ERROR committing bump in ${name}" >&2
             failed=$((failed + 1))
           elif ! git -C "$host" push origin main; then
-            echo "ass_up_all:   WARN committed bump but origin push failed in ${name}" >&2
+            echo "ass publish:   WARN committed bump but origin push failed in ${name}" >&2
             failed=$((failed + 1))
           else
             bumped=$((bumped + 1))
@@ -2819,16 +2824,16 @@ ass_up_all()
 
     if _ass_up_trim_autotrim_enabled "$host"; then
       if ass_up_trim "$name" --yes; then
-        echo "ass_up_all: ${name} -- consolidated and pruned" >&2
+        echo "ass publish: ${name} -- consolidated and pruned" >&2
       else
-        echo "ass_up_all: ${name} -- trim failed (logged; continuing)" >&2
+        echo "ass publish: ${name} -- trim failed (logged; continuing)" >&2
         failed=$((failed + 1))
       fi
     else
-      echo "ass_up_all: ${name} -- autotrim disabled (ASS_UP_ALL_AUTOTRIM=0)" >&2
+      echo "ass publish: ${name} -- autotrim disabled (ASS_PUBLISH_AUTOTRIM=0)" >&2
     fi
-  done < <(_ass_up_all_consumer_roots | sort -u)
+  done < <(_ass_publish_consumer_roots | sort -u)
 
-  echo "ass_up_all: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${failed} failed"
+  echo "ass publish: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${failed} failed"
   [[ "$failed" -eq 0 ]]
 }

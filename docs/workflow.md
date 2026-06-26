@@ -215,7 +215,7 @@ Never compete with the human for the same hardware (USB serial, SD card, block d
 
 ### 4. The `.agentstartstack-bump` watch file
 
-When the human runs `ass up --all` (see [ass.md](ass.md)) and a consumer has an in-flight session clone, `ass up --all` cannot auto-commit the `.agentstartstack` submodule bump in that consumer's canonical repo -- doing so would turn the clone's next `ass` into a non-fast-forward. Instead it drops a watch file at the **root of every session clone** for that consumer:
+When the human runs `ass publish` (see [ass.md](ass.md)) and a consumer has an in-flight session clone, `ass publish` cannot auto-commit the `.agentstartstack` submodule bump in that consumer's canonical repo -- doing so would turn the clone's next `ass` into a non-fast-forward. Instead it drops a watch file at the **root of every session clone** for that consumer:
 
 ```
 .agentstartstack-bump
@@ -260,7 +260,7 @@ The bump (and your reconciliation) then reaches the canonical local repo through
 
 The guard is installed by `scripts/install-precommit-guard.sh`, which **both** the init scripts **and** `install-githooks.sh` call. So running either installs the same guard -- they cannot diverge, and re-running `install-githooks.sh` re-asserts the guard rather than dropping it. Agents do not need to remember to re-run anything.
 
-Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by `ass up --all` and removed by you when you apply the bump.
+Do not edit the watch file or add it to a tracked `.gitignore`; it is managed by `ass publish` and removed by you when you apply the bump.
 
 #### Acting on the bump delta (mandatory)
 
@@ -311,14 +311,14 @@ commit any resulting doc fixups alongside the submodule bump.
 
 Keep each line specific (exact command, exact follow-up). If a template change is self-contained and needs nothing downstream, no line is needed -- absence of a `CONSUMER-ACTION:` line means "bump and go" for that commit. Right before a `ass`/`ass up` that publishes such a change, confirm the action line rode the correct commit (the one carrying the change), since that is the commit consumers will read it from.
 
-#### ass up --all is action-aware; init backstops it
+#### ass publish is action-aware; init backstops it
 
-`ass up --all` propagates a bump to each consumer by one of two paths, and **neither blind-bumps past a `CONSUMER-ACTION`**:
+`ass publish` propagates a bump to each consumer by one of two paths, and **neither blind-bumps past a `CONSUMER-ACTION`**:
 
 - **In-flight session clone** -> drops the `.agentstartstack-bump` watch file; the agent reads the delta and reconciles (per the obligation above).
-- **No in-flight clone** -> `ass up --all` reads the delta (`OLD..NEW`) it would adopt:
+- **No in-flight clone** -> `ass publish` reads the delta (`OLD..NEW`) it would adopt:
   - **action-free delta** -> safe to auto-commit the bump in the consumer canonical and push (the fast path).
-  - **delta carries any `CONSUMER-ACTION:`** -> `ass up --all` does **not** auto-commit. It restores the submodule to its committed SHA and reports the consumer under "need agent (actions)". The bump waits until an agent session reconciles it; auto-committing would silently skip the actions.
+  - **delta carries any `CONSUMER-ACTION:`** -> `ass publish` does **not** auto-commit. It restores the submodule to its committed SHA and reports the consumer under "need agent (actions)". The bump waits until an agent session reconciles it; auto-committing would silently skip the actions.
 
 **Init backstop.** Independently of any watch file, `init_*_session.sh` checks at align time whether the `.agentstartstack` submodule is behind its remote (`agentstartstack_pending_reconcile`). If so it prints the pending `OLD..NEW` range and the read-and-reconcile commands, so a deferred bump is caught on the next session even with no watch file present.
 
