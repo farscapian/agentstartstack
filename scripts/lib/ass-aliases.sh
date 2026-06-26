@@ -296,6 +296,18 @@ _ass_status_notes() {
   (IFS=', '; echo "${notes[*]}")
 }
 
+# Column layout: # agent | origin ahead/behind | canonical ahead/behind | HEAD path
+# Count cols are width 7 (fits git short SHA on the reference row).
+_ass_status_format_header_row() {
+  # shellcheck disable=SC2059
+  printf '%-3s %-7s %-7s %-7s  %-7s %-7s  %-9s  %s\n' "$@"
+}
+
+_ass_status_format_row() {
+  # shellcheck disable=SC2059
+  printf '%-3s %-7s %7s %7s  %7s %7s  %-9s  %s' "$@"
+}
+
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
   local ahead behind can_ahead can_behind head notes
@@ -305,8 +317,7 @@ _ass_status_print_row() {
   head=$(git -C "$path" rev-parse --short HEAD 2>/dev/null || echo '?')
   notes=$(_ass_status_notes "$path" "$pwd_here")
 
-  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s' \
-    "$idx" "$agent" "$ahead" "$behind" "$can_ahead" "$can_behind" "$head" "$path"
+  _ass_status_format_row "$idx" "$agent" "$ahead" "$behind" "$can_ahead" "$can_behind" "$head" "$path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -362,12 +373,9 @@ EOF
   _ass_info "origin/main @ ${origin_head}  canonical @ ${can_head}"
   _ass_info "pwd: ${pwd_here}"
   echo ""
-  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
-    "#" "agent" "ahead" "behind" "ahead" "behind" "HEAD" "path"
-  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
-    "---" "-------" "-----" "------" "-----" "------" "---------" "----"
-  printf '%-3s %-7s %5s %6s %5s %6s  %-9s  %s\n' \
-    "" "" "$origin_head" "$origin_head" "$can_head" "$can_head" "" ""
+  _ass_status_format_header_row "#" "agent" "ahead" "behind" "ahead" "behind" "HEAD" "path"
+  _ass_status_format_row "" "" "$origin_head" "$origin_head" "$can_head" "$can_head" "" ""; printf '\n'
+  _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-------" "---------" "----"
 
   while IFS= read -r clone; do
     [[ -n "$clone" ]] || continue
