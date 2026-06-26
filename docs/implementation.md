@@ -87,9 +87,11 @@ All `ass` / `nut` commands that list session clones MUST call
 
 ```bash
 origin=$(git -C "$canonical" remote get-url origin)
-agent_session_clones_list "$origin"              # any order
-agent_session_clones_list "$origin" --sorted     # newest main first (ass status #)
+agent_session_clones_list "$origin"   # newest main first; ass status #1 = first line
 ```
+
+`ass sync`, `ass status`, `ass list`, handoff pick, and trim all call this same function
+with the same sort order. Do not add alternate discovery or sort paths per command.
 
 Clones are matched by exact `origin` URL under `AGENT_SESSION_CLONE_PARENT`.
 Consumer-scoped callers resolve the canonical repo first, then call the same function

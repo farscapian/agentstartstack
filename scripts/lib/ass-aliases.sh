@@ -489,7 +489,7 @@ ass_status() {
   _ass_status_format_header_row "#" "agent" "wip" "ahead" "behind" "-->" "ahead" "behind" "HEAD" "path"
   _ass_status_format_header_row "---" "-------" "-------" "-------" "-------" "-->" "-------" "-------" "---------" "----"
 
-  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+  mapfile -t clones < <(agent_session_clones_list "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "agent session clones: (none)"
@@ -695,7 +695,7 @@ ass_info() {
   pwd_here=$(readlink -f "$(pwd)" 2>/dev/null || pwd)
 
   clone=$(_ass_session_clone_at_index "$origin" "$index") || {
-    mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+    mapfile -t clones < <(agent_session_clones_list "$origin")
     _ass_err "ass info: invalid index: ${index} (${#clones[@]} session clone(s); see: ass status)"
     return 1
   }
@@ -772,13 +772,13 @@ _ass_session_agent_kind() {
   printf '?'
 }
 
-# 1-based index into agent_session_clones_list --sorted (ass list/status numbering).
+# 1-based index into agent_session_clones_list (ass list/status numbering).
 _ass_session_clone_at_index() {
   local origin="$1" index="$2"
   local -a clones=()
 
   [[ "$index" =~ ^[0-9]+$ && "$index" -ge 1 ]] || return 1
-  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+  mapfile -t clones < <(agent_session_clones_list "$origin")
   [[ "$index" -le "${#clones[@]}" ]] || return 1
   printf '%s\n' "${clones[index - 1]}"
 }
@@ -834,7 +834,7 @@ ass_list() {
   _ass_info "ass list: ${repo_name}"
   _ass_info "canonical: ${canonical}"
 
-  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+  mapfile -t clones < <(agent_session_clones_list "$origin")
 
   if [[ ${#clones[@]} -eq 0 ]]; then
     echo "session clones: (none)"
@@ -1725,13 +1725,13 @@ ass_drop() {
   }
 
   clone=$(_ass_session_clone_at_index "$origin" "$index") || {
-    mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+    mapfile -t clones < <(agent_session_clones_list "$origin")
     _ass_err "ass drop: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
     return 1
   }
   clone=$(readlink -f "$clone")
 
-  mapfile -t clones < <(agent_session_clones_list "$origin" --sorted)
+  mapfile -t clones < <(agent_session_clones_list "$origin")
   agent=$(_ass_session_agent_kind "$clone")
   head=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null || echo '?')
 

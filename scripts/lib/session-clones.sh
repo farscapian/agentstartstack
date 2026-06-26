@@ -2,6 +2,7 @@
 # session-clones.sh -- single source for agent session clone discovery.
 #
 # All ass/nut commands that need session clones MUST call agent_session_clones_list().
+# Same function, same order everywhere (newest commit on main first; ass status #1).
 # Clones are matched by git origin URL under AGENT_SESSION_CLONE_PARENT (any depth
 # up to 5 path segments below each parent; no directory-naming scheme assumed).
 #
@@ -9,13 +10,12 @@
 
 : "${AGENT_SESSION_CLONE_PARENT:=${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 
-# agent_session_clones_list WANT [SORT]
+# agent_session_clones_list WANT
 #
 # WANT: canonical git origin URL (exact string match to each clone's origin remote).
-# SORT: pass "--sorted" to order by newest commit on main first (ass status #1 = newest).
-# Prints absolute clone paths, one per line. Deduped.
+# Prints absolute clone paths, one per line, newest commit on main first. Deduped.
 agent_session_clones_list() {
-  local want="$1" sort="${2:-}" parents base candidate got gitdir
+  local want="$1" parents base candidate got gitdir
   declare -A seen=()
   local -a clones=()
 
@@ -44,12 +44,7 @@ agent_session_clones_list() {
 
   [[ ${#clones[@]} -gt 0 ]] || return 0
 
-  if [[ "$sort" == "--sorted" ]]; then
-    for candidate in "${clones[@]}"; do
-      printf '%s %s\n' "$(git -C "$candidate" log -1 --format=%ct main 2>/dev/null || echo 0)" "$candidate"
-    done | sort -rn -k1,1 | awk '{print $2}'
-    return 0
-  fi
-
-  printf '%s\n' "${clones[@]}"
+  for candidate in "${clones[@]}"; do
+    printf '%s %s\n' "$(git -C "$candidate" log -1 --format=%ct main 2>/dev/null || echo 0)" "$candidate"
+  done | sort -rn -k1,1 | awk '{print $2}'
 }
