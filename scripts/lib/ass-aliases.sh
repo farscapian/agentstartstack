@@ -396,13 +396,26 @@ EOF
   return 0
 }
 
+# grok / claude / ? -- marker file, then clone dir name, then worktree parent.
 _ass_session_agent_kind() {
-  local clone="$1" marker="${clone}/.git/agentstartstack-session-agent"
-
+  local clone="$1" marker kind base
+  clone=$(readlink -f "$clone")
+  marker="${clone}/.git/agentstartstack-session-agent"
   if [[ -f "$marker" ]]; then
-    tr -d '[:space:]' < "$marker"
+    kind=$(tr -d '[:space:]' < "$marker")
+    [[ "$kind" == grok || "$kind" == claude ]] && { printf '%s\n' "$kind"; return 0; }
+  fi
+  base=$(basename "$clone")
+  if [[ "$base" == claude-* ]]; then
+    printf 'claude\n'
     return 0
   fi
+  if [[ "$base" == grok-* ]]; then
+    printf 'grok\n'
+    return 0
+  fi
+  kind=$(_ass_up_trim_harness "$clone")
+  [[ "$kind" == grok || "$kind" == claude ]] && { printf '%s\n' "$kind"; return 0; }
   printf '?'
 }
 
@@ -739,14 +752,7 @@ _ass_canonical_normalize_stash_ref() {
 }
 
 _ass_clone_agent_kind() {
-  local clone="$1" marker kind
-  clone=$(readlink -f "$clone")
-  marker="${clone}/.git/agentstartstack-session-agent"
-  if [[ -f "$marker" ]]; then
-    kind=$(tr -d '[:space:]' < "$marker")
-    [[ "$kind" == grok || "$kind" == claude ]] && { printf '%s\n' "$kind"; return 0; }
-  fi
-  _ass_up_trim_harness "$clone"
+  _ass_session_agent_kind "$1"
 }
 
 _ass_canonical_stash_agent_compat_ok() {
