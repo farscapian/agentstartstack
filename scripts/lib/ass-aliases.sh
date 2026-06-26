@@ -1614,6 +1614,28 @@ _ass_codium_left_monitor_geometry() {
   printf '%s %s %s %s\n' "$x" "$y" "$w" "$h"
 }
 
+# Prompt to install wmctrl when missing (Codium window placement on XWayland).
+_ass_ensure_wmctrl() {
+  local line
+  command -v wmctrl >/dev/null 2>&1 && return 0
+
+  _ass_info "wmctrl is not installed (places the new Codium window on the left monitor)"
+  read -r -p "ass new: install wmctrl now? [y/N] " line </dev/tty
+  [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || return 1
+
+  if command -v apt-get >/dev/null 2>&1; then
+    if sudo apt-get install -y wmctrl; then
+      _ass_ok "ass new: installed wmctrl"
+      return 0
+    fi
+    _ass_err "ass new: wmctrl install failed (try: sudo apt install wmctrl)"
+    return 1
+  fi
+
+  _ass_err "ass new: apt-get not found; install wmctrl manually for window placement"
+  return 1
+}
+
 # Best-effort: move a new Codium window to the left monitor and maximize (wmctrl/XWayland).
 _ass_codium_place_window_maximized() {
   local marker="$1" x="${2:-0}" y="${3:-0}"
@@ -1635,6 +1657,7 @@ _ass_open_claude_code_in_codium() {
   local clone_path="$1" marker x=0 y=0
 
   command -v codium >/dev/null 2>&1 || return 1
+  _ass_ensure_wmctrl || _ass_info "ass new: continuing without wmctrl (Electron flags only)"
   marker=$(basename "$clone_path")
 
   if read -r x y _ _ < <(_ass_codium_left_monitor_geometry 2>/dev/null); then
