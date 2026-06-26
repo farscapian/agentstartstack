@@ -2,7 +2,7 @@
 
 Human-side helper for the AI git workflow step **local-sync** (session clone -> canonical local repo via the `local-sync` remote). Agents commit in the session clone; the human runs `nut` to local-sync with the canonical local repo, reviews, then `git push origin main`.
 
-**Canonical source:** [`scripts/lib/nut-aliases.sh`](../scripts/lib/nut-aliases.sh) (tracked). Install it into your shell with [`scripts/install-shell-aliases.sh`](../scripts/install-shell-aliases.sh) -- which both `init_claude_session.sh` and `init_grok_session.sh` call -- so a managed block in `~/.bash_aliases` is kept in sync automatically. To change behavior, edit the lib file and re-run the installer; do **not** hand-edit `~/.bash_aliases` (the managed block is overwritten on the next run).
+**Canonical source:** [`scripts/lib/nut-aliases.sh`](../scripts/lib/nut-aliases.sh) (tracked). Install it into your shell with [`scripts/install-shell-aliases.sh`](../scripts/install-shell-aliases.sh) -- which both `init_claude_session.sh` and `init_grok_session.sh` call. The installer writes a small managed block in `~/.bash_aliases` that **sources** this lib file from the agentstartstack canonical repo (never a session clone) -- so all the functions live in the repo exclusively and your shell only references them. Edits to the lib file take effect in new shells with no re-install. Do **not** hand-edit `~/.bash_aliases`.
 
 ## Why "nut"
 
@@ -121,7 +121,10 @@ scripts/install-shell-aliases.sh
 source ~/.bashrc        # or: source ~/.bash_aliases
 ```
 
-The installer writes a managed block into `~/.bash_aliases` (overwritten on each
-run) and ensures `~/.bashrc` sources it. To add a guard for a new project or
-otherwise change behavior, edit `scripts/lib/nut-aliases.sh` and re-run the
-installer -- never hand-edit the managed block.
+The installer writes a small managed block into `~/.bash_aliases` that **sources**
+`scripts/lib/nut-aliases.sh` from the agentstartstack canonical repo -- never a
+session clone, which `nutup trim` may delete. All the functions live in the repo
+exclusively; your shell only references them. Edits to the lib file take effect in
+new shells with no re-install (re-run the installer only if the canonical repo path
+moves). The block also ensures `~/.bashrc` sources `~/.bash_aliases`. Never
+hand-edit the managed block.

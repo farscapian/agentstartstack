@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # install-shell-aliases.sh -- idempotently install the nut/nutup shell aliases.
 #
-# Copies the canonical lib/nut-aliases.sh into a managed block in ~/.bash_aliases
-# and ensures ~/.bashrc sources ~/.bash_aliases. Re-running replaces the managed
-# block in place, so it is safe to call every session -- both init_claude_session.sh
-# and init_grok_session.sh call it, and the human can run it directly (see the
-# CONSUMER-ACTION in the bump that updates the aliases).
+# Writes a managed block into ~/.bash_aliases that **sources** the canonical
+# lib/nut-aliases.sh from a persistent checkout (so all nut/nutup/nutupyall/dropit
+# logic lives in the repo exclusively -- the shell only references it), and ensures
+# ~/.bashrc sources ~/.bash_aliases. The sourced path is resolved to the
+# agentstartstack canonical repo, never a session clone (nutup trim deletes those).
+# Re-running replaces the managed block in place, so it is safe to call every
+# session -- both init_claude_session.sh and init_grok_session.sh call it, and the
+# human can run it directly (see the CONSUMER-ACTION in the bump that updates it).
 #
 # Machine-global and config-free: it needs no .agentstartstack.env. It never
 # sources your shell for you (a child process cannot) -- it prints the command.
@@ -50,23 +53,51 @@ detect_default_roots() {
 }
 DEFAULT_ROOTS="$(detect_default_roots || true)"
 
+# Resolve a STABLE path to nut-aliases.sh for ~/.bash_aliases to source. It must
+# NOT be a session clone (nutup trim deletes those, which would break the source
+# line), so prefer the agentstartstack canonical checkout under the project roots;
+# fall back to SCRIPT_DIR's own copy only if that is itself not under a clone parent.
+resolve_stable_src() {
+  local roots r cand parents base in_clone=0
+  roots="${AGENTSTARTSTACK_PROJECT_ROOTS:-$DEFAULT_ROOTS}"
+  local IFS=:
+  for r in $roots; do
+    [[ -n "$r" ]] || continue
+    cand="${r}/agentstartstack/scripts/lib/nut-aliases.sh"
+    [[ -f "$cand" ]] && { readlink -f "$cand"; return 0; }
+  done
+
+  parents="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  for base in $parents; do
+    [[ -n "$base" ]] || continue
+    [[ "$SCRIPT_DIR" == "$base"/* ]] && { in_clone=1; break; }
+  done
+  [[ "$in_clone" == 0 ]] && { readlink -f "$SRC"; return 0; }
+  return 1
+}
+
+STABLE_SRC="$(resolve_stable_src || true)"
+[[ -n "$STABLE_SRC" ]] || err "Cannot resolve a non-clone nut-aliases.sh to source. Run the installer from the agentstartstack canonical repo (or a consumer canonical), or set AGENTSTARTSTACK_PROJECT_ROOTS to the dir holding your agentstartstack checkout."
+bash -n "$STABLE_SRC" 2>/dev/null || warn "Source file has a syntax error: ${STABLE_SRC} (new shells may fail to load aliases)"
+
 # Build the managed block: markers, a "do not edit" note, an overridable default
-# for the project-roots search path, then the canonical source. A trap cleans the
-# tempfile on any exit.
+# for the project-roots search path, then a guarded source of the canonical
+# nut-aliases.sh. A trap cleans the tempfile on any exit.
 tmp="$(mktemp "${TMPDIR:-/tmp}/nut-aliases.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 
 {
   printf '%s\n' "$BEGIN_MARK"
   printf '%s\n' "# Managed by agentstartstack scripts/install-shell-aliases.sh -- do not edit."
-  printf '%s\n' "# Edit scripts/lib/nut-aliases.sh upstream, then re-run the installer."
+  printf '%s\n' "# This sources the canonical nut-aliases.sh from the agentstartstack repo;"
+  printf '%s\n' "# all nut/nutup/dropit logic lives there. Edit it there, not here."
   if [[ -n "$DEFAULT_ROOTS" ]]; then
     printf '%s\n' "# Default project-roots search path (computed at install time). Override by"
     printf '%s\n' "# exporting AGENTSTARTSTACK_PROJECT_ROOTS before this file is sourced."
     printf ': "${AGENTSTARTSTACK_PROJECT_ROOTS:=%s}"\n' "$DEFAULT_ROOTS"
     printf '%s\n' "export AGENTSTARTSTACK_PROJECT_ROOTS"
   fi
-  cat "$SRC"
+  printf '[ -f "%s" ] && . "%s"\n' "$STABLE_SRC" "$STABLE_SRC"
   printf '%s\n' "$END_MARK"
 } > "$tmp"
 
