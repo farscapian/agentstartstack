@@ -5,7 +5,8 @@ Fetches origin/main quietly before counting. Lists agent session clones only
 (not canonical). References are shown in the INFO line above the table.
 
 Columns (each clone row):
-  #       session clone index (newest first)
+  #       1 = newest clone (rollover target); ^ = rolls into #1 on trim/drop
+          (ass list shows 1,2,3,... for ass drop / ass info index)
   agent   grok / claude
   wip     uncommitted work not in canonical (- or dirty)
   ahead   commits on this clone not on canonical main

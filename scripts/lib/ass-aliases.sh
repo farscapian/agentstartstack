@@ -436,6 +436,16 @@ _ass_status_format_row() {
   printf '%-3s %-7s %-7s %7s %7s  %-5s  %7s %7s  %-9s  %s' "$@"
 }
 
+# ass status # column: 1 = newest (rollover target); ^ = rolls into #1 on trim/drop.
+_ass_status_index_display() {
+  local i="$1"
+  if [[ "$i" -eq 1 ]]; then
+    printf '1'
+  else
+    printf '^'
+  fi
+}
+
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
   local ahead behind can_ahead can_behind head wip notes
@@ -497,12 +507,13 @@ ass_status() {
     i=1
     for clone in "${clones[@]}"; do
       _ass_status_print_row "$clone" "$pwd_here" "$canonical" \
-        "$(_ass_session_agent_kind "$clone")" "$i"
+        "$(_ass_session_agent_kind "$clone")" "$(_ass_status_index_display "$i")"
       i=$((i + 1))
     done
   fi
 
   echo ""
+  _ass_info "^ = rolls into #1 on trim/drop (ass list shows numeric index for ass drop)"
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
   _ass_info "--> = canonical pushes to origin/main"

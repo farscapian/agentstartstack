@@ -200,7 +200,7 @@ ass status
 
 | Column | Meaning |
 |--------|---------|
-| **#** | Session clone index (newest first, same order as `ass list`) |
+| **#** | `1` = newest (rollover target); `^` = rolls into #1 on trim/drop (`ass list` has numeric index for `ass drop`) |
 | **agent** | `grok` / `claude` from `.git/agentstartstack-session-agent` |
 | **wip** | Uncommitted work not yet in canonical: `-` (clean) or `dirty` |
 | **canonical** (group title) | First ahead/behind pair vs canonical/main |
