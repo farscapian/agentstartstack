@@ -2089,25 +2089,12 @@ _ass_codium_left_monitor_geometry() {
   printf '%s %s %s %s\n' "$x" "$y" "$w" "$h"
 }
 
-# Prompt to install wmctrl when missing (Codium window placement on XWayland).
+# Check for wmctrl (Codium window placement on XWayland); inform if missing.
 _ass_ensure_wmctrl() {
-  local line
   command -v wmctrl >/dev/null 2>&1 && return 0
 
   _ass_info "wmctrl is not installed (places the new Codium window on the left monitor)"
-  read -r -p "ass new: install wmctrl now? [y/N] " line </dev/tty
-  [[ "$line" == [yY] || "$line" == [yY][eE][sS] ]] || return 1
-
-  if command -v apt-get >/dev/null 2>&1; then
-    if sudo apt-get install -y wmctrl; then
-      _ass_ok "ass new: installed wmctrl"
-      return 0
-    fi
-    _ass_err "ass new: wmctrl install failed (try: sudo apt install wmctrl)"
-    return 1
-  fi
-
-  _ass_err "ass new: apt-get not found; install wmctrl manually for window placement"
+  _ass_info "ass new: install it manually for window placement (e.g. apt install wmctrl)"
   return 1
 }
 

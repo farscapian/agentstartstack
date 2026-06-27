@@ -32,7 +32,7 @@ ass new --claude    # force Claude Code session clone
 # (left monitor, maximized, Claude Code extension opened) whenever the codium CLI is
 # on PATH -- regardless of where you launched ass new. Opt out: ASS_NEW_OPEN_CODIUM=0.
 # Optional: ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y override monitor origin.
-# ass new prompts to install wmctrl (apt) when missing, for left-monitor placement.
+# ass new notes when wmctrl is missing; install it manually (apt) for left-monitor placement.
 ass drop            # archive all session clones except #1 (collapse into one)
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass drop <src>      # from consumer clone: copy generic work upstream
