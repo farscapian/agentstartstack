@@ -64,6 +64,7 @@ main() {
     new) shift; ass_new "$@" ;;
     drop)  shift; ass_drop "$@" ;;
     publish) shift; ass_publish "$@" ;;
+    open) shift; ass_open "$@" ;;
     face)
       shift
       # Easter-egg mnemonic: "face down ass up" = ass up, then ass publish.

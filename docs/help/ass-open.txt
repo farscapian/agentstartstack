@@ -1,0 +1,16 @@
+ass open -- open a session clone in its agent's editor
+
+Usage:
+  ass open <n>
+
+Index matches ass list / ass status (# column; newest clone = 1, shown 1*).
+Opens session clone #n in the editor for its agent:
+  - claude -> new Codium window (left monitor, maximized) with the Claude Code
+    extension (same as ass new; honors ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y).
+  - grok   -> Cursor (falls back to codium, then code).
+
+Run from the canonical local repo or any session clone (pwd-oriented).
+
+Help:
+  ass open help
+  ass help open

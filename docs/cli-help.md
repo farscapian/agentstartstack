@@ -24,6 +24,7 @@ How `ass` structures terminal help (iotstack-style). Help text lives in
 | `docs/help/ass-list.txt` | `ass list help`, `ass help list` |
 | `docs/help/ass-status.txt` | `ass status help`, `ass help status` |
 | `docs/help/ass-info.txt` | `ass info help`, `ass help info` |
+| `docs/help/ass-open.txt` | `ass open help`, `ass help open` |
 | `docs/help/ass-drop.txt` | `ass drop help`, `ass help drop` (collapse all, clone #n, upstream copy) |
 | `docs/help/ass-up.txt` | `ass up help`, `ass help up` |
 | `docs/help/ass-up-trim.txt` | `ass up trim help`, `ass help up trim` |

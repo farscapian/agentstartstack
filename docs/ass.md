@@ -38,6 +38,7 @@ ass drop <n>        # archive and remove session clone #n (see ass list)
 ass drop <src>      # from consumer clone: copy generic work upstream
 ass status          # ahead/behind origin/main for canonical and session clones
 ass info <n>        # plain-language summary for session #n (from ass status)
+ass open <n>        # open session clone #n in its agent's editor
 ass list            # session clones for canonical pwd (by origin URL)
 ass up              # ass sync, then git push origin main
 ass up -f           # as ass sync -f, then push
@@ -232,6 +233,30 @@ and/or a dirty-work analysis (file counts, diff size, largest edited paths).
 ass status
 ass info 2
 ```
+
+## ass open (open a clone in its editor)
+
+`ass open <n>` opens session clone **`n`** (same index as `ass status` / `ass list`)
+in the editor for its agent: a **claude** clone opens a new Codium window with the
+Claude Code extension (same as `ass new`); a **grok** clone opens in Cursor (falling
+back to `codium`, then `code`). Pwd-oriented -- run from canonical or any clone.
+
+```bash
+ass list
+ass open 2
+```
+
+## Session titles (ass status / ass list)
+
+Both `ass status` and `ass list` show the **agent session title** for each clone:
+
+- **grok** -- `session_summary` from the newest `~/.grok/sessions/<clone>/<uuid>/summary.json`.
+- **claude** -- the latest `ai-title` from the Claude Code session that edited the clone
+  (located by scanning the canonical project's `*.jsonl` for the clone path; every
+  `ass new` claude session edits its clone by absolute path, so the match is exact).
+
+In `ass list` the title is its own column; in `ass status` it is appended after the
+path as `| <title>`. Titles are truncated for display.
 
 ## ass drop (archive session clones)
 

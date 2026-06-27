@@ -65,6 +65,7 @@ ass_help_list() { _ass_cat_help ass-list.txt; }
 ass_help_status() { _ass_cat_help ass-status.txt; }
 ass_help_info() { _ass_cat_help ass-info.txt; }
 ass_help_drop() { _ass_cat_help ass-drop.txt; }
+ass_help_open() { _ass_cat_help ass-open.txt; }
 ass_help_up() { _ass_cat_help ass-up.txt; }
 ass_help_up_trim() { _ass_cat_help ass-up-trim.txt; }
 ass_help_publish() { _ass_cat_help ass-publish.txt; }
@@ -93,6 +94,7 @@ ass_help_topic() {
     status) ass_help_status ;;
     info) ass_help_info ;;
     drop) ass_help_drop ;;
+    open) ass_help_open ;;
     trim) ass_help_up_trim ;;
     *)
       _ass_err "ass: unknown help topic: ${topic}"
@@ -519,6 +521,67 @@ _ass_status_display_path() {
   fi
 }
 
+# Title (aiTitle) of the newest Claude Code session that edited this clone. Claude
+# files sessions under the launch cwd's project dir (canonical, not the clone), but
+# each 'ass new' session edits its clone by absolute path, so the clone path appears
+# in exactly that session's transcript. Grep every project's *.jsonl for the clone
+# path (it is globally unique) -- location-independent, no cwd/encoding assumptions.
+_ass_claude_session_title() {
+  local clone="$1" newest
+  clone=$(readlink -f "$clone")
+  newest=$(
+    grep -lF "$clone" "$HOME"/.claude/projects/*/*.jsonl 2>/dev/null \
+      | while IFS= read -r f; do printf '%s\t%s\n' "$(stat -c %Y "$f" 2>/dev/null || echo 0)" "$f"; done \
+      | sort -rn -k1,1 | head -1 | cut -f2-
+  )
+  [[ -n "$newest" ]] || return 1
+  grep '"type":"ai-title"' "$newest" 2>/dev/null | tail -1 \
+    | python3 -c 'import sys,json
+try: print(json.loads(sys.stdin.read()).get("aiTitle",""))
+except Exception: pass' 2>/dev/null
+}
+
+# Title (session_summary) of the newest Grok session bound to this clone. Grok
+# files sessions under ~/.grok/sessions/<url-encoded-clone-path>/<uuid>/summary.json.
+_ass_grok_session_title() {
+  local clone="$1" encoded base newest entry
+  clone=$(readlink -f "$clone")
+  encoded=$(_ass_path_urlencode "$clone") || return 1
+  base="${HOME}/.grok/sessions/${encoded}"
+  [[ -d "$base" ]] || return 1
+  newest=$(
+    for entry in "$base"/*/summary.json; do
+      [[ -f "$entry" ]] || continue
+      printf '%s\t%s\n' "$(stat -c %Y "$entry" 2>/dev/null || echo 0)" "$entry"
+    done | sort -rn -k1,1 | head -1 | cut -f2-
+  )
+  [[ -n "$newest" ]] || return 1
+  python3 -c 'import sys,json
+try: print(json.load(open(sys.argv[1])).get("session_summary",""))
+except Exception: pass' "$newest" 2>/dev/null
+}
+
+# Agent session title for a clone (grok/claude). Echoes empty when unknown.
+_ass_session_title() {
+  local clone="$1" agent="$2"
+  case "$agent" in
+    grok)   _ass_grok_session_title "$clone" ;;
+    claude) _ass_claude_session_title "$clone" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Truncate $1 to $2 columns (default 40), appending '...' when cut.
+_ass_truncate() {
+  local s="$1" n="${2:-40}"
+  s="${s//$'\n'/ }"
+  if [[ "${#s}" -gt "$n" ]]; then
+    printf '%s...' "${s:0:n-3}"
+  else
+    printf '%s' "$s"
+  fi
+}
+
 # ass status # column: 1* = primary (newest) clone, the rollover target;
 # ^ = rolls into #1 on trim/drop.
 _ass_status_index_display() {
@@ -532,7 +595,7 @@ _ass_status_index_display() {
 
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
-  local ahead behind can_ahead can_behind wip sync_col notes disp_path
+  local ahead behind can_ahead can_behind wip sync_col notes disp_path title
 
   read -r ahead behind < <(_ass_origin_ahead_behind "$path")
   read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
@@ -542,9 +605,11 @@ _ass_status_print_row() {
   [[ "$idx" == "1*" ]] && sync_col="-->"
   notes=$(_ass_status_notes "$path" "$pwd_here")
   disp_path=$(_ass_status_display_path "$path")
+  title=$(_ass_truncate "$(_ass_session_title "$path" "$agent" "$canonical")" 45)
 
   _ass_status_format_row "$idx" "$agent" "$wip" "$sync_col" "$can_ahead" "$can_behind" \
     "$ahead" "$behind" "$disp_path"
+  [[ -n "$title" ]] && printf '  | %s' "$title"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -605,6 +670,7 @@ ass_status() {
   _ass_info "^ = rolls into #1 on trim/drop (ass list shows numeric index for ass drop)"
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
   _ass_info "--> (after wip) = session #1 local-syncs to canonical (ass sync handoff)"
+  _ass_info "| <title> after path = agent session title (grok summary / claude ai-title)"
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
   _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
   return 0
@@ -902,7 +968,7 @@ _ass_drop_rollover_survivor() {
 ass_list() {
   local -a _ass_argv clones=()
   local canonical origin repo_name pwd_here clone
-  local i agent head behind notes disp_path idx_disp
+  local i agent head behind notes disp_path idx_disp title
 
   if _ass_help_requested "${1:-}"; then
     ass_help_list
@@ -943,8 +1009,8 @@ ass_list() {
   fi
 
   echo ""
-  printf '%-3s %-7s %-9s %6s  %s\n' "#" "agent" "HEAD" "behind" "path"
-  printf '%-3s %-7s %-9s %6s  %s\n' "---" "-------" "---------" "------" "----"
+  printf '%-3s %-7s %-42s %-9s %6s  %s\n' "#" "agent" "title" "HEAD" "behind" "path"
+  printf '%-3s %-7s %-42s %-9s %6s  %s\n' "---" "-------" "-----" "---------" "------" "----"
 
   i=1
   for clone in "${clones[@]}"; do
@@ -955,15 +1021,17 @@ ass_list() {
     if _ass_clone_has_dirty_worktree "$clone"; then notes=" dirty"; fi
     if [[ "$clone" == "$pwd_here" ]]; then notes="${notes} pwd"; fi
     disp_path=$(_ass_status_display_path "$clone")
+    title=$(_ass_truncate "$(_ass_session_title "$clone" "$agent" "$canonical")" 40)
     # Numeric index for ass drop / ass info; mark the primary (newest) clone 1*.
     idx_disp="$i"
     [[ "$i" -eq 1 ]] && idx_disp="1*"
-    printf '%-3s %-7s %-9s %6s  %s%s\n' "$idx_disp" "$agent" "$head" "$behind" "$disp_path" "$notes"
+    printf '%-3s %-7s %-42s %-9s %6s  %s%s\n' "$idx_disp" "$agent" "$title" "$head" "$behind" "$disp_path" "$notes"
     i=$((i + 1))
   done
 
   echo ""
   _ass_info "1* = primary (newest) clone; index (1,2,3,...) is the ass drop / ass info arg"
+  _ass_info "title = agent session title (grok summary / claude ai-title)"
   _ass_info "behind = commits on canonical main not in this clone"
   _ass_info "see also: ass status (vs origin/main)"
   return 0
@@ -2063,6 +2131,73 @@ _ass_open_claude_code_in_codium() {
   sleep 1
   codium -r "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
   return 0
+}
+
+# Open a clone in Cursor (grok's editor); fall back to codium, then code.
+_ass_open_grok_in_cursor() {
+  local clone="$1" editor
+  for editor in cursor codium code; do
+    if command -v "$editor" >/dev/null 2>&1; then
+      "$editor" -n "$clone" >/dev/null 2>&1 && return 0
+    fi
+  done
+  return 1
+}
+
+# ass open <n> -- open session clone #n in its agent's editor (n from ass status/list).
+ass_open() {
+  local -a _ass_argv clones=()
+  local index canonical origin clone agent
+
+  if _ass_help_requested "${1:-}"; then
+    ass_help_open
+    return 0
+  fi
+
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  if [[ ${#_ass_argv[@]} -ne 1 ]] || ! [[ "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
+    _ass_err "ass open: usage: ass open <n>  (n from ass status / ass list)"
+    return 1
+  fi
+  index="${_ass_argv[0]}"
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass open: canonical has no origin remote"
+    return 1
+  }
+
+  clone=$(_ass_session_clone_at_index "$origin" "$index") || {
+    mapfile -t clones < <(agent_session_clones_list "$origin")
+    _ass_err "ass open: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
+    return 1
+  }
+  clone=$(readlink -f "$clone")
+  agent=$(_ass_session_agent_kind "$clone")
+
+  _ass_info "ass open: #${index} ${agent} -> ${clone}"
+  case "$agent" in
+    claude)
+      if _ass_open_claude_code_in_codium "$clone"; then
+        _ass_ok "ass open: opened ${clone} in a new Codium window (Claude Code)"
+      else
+        _ass_err "ass open: codium CLI not found -- open ${clone} manually"
+        return 1
+      fi
+      ;;
+    grok)
+      if _ass_open_grok_in_cursor "$clone"; then
+        _ass_ok "ass open: opened ${clone} in Cursor"
+      else
+        _ass_err "ass open: no cursor/codium/code CLI found -- open ${clone} manually"
+        return 1
+      fi
+      ;;
+    *)
+      _ass_info "ass open: unknown agent kind -- open this folder manually: ${clone}"
+      ;;
+  esac
 }
 
 # Infer session agent from installed CLIs: grok only -> grok; claude only -> claude;
