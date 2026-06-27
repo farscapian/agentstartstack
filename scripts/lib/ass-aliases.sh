@@ -562,8 +562,18 @@ except Exception: pass' "$newest" 2>/dev/null
 }
 
 # Agent session title for a clone (grok/claude). Echoes empty when unknown.
+# A human-set title (ass new --title, stored as ASS_SESSION_TITLE in the clone
+# env) wins over the agent-derived title.
 _ass_session_title() {
-  local clone="$1" agent="$2"
+  local clone="$1" agent="$2" override
+  local env_file="${clone}/.agentstartstack.env"
+  if [[ -f "$env_file" ]]; then
+    override=$(sed -n 's/^ASS_SESSION_TITLE=//p' "$env_file" 2>/dev/null | tail -1)
+    if [[ -n "$override" ]]; then
+      printf '%s\n' "$override"
+      return 0
+    fi
+  fi
   case "$agent" in
     grok)   _ass_grok_session_title "$clone" ;;
     claude) _ass_claude_session_title "$clone" ;;
@@ -2253,7 +2263,7 @@ _ass_ensure_trailing_newline() {
 
 # Write gitignored .agentstartstack.env into a session clone so init_* can align it.
 _ass_new_write_clone_env() {
-  local canonical="$1" clone_path="$2" origin="$3"
+  local canonical="$1" clone_path="$2" origin="$3" title="${4:-}"
   local env_file="${clone_path}/.agentstartstack.env" project_name
 
   project_name="$(basename "$canonical")"
@@ -2283,10 +2293,21 @@ EOF
   else
     printf 'AGENT_SESSION_CLONE_PARENT=%s\n' "${parents}" >> "$env_file"
   fi
+  # Optional human-set session title (ass new --title). Preferred over the
+  # agent-derived title in ass list. Rewrite via grep+append so an arbitrary
+  # title (slashes, '>', etc.) never reaches sed as a replacement string.
+  if [[ -n "$title" ]]; then
+    if grep -q '^ASS_SESSION_TITLE=' "$env_file" 2>/dev/null; then
+      grep -v '^ASS_SESSION_TITLE=' "$env_file" > "${env_file}.tmp" \
+        && mv "${env_file}.tmp" "$env_file"
+    fi
+    printf 'ASS_SESSION_TITLE=%s\n' "$title" >> "$env_file"
+  fi
 }
 
 ass_new() {
   local agent="" canonical origin session_id clone_path script_dir repo_name
+  local title="" path_arg="" base_dir
   if _ass_help_requested "${1:-}"; then
     ass_help_new
     return 0
@@ -2295,7 +2316,14 @@ ass_new() {
     case "$1" in
       --grok) agent=grok; shift ;;
       --claude) agent=claude; shift ;;
-      *) _ass_err "ass new: unknown option: $1"; return 1 ;;
+      --title) shift
+        [[ $# -gt 0 ]] || { _ass_err "ass new: --title requires a value"; return 1; }
+        title="$1"; shift ;;
+      --title=*) title="${1#--title=}"; shift ;;
+      -*) _ass_err "ass new: unknown option: $1"; return 1 ;;
+      *)
+        [[ -z "$path_arg" ]] || { _ass_err "ass new: unexpected extra argument: $1"; return 1; }
+        path_arg="$1"; shift ;;
     esac
   done
   if [[ -z "$agent" ]]; then
@@ -2310,8 +2338,13 @@ ass_new() {
       _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
     fi
   fi
-  canonical=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    _ass_err "ass new: run from the canonical local repo"; return 1
+  # Canonical defaults to pwd; an optional path arg ('.' or any path) targets a
+  # different canonical checkout so ass new can run from outside it.
+  base_dir="${path_arg:-.}"
+  [[ -d "$base_dir" ]] || { _ass_err "ass new: path not found: ${base_dir}"; return 1; }
+  canonical=$(git -C "$base_dir" rev-parse --show-toplevel 2>/dev/null) || {
+    _ass_err "ass new: not a git repo: ${base_dir} (run from / point at the canonical local repo)"
+    return 1
   }
   canonical=$(readlink -f "$canonical")
   origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
@@ -2322,7 +2355,7 @@ ass_new() {
   clone_path="${ASS_NEW_SESSION_CLONE_ROOT}/${repo_name}/${session_id}"
   mkdir -p "$(dirname "$clone_path")"
   git clone "$origin" "$clone_path"
-  _ass_new_write_clone_env "$canonical" "$clone_path" "$origin"
+  _ass_new_write_clone_env "$canonical" "$clone_path" "$origin" "$title"
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
   "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
   _ass_ok "ass new: session clone ready: ${clone_path}"

@@ -4,10 +4,19 @@ Usage:
   ass new
   ass new --grok
   ass new --claude
+  ass new [PATH]
+  ass new --title "TITLE"
 
 Options:
   --grok              Force Grok / Cursor session clone
   --claude            Force Claude Code session clone
+  --title TITLE       Human-set session title shown in 'ass list' (wins over
+                      the agent-derived title)
+
+Arguments:
+  PATH                Canonical local repo to clone (default: pwd). Accepts '.'
+                      or any path; ass new resolves its git toplevel, so it can
+                      run from outside the canonical checkout.
 
 Inference order (which agent): Codium integrated terminal -> claude; else
 grok-only on PATH -> grok; claude-only -> claude; both installed -> claude.
