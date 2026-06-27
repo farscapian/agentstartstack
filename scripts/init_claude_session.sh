@@ -72,9 +72,11 @@ info "Project:       ${DISPLAY_NAME} (${PROJECT_NAME})"
 echo ""
 
 # Re-running init re-aligns via a hard reset + clean, which discards uncommitted
-# work. If the session clone is dirty, confirm before destroying it (a fresh
-# clone is clean, so first-run init never prompts).
-if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+# work. If the session clone is dirty, confirm before destroying it. Exclude
+# .agentstartstack.env: ass new writes clone-specific config into it, so a fresh
+# clone is "dirty" by that file alone -- it is init-generated, not agent work,
+# and the reset below re-aligns it anyway. Any OTHER dirt is real work.
+if [[ -n "$(git status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]; then
   warn "Session clone has uncommitted changes; re-aligning will HARD RESET and discard them:"
   git status --short >&2
   read -r -p "Discard and re-align? [y/N] " confirm </dev/tty

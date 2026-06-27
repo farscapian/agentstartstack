@@ -1227,7 +1227,10 @@ _ass_print_handoff_report() {
 
 _ass_clone_has_dirty_worktree() {
   local clone="$1"
-  [[ -n "$(git -C "$clone" status --porcelain 2>/dev/null)" ]]
+  # Exclude .agentstartstack.env: ass new writes clone-specific config into it,
+  # so a fresh clone is "dirty" by that file alone. It is init-generated, not
+  # agent work -- it should not show as wip, block drop, or be auto-committed.
+  [[ -n "$(git -C "$clone" status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]
 }
 
 _ass_ensure_local_sync_remote() {
