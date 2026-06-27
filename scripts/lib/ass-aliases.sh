@@ -2143,8 +2143,12 @@ _ass_open_claude_code_in_codium() {
 
   _ass_codium_place_window_maximized "$marker" "$x" "$y" &
 
-  sleep 1
-  codium -r "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
+  # Activate the Claude Code extension via its vscode:// deep link. Use --open-url
+  # (the CLI flag for protocol URIs); -r/--reuse-window treats its argument as a
+  # file/folder path, which is why the URI used to land in quick-open. Give the
+  # new window a moment to start so the extension's URI handler is registered.
+  sleep 2
+  codium --open-url "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
   return 0
 }
 
