@@ -571,17 +571,6 @@ _ass_session_title() {
   esac
 }
 
-# Truncate $1 to $2 columns (default 40), appending '...' when cut.
-_ass_truncate() {
-  local s="$1" n="${2:-40}"
-  s="${s//$'\n'/ }"
-  if [[ "${#s}" -gt "$n" ]]; then
-    printf '%s...' "${s:0:n-3}"
-  else
-    printf '%s' "$s"
-  fi
-}
-
 # ass status # column: 1* = primary (newest) clone, the rollover target;
 # ^ = rolls into #1 on trim/drop.
 _ass_status_index_display() {
@@ -595,7 +584,7 @@ _ass_status_index_display() {
 
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
-  local ahead behind can_ahead can_behind wip sync_col notes disp_path title
+  local ahead behind can_ahead can_behind wip sync_col notes disp_path
 
   read -r ahead behind < <(_ass_origin_ahead_behind "$path")
   read -r can_ahead can_behind < <(_ass_clone_canonical_ahead_behind "$path" "$canonical")
@@ -605,11 +594,9 @@ _ass_status_print_row() {
   [[ "$idx" == "1*" ]] && sync_col="-->"
   notes=$(_ass_status_notes "$path" "$pwd_here")
   disp_path=$(_ass_status_display_path "$path")
-  title=$(_ass_truncate "$(_ass_session_title "$path" "$agent" "$canonical")" 45)
 
   _ass_status_format_row "$idx" "$agent" "$wip" "$sync_col" "$can_ahead" "$can_behind" \
     "$ahead" "$behind" "$disp_path"
-  [[ -n "$title" ]] && printf '  | %s' "$title"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
 }
@@ -670,7 +657,6 @@ ass_status() {
   _ass_info "^ = rolls into #1 on trim/drop (ass list shows numeric index for ass drop)"
   _ass_info "wip = uncommitted work in clone not yet in canonical (dirty or -)"
   _ass_info "--> (after wip) = session #1 local-syncs to canonical (ass sync handoff)"
-  _ass_info "| <title> after path = agent session title (grok summary / claude ai-title)"
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
   _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
   return 0
@@ -966,9 +952,10 @@ _ass_drop_rollover_survivor() {
 
 # ass list -- session clones for the canonical repo at pwd.
 ass_list() {
-  local -a _ass_argv clones=()
+  local -a _ass_argv clones=() tlines=()
   local canonical origin repo_name pwd_here clone
-  local i agent head behind notes disp_path idx_disp title
+  local i agent head behind notes disp_path idx_disp title k
+  local TITLE_W=40
 
   if _ass_help_requested "${1:-}"; then
     ass_help_list
@@ -1009,8 +996,8 @@ ass_list() {
   fi
 
   echo ""
-  printf '%-3s %-7s %-42s %-9s %6s  %s\n' "#" "agent" "title" "HEAD" "behind" "path"
-  printf '%-3s %-7s %-42s %-9s %6s  %s\n' "---" "-------" "-----" "---------" "------" "----"
+  printf "%-3s %-7s %-${TITLE_W}s %-9s %6s  %s\n" "#" "agent" "title" "HEAD" "behind" "path"
+  printf "%-3s %-7s %-${TITLE_W}s %-9s %6s  %s\n" "---" "-------" "-----" "---------" "------" "----"
 
   i=1
   for clone in "${clones[@]}"; do
@@ -1021,11 +1008,20 @@ ass_list() {
     if _ass_clone_has_dirty_worktree "$clone"; then notes=" dirty"; fi
     if [[ "$clone" == "$pwd_here" ]]; then notes="${notes} pwd"; fi
     disp_path=$(_ass_status_display_path "$clone")
-    title=$(_ass_truncate "$(_ass_session_title "$clone" "$agent" "$canonical")" 40)
     # Numeric index for ass drop / ass info; mark the primary (newest) clone 1*.
     idx_disp="$i"
     [[ "$i" -eq 1 ]] && idx_disp="1*"
-    printf '%-3s %-7s %-42s %-9s %6s  %s%s\n' "$idx_disp" "$agent" "$title" "$head" "$behind" "$disp_path" "$notes"
+
+    # Full title word-wrapped to the title column: first segment on the row, the
+    # rest on continuation lines indented under the title column (3+1+7+1 = 12).
+    title=$(_ass_session_title "$clone" "$agent")
+    tlines=()
+    mapfile -t tlines < <(printf '%s\n' "$title" | fold -s -w "$TITLE_W" | sed 's/[[:space:]]*$//')
+    printf "%-3s %-7s %-${TITLE_W}s %-9s %6s  %s%s\n" \
+      "$idx_disp" "$agent" "${tlines[0]:-}" "$head" "$behind" "$disp_path" "$notes"
+    for ((k = 1; k < ${#tlines[@]}; k++)); do
+      printf '%-3s %-7s %s\n' "" "" "${tlines[k]}"
+    done
     i=$((i + 1))
   done
 
