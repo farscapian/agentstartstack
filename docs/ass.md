@@ -76,7 +76,9 @@ session clone (ahead/behind canonical), and which clone is selected.
 - **No in-flight session clone** -- `git submodule update --remote` to see the delta it would adopt. If that delta is **action-free** (no `CONSUMER-ACTION:` in any producer commit), **auto-commit** the bump (`Bump .agentstartstack to <sha>`) and `git push origin main`. If the delta **carries a `CONSUMER-ACTION:`**, do **not** auto-commit (a blind pointer move would skip the actions) -- restore the submodule and report the consumer under "need agent (actions)" so an agent session reconciles it. Unchanged consumers report "already current".
 - **In-flight session clone(s)** -- uncommitted changes, or commits ahead of `local-sync/main`. Auto-committing the canonical bump would turn an in-flight clone's next `ass` into a non-fast-forward, so canonical is left untouched. Instead `ass publish` drops a gitignored **`.agentstartstack-bump` watch file** in every clone of that consumer (see [The .agentstartstack-bump watch file](workflow.md#the-agentstartstack-bump-watch-file)). The bump then **rides along**: the agent applies the submodule update on its next commit, and the bump reaches canonical via that agent's normal `ass` (a fast-forward). Other clones find canonical already current on their next align and just clear the flag.
 
-The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / flagged (in-flight) / need agent (actions) / failed`.
+The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / flagged (in-flight) / need agent (actions) / trim-skipped / failed`.
+
+**Shortcut:** `face down ass up` runs `ass up`, then `ass publish` (installed as a thin `face()` wrapper alongside `ass()` by `install-shell-aliases.sh`).
 
 **Conventions**
 
