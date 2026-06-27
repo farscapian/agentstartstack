@@ -603,9 +603,9 @@ _ass_status_print_row() {
 
 # ass status -- agent session clones vs origin/main and canonical/main.
 ass_status() {
-  local -a _ass_argv clones=()
+  local -a _ass_argv clones=() rest=()
   local sync_target canonical origin repo_name pwd_here origin_head can_head
-  local clone i
+  local clone i arg no_sync=0
 
   if _ass_help_requested "${1:-}"; then
     ass_help_status
@@ -613,9 +613,26 @@ ass_status() {
   fi
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  # ass status implies an ass sync handoff first; --no-sync gives a read-only view.
+  for arg in "${_ass_argv[@]}"; do
+    case "$arg" in
+      --no-sync) no_sync=1 ;;
+      *) rest+=("$arg") ;;
+    esac
+  done
+  _ass_argv=("${rest[@]}")
   if [[ ${#_ass_argv[@]} -gt 0 ]]; then
     _ass_err "ass status: unexpected argument: ${_ass_argv[0]} (pwd-oriented -- cd to the repo first)"
     return 1
+  fi
+
+  # Implied handoff: land agent work to canonical before reporting (non-fatal so
+  # the table always prints). Opt out with --no-sync.
+  if [[ "$no_sync" -eq 0 ]]; then
+    # ass_sync takes only optional flags; a bare call is intended (not script $@).
+    # shellcheck disable=SC2119
+    ass_sync || true
+    echo ""
   fi
 
   sync_target=$(_ass_resolve_sync_target "") || return 1
@@ -1137,6 +1154,8 @@ ass_sync_all() {
 }
 
 # ass sync -- local-sync handoff (session clone -> canonical). Former bare `ass`.
+# Called both with flags (ass.sh) and bare (ass status implied handoff).
+# shellcheck disable=SC2120
 ass_sync() {
   local -a _ass_argv sync_target
 

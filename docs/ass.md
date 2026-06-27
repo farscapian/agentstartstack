@@ -203,6 +203,10 @@ SHAs appear in the table group-title row (`canonical (SHA) --> origin/main (SHA)
 Session **#1** shows **`-->`** after **wip** (local-sync handoff to canonical). Run from
 the canonical repo or any session clone (pwd-oriented).
 
+`ass status` **implies an `ass sync` handoff first** (lands agent work to canonical
+before reporting; non-fatal, so the table always prints). Use `ass status --no-sync`
+for a read-only view that skips the handoff.
+
 ```bash
 ass status
 ```
