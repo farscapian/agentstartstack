@@ -2163,10 +2163,12 @@ _ass_open_grok_in_cursor() {
   return 1
 }
 
-# ass open <n> -- open session clone #n in its agent's editor (n from ass status/list).
+# ass open <n|path> -- open a session clone in its agent's editor.
+# <n> is an index from ass status / ass list; a path opens that clone directly
+# (handy for a worktree path you already have, e.g. from another tool).
 ass_open() {
   local -a _ass_argv clones=()
-  local index canonical origin clone agent
+  local arg index canonical origin clone agent
 
   if _ass_help_requested "${1:-}"; then
     ass_help_open
@@ -2174,28 +2176,42 @@ ass_open() {
   fi
 
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
-  if [[ ${#_ass_argv[@]} -ne 1 ]] || ! [[ "${_ass_argv[0]}" =~ ^[0-9]+$ ]]; then
-    _ass_err "ass open: usage: ass open <n>  (n from ass status / ass list)"
+  if [[ ${#_ass_argv[@]} -ne 1 ]]; then
+    _ass_err "ass open: usage: ass open <n|path>  (n from ass status / ass list)"
     return 1
   fi
-  index="${_ass_argv[0]}"
+  arg="${_ass_argv[0]}"
 
-  canonical=$(_ass_resolve_sync_target "") || return 1
-  canonical=$(readlink -f "$canonical")
-  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
-    _ass_err "ass open: canonical has no origin remote"
-    return 1
-  }
+  if [[ "$arg" =~ ^[0-9]+$ ]]; then
+    index="$arg"
+    canonical=$(_ass_resolve_sync_target "") || return 1
+    canonical=$(readlink -f "$canonical")
+    origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+      _ass_err "ass open: canonical has no origin remote"
+      return 1
+    }
 
-  clone=$(_ass_session_clone_at_index "$origin" "$index") || {
-    mapfile -t clones < <(agent_session_clones_list "$origin")
-    _ass_err "ass open: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
-    return 1
-  }
-  clone=$(readlink -f "$clone")
+    clone=$(_ass_session_clone_at_index "$origin" "$index") || {
+      mapfile -t clones < <(agent_session_clones_list "$origin")
+      _ass_err "ass open: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
+      return 1
+    }
+    clone=$(readlink -f "$clone")
+  else
+    # Direct path to a session clone directory. Resolve to its git toplevel when
+    # the path is inside a repo so a subdir still opens the clone root.
+    [[ -d "$arg" ]] || { _ass_err "ass open: path not found: ${arg}"; return 1; }
+    clone=$(git -C "$arg" rev-parse --show-toplevel 2>/dev/null) || clone="$arg"
+    clone=$(readlink -f "$clone")
+    index=""
+  fi
   agent=$(_ass_session_agent_kind "$clone")
 
-  _ass_info "ass open: #${index} ${agent} -> ${clone}"
+  if [[ -n "$index" ]]; then
+    _ass_info "ass open: #${index} ${agent} -> ${clone}"
+  else
+    _ass_info "ass open: ${agent} -> ${clone}"
+  fi
   case "$agent" in
     claude)
       if _ass_open_claude_code_in_codium "$clone"; then

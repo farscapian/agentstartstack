@@ -39,6 +39,7 @@ ass drop <src>      # from consumer clone: copy generic work upstream
 ass status          # ahead/behind origin/main for canonical and session clones
 ass info <n>        # plain-language summary for session #n (from ass status)
 ass open <n>        # open session clone #n in its agent's editor
+ass open <path>     # open a clone directly by path (worktree path)
 ass list            # session clones for canonical pwd (by origin URL)
 ass up              # ass sync, then git push origin main
 ass up -f           # as ass sync -f, then push
@@ -245,9 +246,14 @@ in the editor for its agent: a **claude** clone opens a new Codium window with t
 Claude Code extension (same as `ass new`); a **grok** clone opens in Cursor (falling
 back to `codium`, then `code`). Pwd-oriented -- run from canonical or any clone.
 
+`ass open <path>` opens a clone **directly by path** instead of by index -- handy
+when you already have a worktree path (e.g. from another tool). A path inside a repo
+resolves to its git toplevel, so a subdirectory still opens the clone root.
+
 ```bash
 ass list
 ass open 2
+ass open ~/.ass/worktrees/agentstartstack/1782556444
 ```
 
 ## Session titles (ass list)
