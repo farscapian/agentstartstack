@@ -14,7 +14,6 @@ Structure and naming rules: [docs/cli-help.md](../cli-help.md).
 - **ass-list.txt** -- list session clones
 - **ass-status.txt** -- ahead/behind report
 - **ass-info.txt** -- plain-language session summary by index
-- **ass-open.txt** -- open a session clone in its agent's editor
 - **ass-drop.txt** -- collapse to one clone, archive by index, or copy work upstream
 - **ass-up.txt** -- handoff + push origin main
 - **ass-up-trim.txt** -- consolidate and prune stale clones

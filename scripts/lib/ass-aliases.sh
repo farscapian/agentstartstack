@@ -65,7 +65,6 @@ ass_help_list() { _ass_cat_help ass-list.txt; }
 ass_help_status() { _ass_cat_help ass-status.txt; }
 ass_help_info() { _ass_cat_help ass-info.txt; }
 ass_help_drop() { _ass_cat_help ass-drop.txt; }
-ass_help_open() { _ass_cat_help ass-open.txt; }
 ass_help_up() { _ass_cat_help ass-up.txt; }
 ass_help_up_trim() { _ass_cat_help ass-up-trim.txt; }
 ass_help_publish() { _ass_cat_help ass-publish.txt; }
@@ -94,7 +93,6 @@ ass_help_topic() {
     status) ass_help_status ;;
     info) ass_help_info ;;
     drop) ass_help_drop ;;
-    open) ass_help_open ;;
     trim) ass_help_up_trim ;;
     *)
       _ass_err "ass: unknown help topic: ${topic}"
@@ -2019,7 +2017,7 @@ ass_drop() {
 
   # Guard: refuse to remove the primary (#1, the 1* active rollover target) or the
   # pwd clone without --force -- the active agent session is almost always one of
-  # these, and cwd-based session detection misses Codium-at-canonical sessions.
+  # these, and cwd-based session detection can miss a session run from canonical.
   local is_primary=0 is_pwd=0 what=""
   [[ "$index" -eq 1 ]] && is_primary=1
   [[ "$clone" == "$pwd_here" ]] && is_pwd=1
@@ -2052,191 +2050,8 @@ ass_drop() {
   return 0
 }
 
-# True when ass new runs inside a Codium (VSCodium) integrated terminal.
-_ass_in_codium_integrated_terminal() {
-  [[ "${TERM_PROGRAM:-}" == vscode ]] || return 1
-
-  local ipc="${VSCODE_IPC_HOOK_CLI:-}" git_node="${VSCODE_GIT_ASKPASS_NODE:-}"
-  case "${ipc}${git_node}" in
-    *[Cc]odium*|*/codium/*) return 0 ;;
-  esac
-
-  local pid="${PPID:-}" depth=0 comm
-  while [[ "$depth" -lt 8 && -n "$pid" && "$pid" -gt 1 ]]; do
-    comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ') || break
-    case "$comm" in
-      codium|codium-bin|Codium) return 0 ;;
-    esac
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || break
-    depth=$((depth + 1))
-  done
-  return 1
-}
-
-# Leftmost connected output from xrandr: X Y WIDTH HEIGHT.
-_ass_codium_left_monitor_geometry() {
-  local line x y w h
-  command -v xrandr >/dev/null 2>&1 || return 1
-  line=$(xrandr --query 2>/dev/null | awk '
-    $2 == "connected" {
-      if (match($0, /([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)/, m)) {
-        printf "%d %d %d %d\n", m[3], m[4], m[1], m[2]
-      }
-    }
-  ' | sort -n -k1,1 | head -1)
-  [[ -n "$line" ]] || return 1
-  read -r x y w h <<<"$line"
-  printf '%s %s %s %s\n' "$x" "$y" "$w" "$h"
-}
-
-# Check for wmctrl (Codium window placement on XWayland); inform if missing.
-_ass_ensure_wmctrl() {
-  command -v wmctrl >/dev/null 2>&1 && return 0
-
-  _ass_info "wmctrl is not installed (places the new Codium window on the left monitor)"
-  _ass_info "ass new: install it manually for window placement (e.g. apt install wmctrl)"
-  return 1
-}
-
-# Best-effort: move a new Codium window to the left monitor and maximize (wmctrl/XWayland).
-_ass_codium_place_window_maximized() {
-  local marker="$1" x="${2:-0}" y="${3:-0}"
-  local wid attempt
-
-  command -v wmctrl >/dev/null 2>&1 || return 1
-  for attempt in $(seq 1 40); do
-    sleep 0.25
-    wid=$(wmctrl -l 2>/dev/null | grep -iF "$marker" | tail -1 | awk '{print $1}') || true
-    [[ -n "$wid" ]] || continue
-    wmctrl -i -r "$wid" -e "0,${x},${y},-1,-1" 2>/dev/null || true
-    wmctrl -i -r "$wid" -b add,maximized_vert,maximized_horz 2>/dev/null && return 0
-  done
-  return 1
-}
-
-# Policy gate: should ass new auto-open a Codium + Claude Code window for a claude
-# session? True whenever the codium CLI is on PATH; opt out with ASS_NEW_OPEN_CODIUM=0.
-# (Independent of where ass new was launched -- the human runs it from canonical.)
-_ass_new_should_open_codium() {
-  [[ "${ASS_NEW_OPEN_CODIUM:-1}" != 0 ]] || return 1
-  command -v codium >/dev/null 2>&1
-}
-
-# Detached Codium window on the left monitor (maximized) + Claude Code extension.
-_ass_open_claude_code_in_codium() {
-  local clone_path="$1" marker x=0 y=0
-
-  command -v codium >/dev/null 2>&1 || return 1
-  _ass_ensure_wmctrl || _ass_info "ass new: continuing without wmctrl (Electron flags only)"
-  marker=$(basename "$clone_path")
-
-  if read -r x y _ _ < <(_ass_codium_left_monitor_geometry 2>/dev/null); then
-    :
-  fi
-  x="${ASS_CODIUM_WINDOW_X:-$x}"
-  y="${ASS_CODIUM_WINDOW_Y:-$y}"
-
-  # -n: new detached window. Electron passthrough: position + maximize on that monitor.
-  codium -n --window-position="${x},${y}" --start-maximized "$clone_path" >/dev/null 2>&1 \
-    || codium -n "$clone_path" >/dev/null 2>&1 \
-    || return 1
-
-  _ass_codium_place_window_maximized "$marker" "$x" "$y" &
-
-  # Activate the Claude Code extension via its vscode:// deep link. Use --open-url
-  # (the CLI flag for protocol URIs); -r/--reuse-window treats its argument as a
-  # file/folder path, which is why the URI used to land in quick-open. Give the
-  # new window a moment to start so the extension's URI handler is registered.
-  sleep 2
-  codium --open-url "vscode://anthropic.claude-code/open" >/dev/null 2>&1 &
-  return 0
-}
-
-# Open a clone in Cursor (grok's editor); fall back to codium, then code.
-_ass_open_grok_in_cursor() {
-  local clone="$1" editor
-  for editor in cursor codium code; do
-    if command -v "$editor" >/dev/null 2>&1; then
-      "$editor" -n "$clone" >/dev/null 2>&1 && return 0
-    fi
-  done
-  return 1
-}
-
-# ass open <n|path> -- open a session clone in its agent's editor.
-# <n> is an index from ass status / ass list; a path opens that clone directly
-# (handy for a worktree path you already have, e.g. from another tool).
-ass_open() {
-  local -a _ass_argv clones=()
-  local arg index canonical origin clone agent
-
-  if _ass_help_requested "${1:-}"; then
-    ass_help_open
-    return 0
-  fi
-
-  _as_cli_parse_global_flags _ass_argv "$@" || return 1
-  if [[ ${#_ass_argv[@]} -ne 1 ]]; then
-    _ass_err "ass open: usage: ass open <n|path>  (n from ass status / ass list)"
-    return 1
-  fi
-  arg="${_ass_argv[0]}"
-
-  if [[ "$arg" =~ ^[0-9]+$ ]]; then
-    index="$arg"
-    canonical=$(_ass_resolve_sync_target "") || return 1
-    canonical=$(readlink -f "$canonical")
-    origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
-      _ass_err "ass open: canonical has no origin remote"
-      return 1
-    }
-
-    clone=$(_ass_session_clone_at_index "$origin" "$index") || {
-      mapfile -t clones < <(agent_session_clones_list "$origin")
-      _ass_err "ass open: invalid index: ${index} (${#clones[@]} session clone(s); see: ass list)"
-      return 1
-    }
-    clone=$(readlink -f "$clone")
-  else
-    # Direct path to a session clone directory. Resolve to its git toplevel when
-    # the path is inside a repo so a subdir still opens the clone root.
-    [[ -d "$arg" ]] || { _ass_err "ass open: path not found: ${arg}"; return 1; }
-    clone=$(git -C "$arg" rev-parse --show-toplevel 2>/dev/null) || clone="$arg"
-    clone=$(readlink -f "$clone")
-    index=""
-  fi
-  agent=$(_ass_session_agent_kind "$clone")
-
-  if [[ -n "$index" ]]; then
-    _ass_info "ass open: #${index} ${agent} -> ${clone}"
-  else
-    _ass_info "ass open: ${agent} -> ${clone}"
-  fi
-  case "$agent" in
-    claude)
-      if _ass_open_claude_code_in_codium "$clone"; then
-        _ass_ok "ass open: opened ${clone} in a new Codium window (Claude Code)"
-      else
-        _ass_err "ass open: codium CLI not found -- open ${clone} manually"
-        return 1
-      fi
-      ;;
-    grok)
-      if _ass_open_grok_in_cursor "$clone"; then
-        _ass_ok "ass open: opened ${clone} in Cursor"
-      else
-        _ass_err "ass open: no cursor/codium/code CLI found -- open ${clone} manually"
-        return 1
-      fi
-      ;;
-    *)
-      _ass_info "ass open: unknown agent kind -- open this folder manually: ${clone}"
-      ;;
-  esac
-}
-
 # Infer session agent from installed CLIs: grok only -> grok; claude only -> claude;
-# both -> claude. Codium integrated terminal -> claude. Explicit flags override.
+# both -> claude. Explicit --grok/--claude flags override.
 _ass_detect_installed_agent() {
   local has_grok=0 has_claude=0
   command -v grok >/dev/null 2>&1 && has_grok=1
@@ -2330,16 +2145,11 @@ ass_new() {
     esac
   done
   if [[ -z "$agent" ]]; then
-    if _ass_in_codium_integrated_terminal; then
-      agent=claude
-      _ass_info "ass new: using claude (Codium integrated terminal)"
-    else
-      agent=$(_ass_detect_installed_agent) || {
-        _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
-        return 1
-      }
-      _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
-    fi
+    agent=$(_ass_detect_installed_agent) || {
+      _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
+      return 1
+    }
+    _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
   fi
   # Canonical defaults to pwd; an optional path arg ('.' or any path) targets a
   # different canonical checkout so ass new can run from outside it.
@@ -2362,16 +2172,10 @@ ass_new() {
   script_dir="${_ASS_ALIASES_LIB_DIR}/.."
   "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
   _ass_ok "ass new: session clone ready: ${clone_path}"
-  if [[ "$agent" == claude ]] && _ass_new_should_open_codium; then
-    if _ass_open_claude_code_in_codium "$clone_path"; then
-      _ass_ok "ass new: opened ${clone_path} in a new Codium window (left monitor, maximized)"
-    else
-      _ass_info "ass new: could not open Codium automatically -- open ${clone_path} in Claude Code"
-    fi
-  elif [[ "$agent" == grok ]]; then
-    _ass_info "ass new: open ${clone_path} in Grok/Cursor as the session workspace"
+  if [[ "$agent" == grok ]]; then
+    _ass_info "ass new: start the session by running 'grok' in: ${clone_path}"
   else
-    _ass_info "ass new: open ${clone_path} in Claude Code (the agent works in that clone)"
+    _ass_info "ass new: start the session by running 'claude' in: ${clone_path}"
   fi
   # Pwd-oriented: the human never cd's into the clone. The agent works there;
   # the human stays in canonical and runs 'ass' to local-sync the agent's work.

@@ -25,21 +25,16 @@ ass sync --stashes  # opt in: prompt to move canonical stashes to session clone
 ass sync all        # align every session clone behind canonical
 ass sync all --dry-run
 ass new             # create + align a session clone (infers agent; see below)
-ass new --grok      # force Grok / Cursor session clone
+ass new --grok      # force Grok session clone
 ass new --claude    # force Claude Code session clone
-# Agent inference: Codium integrated terminal -> claude; else grok/claude from PATH.
-# Codium window: a claude session opens a new detached Codium window on the clone
-# (left monitor, maximized, Claude Code extension opened) whenever the codium CLI is
-# on PATH -- regardless of where you launched ass new. Opt out: ASS_NEW_OPEN_CODIUM=0.
-# Optional: ASS_CODIUM_WINDOW_X / ASS_CODIUM_WINDOW_Y override monitor origin.
-# ass new notes when wmctrl is missing; install it manually (apt) for left-monitor placement.
+# Agent inference: grok/claude from PATH (both installed -> claude).
+# Both agents run in the terminal: ass new prints the clone path; cd there and run
+# 'grok' or 'claude' to start the session.
 ass drop            # archive all session clones except #1 (collapse into one)
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass drop <src>      # from consumer clone: copy generic work upstream
 ass status          # ahead/behind origin/main for canonical and session clones
 ass info <n>        # plain-language summary for session #n (from ass status)
-ass open <n>        # open session clone #n in its agent's editor
-ass open <path>     # open a clone directly by path (worktree path)
 ass list            # session clones for canonical pwd (by origin URL)
 ass up              # ass sync, then git push origin main
 ass up -f           # as ass sync -f, then push
@@ -239,23 +234,6 @@ ass status
 ass info 2
 ```
 
-## ass open (open a clone in its editor)
-
-`ass open <n>` opens session clone **`n`** (same index as `ass status` / `ass list`)
-in the editor for its agent: a **claude** clone opens a new Codium window with the
-Claude Code extension (same as `ass new`); a **grok** clone opens in Cursor (falling
-back to `codium`, then `code`). Pwd-oriented -- run from canonical or any clone.
-
-`ass open <path>` opens a clone **directly by path** instead of by index -- handy
-when you already have a worktree path (e.g. from another tool). A path inside a repo
-resolves to its git toplevel, so a subdirectory still opens the clone root.
-
-```bash
-ass list
-ass open 2
-ass open ~/.ass/worktrees/agentstartstack/1782556444
-```
-
 ## Session titles (ass list)
 
 `ass list` shows the **agent session title** for each clone in its own column:
@@ -279,8 +257,8 @@ unlanded commits. **Refuses clones with an active grok or Claude session** (dete
 running `grok --resume` for that workspace, or a `claude` process with cwd in the clone) --
 quit or close the agent session first.
 
-Two additional safety guards (the cwd check above misses a Claude Code session run
-from a Codium window opened at canonical, so these do not rely on it):
+Two additional safety guards (the cwd check above can miss a session run from
+canonical, so these do not rely on it):
 
 - **Primary / pwd guard:** `ass drop <n>` refuses to remove the **primary** clone
   (`#1`, the `1*` active rollover target) or the clone at your current **pwd**

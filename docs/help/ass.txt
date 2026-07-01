@@ -9,7 +9,6 @@ Commands:
   list                session clones for pwd (by origin URL)
   status              ahead/behind for canonical + session clones
   info <n>            plain-language summary for session #n (from ass status)
-  open <n>            open session clone #n in its agent's editor
   drop                archive session clone(s) or copy work upstream (consumer)
   up                  ass sync, then git push origin main
   publish             ass up agentstartstack, then bump .agentstartstack in consumers
