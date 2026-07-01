@@ -1051,7 +1051,7 @@ ass_list() {
 
     # Full title word-wrapped to the title column: first segment on the row, the
     # rest on continuation lines indented under the title column (3+1+7+1 = 12).
-    title=$(_ass_session_title "$clone" "$agent")
+    title=$(_ass_session_title "$clone" "$agent" || true)
     tlines=()
     mapfile -t tlines < <(printf '%s\n' "$title" | fold -s -w "$TITLE_W" | sed 's/[[:space:]]*$//')
     printf "%-3s %-7s %-${TITLE_W}s %-9s %6s  %s%s\n" \
