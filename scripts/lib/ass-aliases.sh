@@ -611,26 +611,18 @@ _ass_status_print_row() {
 
 # ass status -- agent session clones vs origin/main and canonical/main.
 ass_status() {
-  local -a _ass_argv clones=() rest=()
+  local -a _ass_argv clones=()
   local sync_target canonical origin repo_name pwd_here origin_head can_head
-  local clone i arg
+  local clone i
 
   if _ass_help_requested "${1:-}"; then
     ass_help_status
     return 0
   fi
 
+  # ass status is read-only -- it never local-syncs. Run 'ass sync' yourself when
+  # you want to land agent work to canonical.
   _as_cli_parse_global_flags _ass_argv "$@" || return 1
-  # ass status is read-only -- it never local-syncs. --no-sync is accepted for
-  # backward compat (it used to opt out of an implied ass sync handoff) but is now
-  # a no-op: run 'ass sync' yourself when you want to land agent work to canonical.
-  for arg in "${_ass_argv[@]}"; do
-    case "$arg" in
-      --no-sync) ;;
-      *) rest+=("$arg") ;;
-    esac
-  done
-  _ass_argv=("${rest[@]}")
   if [[ ${#_ass_argv[@]} -gt 0 ]]; then
     _ass_err "ass status: unexpected argument: ${_ass_argv[0]} (pwd-oriented -- cd to the repo first)"
     return 1
