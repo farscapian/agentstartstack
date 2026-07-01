@@ -5,6 +5,11 @@ Read-only: fetches origin/main quietly and counts -- it never local-syncs. Run
 'ass sync' yourself to land agent work to canonical. Lists agent session clones
 only (not canonical). Reference SHAs appear in the table group-title row.
 
+The canonical 'ahead' column is the count of commits on a clone not yet in
+canonical. When any clone has unsynced work (commits ahead of canonical, or
+uncommitted/dirty), ass status prints a warning after the table naming each such
+clone -- it still does not sync; run 'ass sync' yourself.
+
 Columns (each clone row):
   #       1* = primary (newest) clone (rollover target); ^ = rolls into #1 on
           trim/drop (ass list shows 1,2,3,... for ass drop / ass info index)

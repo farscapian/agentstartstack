@@ -592,6 +592,7 @@ _ass_status_index_display() {
 
 _ass_status_print_row() {
   local path="$1" pwd_here="$2" canonical="$3" agent="${4:--}" idx="${5:--}"
+  local unsynced_ref="${6:-}"
   local ahead behind can_ahead can_behind wip sync_col notes disp_path
 
   read -r ahead behind < <(_ass_origin_ahead_behind "$path")
@@ -607,11 +608,26 @@ _ass_status_print_row() {
     "$ahead" "$behind" "$disp_path"
   [[ -n "$notes" ]] && printf '  (%s)' "$notes"
   printf '\n'
+
+  # Record clones with work not yet in canonical (committed ahead of canonical, or
+  # dirty) so the caller can warn -- ass status never local-syncs on its own.
+  if [[ -n "$unsynced_ref" ]]; then
+    local -n _unsynced="$unsynced_ref"
+    local -a reasons=()
+    [[ "$can_ahead" =~ ^[0-9]+$ && "$can_ahead" -gt 0 ]] \
+      && reasons+=("${can_ahead} commit(s) ahead of canonical")
+    [[ "$wip" == dirty ]] && reasons+=("uncommitted work")
+    if [[ ${#reasons[@]} -gt 0 ]]; then
+      local joined="${reasons[0]}"
+      [[ ${#reasons[@]} -gt 1 ]] && joined="${joined}, ${reasons[1]}"
+      _unsynced+=("${disp_path}  (${joined})")
+    fi
+  fi
 }
 
 # ass status -- agent session clones vs origin/main and canonical/main.
 ass_status() {
-  local -a _ass_argv clones=()
+  local -a _ass_argv clones=() unsynced=()
   local sync_target canonical origin repo_name pwd_here origin_head can_head
   local clone i
 
@@ -657,7 +673,7 @@ ass_status() {
     i=1
     for clone in "${clones[@]}"; do
       _ass_status_print_row "$clone" "$pwd_here" "$canonical" \
-        "$(_ass_session_agent_kind "$clone")" "$(_ass_status_index_display "$i")"
+        "$(_ass_session_agent_kind "$clone")" "$(_ass_status_index_display "$i")" unsynced
       i=$((i + 1))
     done
   fi
@@ -669,6 +685,17 @@ ass_status() {
   _ass_info "--> (after wip) = session #1 local-syncs to canonical (ass sync handoff)"
   _ass_info "1st ahead/behind pair: vs canonical/main @ ${can_head}"
   _ass_info "2nd ahead/behind pair: vs origin/main @ ${origin_head}"
+
+  # ass status is read-only. Warn (do not act) when clones hold work not yet in
+  # canonical -- the canonical 'ahead' column above is the per-clone commit count.
+  if [[ ${#unsynced[@]} -gt 0 ]]; then
+    echo ""
+    _ass_warn "ass status: ${#unsynced[@]} agent session clone(s) have work not synced to canonical:"
+    for clone in "${unsynced[@]}"; do
+      _ass_warn "ass status:   ${clone}"
+    done
+    _ass_warn "ass status: run 'ass sync' from a clone to land its work to canonical"
+  fi
   return 0
 }
 
