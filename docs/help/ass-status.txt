@@ -1,11 +1,9 @@
 ass status -- agent session clones vs origin/main and canonical/main
 
 Pwd-oriented: cd to the canonical repo or a session clone, then run ass status.
-Implies an ass sync handoff first (lands agent work to canonical, non-fatal),
-then fetches origin/main quietly and counts. Lists agent session clones only
-(not canonical). Reference SHAs appear in the table group-title row.
-
-Use --no-sync for a read-only view (skip the implied handoff).
+Read-only: fetches origin/main quietly and counts -- it never local-syncs. Run
+'ass sync' yourself to land agent work to canonical. Lists agent session clones
+only (not canonical). Reference SHAs appear in the table group-title row.
 
 Columns (each clone row):
   #       1* = primary (newest) clone (rollover target); ^ = rolls into #1 on
@@ -20,8 +18,7 @@ Columns (each clone row):
   path    session clone directory (~ shortens $HOME)
 
 Usage:
-  ass status
-  ass status --no-sync   # read-only; skip the implied ass sync handoff
+  ass status             # read-only; use 'ass sync' to land agent work
 
 Help:
   ass status help
