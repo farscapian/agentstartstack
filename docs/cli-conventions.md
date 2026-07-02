@@ -105,6 +105,22 @@ requirements a conforming CLI SHALL meet:
 - A CLI that launches long or parallel operations SHOULD offer a way to list
   running invocations and stop them (iotstack `ps` / `kill`).
 
+## Reconciling an existing project CLI
+
+When this guidance lands in a consumer, run the discovery helper from the
+consumer repo root to get a concrete worklist -- it lists your CLI-related
+project docs and root `CLAUDE.md` CLI pointers, then leaves the (judgement)
+reconciliation to you. It edits nothing.
+
+```bash
+.agentstartstack/scripts/reconcile-cli-guidance.sh
+```
+
+Then: trim project-local CLI conventions now covered generically here, refactor
+what remains under your `docs/` down to project-specific specifics only, and
+update your `CLAUDE.md` CLI pointers. (This is the `CONSUMER-ACTION` that rides
+the commit introducing this file.)
+
 ## Reference implementation
 
 - **iotstack** -- `iotstack.sh` (entrypoint, `main()` dispatch, message helpers,
