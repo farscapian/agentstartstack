@@ -2887,6 +2887,13 @@ ass_publish()
 
   _ass_publish_assert_here || return 1
 
+  # Adopt any agent-created worktrees for this repo first, so their work is
+  # ass-aware and picked up by the ass up handoff below. Best-effort: a discovery
+  # hiccup must not block publishing.
+  echo "ass publish: adopting any unadopted agent worktrees (ass discover --adopt)"
+  ass_discover --adopt \
+    || echo "ass publish: WARN ass discover --adopt reported an error; continuing" >&2
+
   ass_up || return 1
 
   # Authoritative bump target = agentstartstack canonical HEAD (just pushed by

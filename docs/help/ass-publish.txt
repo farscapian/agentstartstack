@@ -1,7 +1,9 @@
 ass publish -- local-sync and push agentstartstack, refresh .agentstartstack in consumer repos
 
 Run only from the agentstartstack canonical local repo (not a session clone).
-Publishes the template (ass up: ass sync, then git push origin main), then
+First adopts any unadopted agent worktrees for this repo (implicit
+ass discover --adopt) so their work is ass-aware and included in the handoff.
+Then publishes the template (ass up: ass sync, then git push origin main), then
 propagates the new .agentstartstack pointer to every consumer repo.
 
 For each consumer repo:
