@@ -4,13 +4,18 @@ Usage:
   ass adopt [PATH]
   ass adopt --grok [PATH]
   ass adopt --claude [PATH]
+  ass adopt --canonical PATH [PATH]
   ass adopt --title "TITLE" [PATH]
 
 ass does NOT create worktrees. Grok and Claude Code create their own under
 their default roots (~/.grok/worktrees, ~/.claude/worktrees). Point ass adopt at
 one of those worktrees to make it ass-aware: it writes .agentstartstack.env
-(derived from the canonical repo, resolved by origin URL via
-AGENTSTARTSTACK_PROJECT_ROOTS) and aligns the worktree via init_*_session.sh.
+(derived from the canonical repo) and aligns the worktree via init_*_session.sh.
+
+The canonical repo is either given with --canonical or resolved from the
+worktree's origin URL via AGENTSTARTSTACK_PROJECT_ROOTS. 'ass discover --adopt'
+always passes --canonical (the repo it is discovering for), so adoption uses the
+correct canonical and never mis-resolves when several checkouts share an origin.
 
 Both full clones (.git is a directory) and linked git worktrees (.git is a
 gitfile) are supported. Idempotent -- safe to re-run.
@@ -18,6 +23,9 @@ gitfile) are supported. Idempotent -- safe to re-run.
 Options:
   --grok              Treat as a Grok session (overrides path/marker inference)
   --claude            Treat as a Claude Code session (overrides inference)
+  --canonical PATH    Use this canonical repo instead of resolving by origin URL.
+                      Adoption is rejected if the worktree's origin does not match
+                      this repo's origin (guards against the wrong canonical).
   --title TITLE       Human-set session title shown in 'ass list' (wins over
                       the agent-derived title)
 

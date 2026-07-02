@@ -2148,7 +2148,7 @@ EOF
 # init_*_session.sh. ass does NOT create worktrees -- grok/claude do, under their own
 # ~/.grok/worktrees / ~/.claude/worktrees. Idempotent. PATH defaults to pwd.
 ass_adopt() {
-  local agent="" canonical origin script_dir worktree gitdir
+  local agent="" canonical canonical_arg="" origin canonical_origin script_dir worktree gitdir
   local title="" path_arg=""
   if _ass_help_requested "${1:-}"; then
     ass_help_adopt
@@ -2158,6 +2158,10 @@ ass_adopt() {
     case "$1" in
       --grok) agent=grok; shift ;;
       --claude) agent=claude; shift ;;
+      --canonical) shift
+        [[ $# -gt 0 ]] || { _ass_err "ass adopt: --canonical requires a path"; return 1; }
+        canonical_arg="$1"; shift ;;
+      --canonical=*) canonical_arg="${1#--canonical=}"; shift ;;
       --title) shift
         [[ $# -gt 0 ]] || { _ass_err "ass adopt: --title requires a value"; return 1; }
         title="$1"; shift ;;
@@ -2178,12 +2182,33 @@ ass_adopt() {
   origin=$(git -C "$worktree" remote get-url origin 2>/dev/null) || {
     _ass_err "ass adopt: worktree has no origin remote"; return 1
   }
-  canonical=$(_ass_sync_target_from_worktree "$worktree") || {
-    _ass_err "ass adopt: cannot resolve the canonical local repo for origin ${origin}"
-    _ass_err "ass adopt:   set AGENTSTARTSTACK_PROJECT_ROOTS to the dir(s) holding your canonical checkouts"
-    return 1
-  }
-  canonical=$(readlink -f "$canonical")
+  if [[ -n "$canonical_arg" ]]; then
+    # Caller (e.g. ass discover) already knows the canonical repo -- use it
+    # directly instead of re-resolving by origin URL, which can fail or match the
+    # wrong checkout when several share an origin.
+    canonical=$(git -C "$canonical_arg" rev-parse --show-toplevel 2>/dev/null) || {
+      _ass_err "ass adopt: --canonical is not a git repo: ${canonical_arg}"; return 1
+    }
+    canonical=$(readlink -f "$canonical")
+    canonical_origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+      _ass_err "ass adopt: --canonical repo has no origin remote: ${canonical}"; return 1
+    }
+    # Guard against adopting a worktree into an unrelated canonical repo.
+    [[ "$canonical_origin" == "$origin" ]] || {
+      _ass_err "ass adopt: worktree origin does not match --canonical origin:"
+      _ass_err "ass adopt:   worktree:  ${origin}"
+      _ass_err "ass adopt:   canonical: ${canonical_origin} (${canonical})"
+      return 1
+    }
+  else
+    canonical=$(_ass_sync_target_from_worktree "$worktree") || {
+      _ass_err "ass adopt: cannot resolve the canonical local repo for origin ${origin}"
+      _ass_err "ass adopt:   set AGENTSTARTSTACK_PROJECT_ROOTS to the dir(s) holding your canonical checkouts"
+      _ass_err "ass adopt:   or pass --canonical <path> explicitly"
+      return 1
+    }
+    canonical=$(readlink -f "$canonical")
+  fi
   [[ "$worktree" != "$canonical" ]] || {
     _ass_err "ass adopt: that path is the canonical repo, not a session worktree"; return 1
   }
@@ -2247,7 +2272,10 @@ ass_discover() {
       n_unadopted=$((n_unadopted + 1))
       _ass_warn "ass discover:   [unadopted] ${clone}"
       if [[ "$do_adopt" == 1 ]]; then
-        ass_adopt "$clone" || _ass_err "ass discover:   adopt failed for ${clone}"
+        # Pass the canonical this discover already resolved, so adoption never
+        # re-resolves by origin URL (which could fail or match the wrong checkout).
+        ass_adopt --canonical "$canonical" "$clone" \
+          || _ass_err "ass discover:   adopt failed for ${clone}"
       fi
     fi
   done
