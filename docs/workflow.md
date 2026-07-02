@@ -435,6 +435,35 @@ agent-created worktree, `ass discover` lists them. Note: `ass sync` handoff is
 automated for full-clone worktrees; a native linked worktree is adopted the same
 way, but land its branch into canonical `main` manually for now.
 
+### Automate step 1: the SessionStart bootstrap hook (Claude Code)
+
+Relying on an agent to *read* "run init" in `CLAUDE.md` is probabilistic -- a
+model can weigh it against other rules and skip it. To make provisioning
+**deterministic**, wire the harness to do it: a Claude Code **SessionStart hook**
+runs [`scripts/claude-session-bootstrap.sh`](../scripts/claude-session-bootstrap.sh)
+at every session start, before the agent acts.
+
+The bootstrap is safe and idempotent:
+
+- **Already inside a session clone** -> it just confirms the path; it never spawns
+  another clone.
+- **In the canonical repo** -> it reuses the newest existing session clone
+  (fast-forward only -- never a hard reset, so unlanded commits and dirty work are
+  never destroyed) or, if none exists, creates one under `~/.claude/worktrees/<project>/`
+  and adopts it (origin normalized, `.agentstartstack.env` written, aligned).
+- **Not a consumer / any error** -> it adds no context and never fails the session.
+
+It then injects the clone path as session context, so the agent works in the clone
+from its first message. Install it into a consumer's `.claude/settings.json` with
+[`scripts/install-session-start-hook.sh`](../scripts/install-session-start-hook.sh)
+(idempotent; merges, never clobbers existing settings; requires `jq`). Run it from
+the consumer **session clone** so the committed `.claude/settings.json` flows to
+canonical via `ass`. Review or disable the hook anytime from the `/hooks` menu.
+
+The hook drives init non-interactively (`init_*_session.sh --non-interactive`),
+which **refuses to run on canonical and refuses to discard a dirty clone** rather
+than prompting -- a hook has no tty, and must never destroy work unattended.
+
 **Grok/Cursor after align:** paste the suggested first message from `init_grok_session.sh` (task + 1-3 guidance files).
 
 **Claude Code after align:** VS Code stays at `<canonical>` for the human's reference; Claude edits the session clone only (absolute paths).

@@ -27,17 +27,34 @@ print_hyperlink() {
 
 usage() {
   cat <<'EOF'
-Usage: init_grok_session.sh [session-clone-path]
+Usage: init_grok_session.sh [--non-interactive] [session-clone-path]
 
 Session align for the authorized AI git workflow: aligns a Grok/Cursor session
 clone with the canonical local repo and prints reminders for efficient agent use.
+
+  --non-interactive, -y   Never prompt (for hooks/automation). Refuses to run on
+                          canonical and refuses to discard a dirty clone, rather
+                          than asking. A fresh, clean worktree aligns silently.
 EOF
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-fi
+# Separate flags from the optional positional session-clone path.
+NONINTERACTIVE=0
+PATH_ARG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --non-interactive|-y|--yes) NONINTERACTIVE=1; shift ;;
+    --) shift; [[ $# -gt 0 ]] && PATH_ARG="$1"; break ;;
+    -*) err "Unknown option: $1 (see --help)" ;;
+    *) [[ -z "$PATH_ARG" ]] || err "Unexpected extra argument: $1"; PATH_ARG="$1"; shift ;;
+  esac
+done
+
+# A hook has no controlling tty; if /dev/tty cannot actually be opened, force
+# non-interactive so a prompt never hangs or crashes under set -e. (-r alone is
+# unreliable: /dev/tty is readable by permission even with no controlling tty.)
+{ true </dev/tty; } 2>/dev/null || NONINTERACTIVE=1
 
 resolve_repo_root() {
   local arg="${1:-}"
@@ -49,7 +66,7 @@ resolve_repo_root() {
   git rev-parse --show-toplevel 2>/dev/null || true
 }
 
-REPO_ROOT="$(resolve_repo_root "${1:-}")"
+REPO_ROOT="$(resolve_repo_root "$PATH_ARG")"
 [[ -n "$REPO_ROOT" ]] || err "Not inside a git repo. Pass the session clone path as an argument."
 
 agentstartstack_load_config "$REPO_ROOT" \
@@ -60,6 +77,9 @@ agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guida
 if [[ "$(readlink -f "$REPO_ROOT")" == "$(readlink -f "$CANONICAL_LOCAL_REPO")" ]]; then
   warn "Current directory is the canonical local repo, not a Grok session clone."
   warn "Init is intended for a session clone under one of: ${AGENT_SESSION_CLONE_PARENT}"
+  if [[ "$NONINTERACTIVE" == 1 ]]; then
+    err "Refusing to run on canonical in non-interactive mode (never edit canonical)."
+  fi
   read -r -p "Continue anyway? [y/N] " confirm </dev/tty
   [[ "${confirm,,}" == "y" || "${confirm,,}" == "yes" ]] || exit 0
 fi
@@ -80,6 +100,9 @@ echo ""
 if [[ -n "$(git status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]; then
   warn "Session clone has uncommitted changes; re-aligning will HARD RESET and discard them:"
   git status --short >&2
+  if [[ "$NONINTERACTIVE" == 1 ]]; then
+    err "Refusing to discard a dirty clone in non-interactive mode; commit or align it by hand."
+  fi
   read -r -p "Discard and re-align? [y/N] " confirm </dev/tty
   if [[ "${confirm,,}" != "y" && "${confirm,,}" != "yes" ]]; then
     info "Aborted; clone left as-is."
