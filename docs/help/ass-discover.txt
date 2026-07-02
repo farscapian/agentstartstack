@@ -1,0 +1,20 @@
+ass discover -- find agent worktrees for this repo and their adopt status
+
+Usage:
+  ass discover
+  ass discover --adopt
+
+Pwd-oriented: cd to the canonical repo, then run ass discover. Lists every agent
+session worktree whose origin URL matches this canonical (searching
+AGENT_SESSION_CLONE_PARENT: ~/.claude/worktrees, ~/.grok/worktrees), and marks
+each [adopted] (has .agentstartstack.env) or [unadopted] (not yet ass-aware).
+
+Use this when grok/claude created a worktree that ass does not yet recognize.
+
+Options:
+  --adopt             Adopt every unadopted worktree found (runs 'ass adopt' on
+                      each: writes .agentstartstack.env + aligns via init).
+
+Help:
+  ass discover help
+  ass help discover

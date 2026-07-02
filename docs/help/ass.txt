@@ -4,9 +4,10 @@ Pwd-oriented: cd to the canonical repo or a session clone, then run a subcommand
 
 Commands:
 
-  sync                local-sync handoff (session clone -> canonical)
-  new                 create + align a session clone (canonical pwd)
-  list                session clones for pwd (by origin URL)
+  sync                local-sync handoff (session worktree -> canonical)
+  adopt               make an agent-created worktree ass-aware (write env + align)
+  discover            list agent worktrees for this repo + adopt status
+  list                session worktrees for pwd (by origin URL)
   status              ahead/behind for canonical + session clones
   info <n>            plain-language summary for session #n (from ass status)
   drop                archive session clone(s) or copy work upstream (consumer)

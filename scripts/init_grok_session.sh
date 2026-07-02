@@ -53,7 +53,7 @@ REPO_ROOT="$(resolve_repo_root "${1:-}")"
 [[ -n "$REPO_ROOT" ]] || err "Not inside a git repo. Pass the session clone path as an argument."
 
 agentstartstack_load_config "$REPO_ROOT" \
-  || err "Missing .agentstartstack.env (run add-to-project.sh, or ass new from canonical)"
+  || err "Missing .agentstartstack.env (run add-to-project.sh, or 'ass adopt' this worktree)"
 agentstartstack_apply_defaults || exit 1
 agentstartstack_resolve_guidance_paths "$REPO_ROOT" || err "Cannot resolve guidance paths"
 
@@ -74,8 +74,8 @@ echo ""
 
 # Re-running init re-aligns via a hard reset + clean, which discards uncommitted
 # work. If the session clone is dirty, confirm before destroying it. Exclude
-# .agentstartstack.env: ass new writes clone-specific config into it, so a fresh
-# clone is "dirty" by that file alone -- it is init-generated, not agent work,
+# .agentstartstack.env: ass adopt writes worktree-specific config into it, so a fresh
+# worktree is "dirty" by that file alone -- it is init-generated, not agent work,
 # and the reset below re-aligns it anyway. Any OTHER dirt is real work.
 if [[ -n "$(git status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]; then
   warn "Session clone has uncommitted changes; re-aligning will HARD RESET and discard them:"
@@ -101,17 +101,24 @@ if [[ -f .gitmodules ]]; then
   git submodule update --init --recursive
 fi
 
-# Stamp session align time so ass -f can prefer this clone over older sessions.
-date +%s > "${REPO_ROOT}/.git/agentstartstack-session-init"
-printf '%s\n' grok > "${REPO_ROOT}/.git/agentstartstack-session-agent"
+# Stamp session align time so ass -f can prefer this session over older ones.
+# Resolve the real git dir so markers work for a linked worktree (.git is a gitfile
+# -> <canonical>/.git/worktrees/<name>), not just a full clone (.git is a directory).
+GITDIR=$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir 2>/dev/null || echo "${REPO_ROOT}/.git")
+date +%s > "${GITDIR}/agentstartstack-session-init"
+printf '%s\n' grok > "${GITDIR}/agentstartstack-session-agent"
 
-# Harden origin to fetch-only: agents hand off via the local-sync remote and must
-# never push to origin. Disabling the push URL makes that structural, not just
-# policy. The fetch URL stays intact so ass can still match this clone to the
-# canonical local repo by origin URL.
-if git remote get-url origin &>/dev/null; then
-  git remote set-url --push origin DISABLED
-fi
+# Harden origin to fetch-only so agents never push to origin -- but ONLY for an
+# independent full clone. A linked git worktree shares canonical's config/remotes,
+# so disabling the push URL here would also disable it on canonical. Skip it there.
+case "$GITDIR" in
+  */.git/worktrees/*) : ;;
+  *)
+    if git remote get-url origin &>/dev/null; then
+      git remote set-url --push origin DISABLED
+    fi
+    ;;
+esac
 
 # Surface a pending agentstartstack bump dropped by ass publish (see workflow.md).
 # Backstop: if there is no watch file but the .agentstartstack submodule is behind

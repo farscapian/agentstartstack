@@ -10,8 +10,9 @@ Structure and naming rules: [docs/cli-help.md](../cli-help.md).
 - **ass.txt** -- main menu (direct subcommands only)
 - **ass-sync.txt** -- local-sync handoff
 - **ass-sync-all.txt** -- align all session clones behind canonical
-- **ass-new.txt** -- create session clone
-- **ass-list.txt** -- list session clones
+- **ass-adopt.txt** -- make an agent-created worktree ass-aware
+- **ass-discover.txt** -- list agent worktrees + adopt status
+- **ass-list.txt** -- list session worktrees
 - **ass-status.txt** -- ahead/behind report
 - **ass-info.txt** -- plain-language session summary by index
 - **ass-drop.txt** -- collapse to one clone, archive by index, or copy work upstream

@@ -61,7 +61,8 @@ main() {
     '')
       _ass_cli_usage
       ;;
-    new) shift; ass_new "$@" ;;
+    adopt) shift; ass_adopt "$@" ;;
+    discover) shift; ass_discover "$@" ;;
     drop)  shift; ass_drop "$@" ;;
     publish) shift; ass_publish "$@" ;;
     face)

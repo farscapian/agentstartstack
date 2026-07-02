@@ -1,0 +1,36 @@
+ass adopt -- make an agent-created worktree ass-aware
+
+Usage:
+  ass adopt [PATH]
+  ass adopt --grok [PATH]
+  ass adopt --claude [PATH]
+  ass adopt --title "TITLE" [PATH]
+
+ass does NOT create worktrees. Grok and Claude Code create their own under
+their default roots (~/.grok/worktrees, ~/.claude/worktrees). Point ass adopt at
+one of those worktrees to make it ass-aware: it writes .agentstartstack.env
+(derived from the canonical repo, resolved by origin URL via
+AGENTSTARTSTACK_PROJECT_ROOTS) and aligns the worktree via init_*_session.sh.
+
+Both full clones (.git is a directory) and linked git worktrees (.git is a
+gitfile) are supported. Idempotent -- safe to re-run.
+
+Options:
+  --grok              Treat as a Grok session (overrides path/marker inference)
+  --claude            Treat as a Claude Code session (overrides inference)
+  --title TITLE       Human-set session title shown in 'ass list' (wins over
+                      the agent-derived title)
+
+Arguments:
+  PATH                The agent worktree to adopt (default: pwd). Resolves to its
+                      git toplevel. The agent kind is inferred from the worktree's
+                      parent (~/.claude/worktrees -> claude, ~/.grok/worktrees ->
+                      grok); pass --grok/--claude when it cannot be inferred.
+
+Note: 'ass sync' handoff for LINKED worktrees is not yet supported (they share
+canonical's repo); adopt still works, but land their commits into canonical main
+manually for now. Full clones hand off normally.
+
+Help:
+  ass adopt help
+  ass help adopt

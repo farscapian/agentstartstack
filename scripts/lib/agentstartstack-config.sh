@@ -61,7 +61,7 @@ agentstartstack_infer_config() {
     return 0
   fi
 
-  # Template repo (agentstartstack itself) or a fresh clone before ass_new writes .env.
+  # Template repo (agentstartstack itself) or a worktree before ass adopt writes .env.
   if [[ -f "${dir}/scripts/init_grok_session.sh" && -d "${dir}/docs" ]]; then
     AGENTSTARTSTACK_HOST_ROOT="$dir"
     AGENTSTARTSTACK_CONFIG_FILE=""
@@ -110,10 +110,11 @@ agentstartstack_apply_defaults() {
     return 1
   }
 
-  # Colon-separated parent dirs under which agent session clones live. Single
-  # source of truth for both the init scripts and ass's clone discovery (which
-  # matches clones by git origin URL -- no project-specific subdir naming assumed).
-  AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.ass/worktrees:${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
+  # Colon-separated parent dirs under which agent session worktrees live -- the
+  # agents' own defaults (~/.claude/worktrees, ~/.grok/worktrees). Single source of
+  # truth for both the init scripts and ass's worktree discovery (which matches by
+  # git origin URL -- no project-specific subdir naming assumed).
+  AGENT_SESSION_CLONE_PARENT="${AGENT_SESSION_CLONE_PARENT:-${HOME}/.claude/worktrees:${HOME}/.grok/worktrees}"
 
   return 0
 }

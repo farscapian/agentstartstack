@@ -55,10 +55,12 @@ git -C "$canonical" stash show "$stash_ref" >/dev/null 2>&1 || {
 }
 
 _assc_resolve_agent_kind() {
-  local path="$1" marker kind parents base
+  local path="$1" marker kind parents base gitdir
   path=$(readlink -f "$path")
 
-  marker="${path}/.git/agentstartstack-session-agent"
+  # Resolve the real git dir so the marker is found for linked worktrees too.
+  gitdir=$(git -C "$path" rev-parse --absolute-git-dir 2>/dev/null || echo "${path}/.git")
+  marker="${gitdir}/agentstartstack-session-agent"
   if [[ -f "$marker" ]]; then
     kind=$(tr -d '[:space:]' < "$marker")
     if [[ "$kind" == grok || "$kind" == claude ]]; then
@@ -74,7 +76,6 @@ _assc_resolve_agent_kind() {
     base=$(readlink -f "$base" 2>/dev/null || echo "$base")
     if [[ "$path" == "$base"/* ]]; then
       case "$base" in
-        */.ass/worktrees) printf 'ass'; return 0 ;;
         */.claude/worktrees|*claude*) printf 'claude'; return 0 ;;
         */.grok/worktrees|*grok*) printf 'grok'; return 0 ;;
       esac

@@ -26,7 +26,7 @@ _ASS_ALIASES_LIB_DIR=$(
 )
 # shellcheck source=session-clones.sh
 source "${_ASS_ALIASES_LIB_DIR}/session-clones.sh"
-# AGENT_SESSION_CLONE_PARENT and ASS_NEW_SESSION_CLONE_ROOT come from session-clones.sh.
+# AGENT_SESSION_CLONE_PARENT comes from session-clones.sh (agents' worktree roots).
 # Override AGENT_SESSION_CLONE_PARENT before sourcing ass-aliases to customize discovery.
 # shellcheck source=cli-log.sh
 source "${_ASS_ALIASES_LIB_DIR}/cli-log.sh"
@@ -60,7 +60,8 @@ _ass_help_requested() {
 _ass_main_usage() { _ass_cat_help ass.txt; }
 ass_help_sync() { _ass_cat_help ass-sync.txt; }
 ass_help_sync_all() { _ass_cat_help ass-sync-all.txt; }
-ass_help_new() { _ass_cat_help ass-new.txt; }
+ass_help_adopt() { _ass_cat_help ass-adopt.txt; }
+ass_help_discover() { _ass_cat_help ass-discover.txt; }
 ass_help_list() { _ass_cat_help ass-list.txt; }
 ass_help_status() { _ass_cat_help ass-status.txt; }
 ass_help_info() { _ass_cat_help ass-info.txt; }
@@ -88,7 +89,8 @@ ass_help_topic() {
       esac
       ;;
     publish) ass_help_publish ;;
-    new) ass_help_new ;;
+    adopt) ass_help_adopt ;;
+    discover) ass_help_discover ;;
     list) ass_help_list ;;
     status) ass_help_status ;;
     info) ass_help_info ;;
@@ -313,16 +315,18 @@ _ass_clone_active_agent_session_detail() {
   return 1
 }
 
-# Unix time when init_*_session.sh last aligned this clone (or .git mtime fallback).
+# Unix time when init_*_session.sh last aligned this clone (or git-dir mtime fallback).
 _ass_session_init_time() {
-  local clone="$1" marker="${clone}/.git/agentstartstack-session-init"
+  local clone="$1" gitdir marker
+  gitdir=$(_agent_session_gitdir "$clone")
+  marker="${gitdir}/agentstartstack-session-init"
 
   if [[ -f "$marker" ]]; then
     tr -d '[:space:]' < "$marker"
     return 0
   fi
 
-  stat -c %Y "${clone}/.git" 2>/dev/null || echo 0
+  stat -c %Y "$gitdir" 2>/dev/null || echo 0
 }
 
 # Parse ass / ass up args: optional -f/--force, --stashes, -h/--help. Pwd-oriented (no repo name).
@@ -519,7 +523,7 @@ _ass_status_display_path() {
 
 # Title (aiTitle) of the newest Claude Code session that edited this clone. Claude
 # files sessions under the launch cwd's project dir (canonical, not the clone), but
-# each 'ass new' session edits its clone by absolute path, so the clone path appears
+# each agent session edits its worktree by absolute path, so the worktree path appears
 # in exactly that session's transcript. Grep every project's *.jsonl for the clone
 # path (it is globally unique) -- location-independent, no cwd/encoding assumptions.
 _ass_claude_session_title() {
@@ -558,7 +562,7 @@ except Exception: pass' "$newest" 2>/dev/null
 }
 
 # Agent session title for a clone (grok/claude). Echoes empty when unknown.
-# A human-set title (ass new --title, stored as ASS_SESSION_TITLE in the clone
+# A human-set title (ass adopt --title, stored as ASS_SESSION_TITLE in the clone
 # env) wins over the agent-derived title.
 _ass_session_title() {
   local clone="$1" agent="$2" override
@@ -938,9 +942,10 @@ ass_info() {
 
 # grok / claude / ? -- marker file, then clone dir name, then worktree parent.
 _ass_session_agent_kind() {
-  local clone="$1" marker kind base
+  local clone="$1" marker kind base gitdir
   clone=$(readlink -f "$clone")
-  marker="${clone}/.git/agentstartstack-session-agent"
+  gitdir=$(_agent_session_gitdir "$clone")
+  marker="${gitdir}/agentstartstack-session-agent"
   if [[ -f "$marker" ]]; then
     kind=$(tr -d '[:space:]' < "$marker")
     [[ "$kind" == grok || "$kind" == claude ]] && { printf '%s\n' "$kind"; return 0; }
@@ -1243,8 +1248,8 @@ _ass_print_handoff_report() {
 
 _ass_clone_has_dirty_worktree() {
   local clone="$1"
-  # Exclude .agentstartstack.env: ass new writes clone-specific config into it,
-  # so a fresh clone is "dirty" by that file alone. It is init-generated, not
+  # Exclude .agentstartstack.env: ass adopt writes worktree-specific config into it,
+  # so a fresh worktree is "dirty" by that file alone. It is init-generated, not
   # agent work -- it should not show as wip, block drop, or be auto-committed.
   [[ -n "$(git -C "$clone" status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]
 }
@@ -1573,6 +1578,12 @@ _ass_pick_handoff_clone() {
 _ass_handoff_reconcile_clone() {
   local clone="$1" canonical="$2"
   local ahead behind branch stashed=0
+  # Linked git worktrees share canonical's repo/config; a local-sync remote + rebase
+  # would pollute shared config and is unnecessary. Skip (not yet supported).
+  if _agent_session_is_linked_worktree "$clone"; then
+    _ass_warn "ass: skipping linked git worktree (handoff not yet supported): ${clone}"
+    return 0
+  fi
   _ass_ensure_local_sync_remote "$clone" "$canonical"
   git -C "$clone" fetch -q local-sync main \
     || { _ass_err "ass: fetch local-sync/main failed in session clone"; return 1; }
@@ -1644,6 +1655,17 @@ _ass_push() {
   _ass_auto_sync_all_clones_behind_canonical "$sync_target" "$origin_target" || return 1
 
   best_dir=$(_ass_pick_handoff_clone "$sync_target" "$origin_target" "$repo_name" "$force") || return 1
+
+  # Linked git worktrees share canonical's repo/config, so the local-sync push
+  # handoff (and origin hardening) do not apply and could corrupt canonical. Not yet
+  # supported -- guard rather than do something harmful. (Full clones proceed.)
+  if _agent_session_is_linked_worktree "$best_dir"; then
+    _ass_err "ass: selected worktree is a linked git worktree (shares canonical's repo):"
+    _ass_err "ass:   ${best_dir}"
+    _ass_err "ass: 'ass sync' handoff for linked worktrees is not yet supported."
+    _ass_err "ass:   commit there, then merge/rebase its branch into canonical main manually."
+    return 1
+  fi
 
   _ass_canonical_move_wip_to_clone "$sync_target" "$best_dir" "$handle_stashes" || return 1
   _ass_handoff_preflight "$best_dir" "$sync_target" || return 1
@@ -1810,7 +1832,7 @@ _ass_drop_upstream() {
 
   if [[ -z "$best" ]]; then
     _ass_err "ass drop: no agentstartstack session clone found (origin: $as_origin)"
-    _ass_err "ass drop:   create one (ass new from agentstartstack canonical) and retry"
+    _ass_err "ass drop:   create one (grok/claude worktree, then 'ass adopt') and retry"
     return 1
   fi
 
@@ -2058,27 +2080,6 @@ ass_drop() {
   return 0
 }
 
-# Infer session agent from installed CLIs: grok only -> grok; claude only -> claude;
-# both -> claude. Explicit --grok/--claude flags override.
-_ass_detect_installed_agent() {
-  local has_grok=0 has_claude=0
-  command -v grok >/dev/null 2>&1 && has_grok=1
-  command -v claude >/dev/null 2>&1 && has_claude=1
-  if [[ "$has_grok" == 1 && "$has_claude" == 1 ]]; then
-    printf 'claude\n'
-    return 0
-  fi
-  if [[ "$has_claude" == 1 ]]; then
-    printf 'claude\n'
-    return 0
-  fi
-  if [[ "$has_grok" == 1 ]]; then
-    printf 'grok\n'
-    return 0
-  fi
-  return 1
-}
-
 # Append a newline to $1 when its last byte is not one (safe to call on missing/empty).
 _ass_ensure_trailing_newline() {
   local file="$1"
@@ -2087,8 +2088,8 @@ _ass_ensure_trailing_newline() {
   return 0
 }
 
-# Write gitignored .agentstartstack.env into a session clone so init_* can align it.
-_ass_new_write_clone_env() {
+# Write gitignored .agentstartstack.env into a session worktree so init_* can align it.
+_ass_adopt_write_env() {
   local canonical="$1" clone_path="$2" origin="$3" title="${4:-}"
   local env_file="${clone_path}/.agentstartstack.env" project_name
 
@@ -2119,7 +2120,7 @@ EOF
   else
     printf 'AGENT_SESSION_CLONE_PARENT=%s\n' "${parents}" >> "$env_file"
   fi
-  # Optional human-set session title (ass new --title). Preferred over the
+  # Optional human-set session title (ass adopt --title). Preferred over the
   # agent-derived title in ass list. Rewrite via grep+append so an arbitrary
   # title (slashes, '>', etc.) never reaches sed as a replacement string.
   if [[ -n "$title" ]]; then
@@ -2131,11 +2132,15 @@ EOF
   fi
 }
 
-ass_new() {
-  local agent="" canonical origin session_id clone_path script_dir repo_name
-  local title="" path_arg="" base_dir
+# ass adopt [--grok|--claude] [--title T] [PATH] -- make an agent-created worktree
+# ass-aware: write its .agentstartstack.env (derived from canonical) and align it via
+# init_*_session.sh. ass does NOT create worktrees -- grok/claude do, under their own
+# ~/.grok/worktrees / ~/.claude/worktrees. Idempotent. PATH defaults to pwd.
+ass_adopt() {
+  local agent="" canonical origin script_dir worktree gitdir
+  local title="" path_arg=""
   if _ass_help_requested "${1:-}"; then
-    ass_help_new
+    ass_help_adopt
     return 0
   fi
   while [[ $# -gt 0 ]]; do
@@ -2143,52 +2148,102 @@ ass_new() {
       --grok) agent=grok; shift ;;
       --claude) agent=claude; shift ;;
       --title) shift
-        [[ $# -gt 0 ]] || { _ass_err "ass new: --title requires a value"; return 1; }
+        [[ $# -gt 0 ]] || { _ass_err "ass adopt: --title requires a value"; return 1; }
         title="$1"; shift ;;
       --title=*) title="${1#--title=}"; shift ;;
-      -*) _ass_err "ass new: unknown option: $1"; return 1 ;;
+      -*) _ass_err "ass adopt: unknown option: $1"; return 1 ;;
       *)
-        [[ -z "$path_arg" ]] || { _ass_err "ass new: unexpected extra argument: $1"; return 1; }
+        [[ -z "$path_arg" ]] || { _ass_err "ass adopt: unexpected extra argument: $1"; return 1; }
         path_arg="$1"; shift ;;
     esac
   done
-  if [[ -z "$agent" ]]; then
-    agent=$(_ass_detect_installed_agent) || {
-      _ass_err "ass new: no grok or claude CLI on PATH (install one, or pass --grok/--claude)"
-      return 1
-    }
-    _ass_info "ass new: using ${agent} (inferred from installed CLIs)"
-  fi
-  # Canonical defaults to pwd; an optional path arg ('.' or any path) targets a
-  # different canonical checkout so ass new can run from outside it.
-  base_dir="${path_arg:-.}"
-  [[ -d "$base_dir" ]] || { _ass_err "ass new: path not found: ${base_dir}"; return 1; }
-  canonical=$(git -C "$base_dir" rev-parse --show-toplevel 2>/dev/null) || {
-    _ass_err "ass new: not a git repo: ${base_dir} (run from / point at the canonical local repo)"
+  path_arg="${path_arg:-.}"
+  [[ -d "$path_arg" ]] || { _ass_err "ass adopt: path not found: ${path_arg}"; return 1; }
+  worktree=$(git -C "$path_arg" rev-parse --show-toplevel 2>/dev/null) || {
+    _ass_err "ass adopt: not a git repo: ${path_arg} (point at an agent-created worktree)"
+    return 1
+  }
+  worktree=$(readlink -f "$worktree")
+  origin=$(git -C "$worktree" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass adopt: worktree has no origin remote"; return 1
+  }
+  canonical=$(_ass_sync_target_from_worktree "$worktree") || {
+    _ass_err "ass adopt: cannot resolve the canonical local repo for origin ${origin}"
+    _ass_err "ass adopt:   set AGENTSTARTSTACK_PROJECT_ROOTS to the dir(s) holding your canonical checkouts"
     return 1
   }
   canonical=$(readlink -f "$canonical")
-  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
-    _ass_err "ass new: canonical has no origin remote"; return 1
+  [[ "$worktree" != "$canonical" ]] || {
+    _ass_err "ass adopt: that path is the canonical repo, not a session worktree"; return 1
   }
-  repo_name=$(basename "$canonical")
-  session_id=$(date +%s)
-  clone_path="${ASS_NEW_SESSION_CLONE_ROOT}/${repo_name}/${session_id}"
-  mkdir -p "$(dirname "$clone_path")"
-  git clone "$origin" "$clone_path"
-  _ass_new_write_clone_env "$canonical" "$clone_path" "$origin" "$title"
-  script_dir="${_ASS_ALIASES_LIB_DIR}/.."
-  "${script_dir}/init_agent_session.sh" "--${agent}" "$clone_path"
-  _ass_ok "ass new: session clone ready: ${clone_path}"
-  if [[ "$agent" == grok ]]; then
-    _ass_info "ass new: start the session by running 'grok' in: ${clone_path}"
-  else
-    _ass_info "ass new: start the session by running 'claude' in: ${clone_path}"
+  # Agent kind: explicit flag wins; otherwise infer from the worktree path/marker.
+  if [[ -z "$agent" ]]; then
+    agent=$(_ass_session_agent_kind "$worktree")
+    case "$agent" in
+      grok|claude) _ass_info "ass adopt: inferred agent: ${agent}" ;;
+      *) _ass_err "ass adopt: cannot infer agent for ${worktree} (pass --grok or --claude)"; return 1 ;;
+    esac
   fi
-  # Pwd-oriented: the human never cd's into the clone. The agent works there;
-  # the human stays in canonical and runs 'ass' to local-sync the agent's work.
-  _ass_info "ass new: you (human) stay in canonical and run 'ass' here to land agent work:"
-  _ass_info "ass new:   ${canonical}"
+  _ass_adopt_write_env "$canonical" "$worktree" "$origin" "$title"
+  script_dir="${_ASS_ALIASES_LIB_DIR}/.."
+  "${script_dir}/init_agent_session.sh" "--${agent}" "$worktree" || return 1
+  _ass_ok "ass adopt: ${agent} worktree ready: ${worktree}"
+  if _agent_session_is_linked_worktree "$worktree"; then
+    _ass_warn "ass adopt: this is a linked git worktree (shares canonical's repo);"
+    _ass_warn "ass adopt:   'ass sync' handoff for linked worktrees is not yet supported --"
+    _ass_warn "ass adopt:   land its branch into canonical main manually for now."
+  else
+    _ass_info "ass adopt: land its commits into canonical with 'ass sync' (run from canonical)"
+  fi
+}
+
+# ass discover [--adopt] -- from canonical pwd, list agent worktrees for this repo
+# (by origin URL) and whether each is adopted (has .agentstartstack.env). With
+# --adopt, adopt any that are not yet ass-aware.
+ass_discover() {
+  local -a _ass_argv clones=()
+  local do_adopt=0 arg canonical origin repo_name clone n_unadopted=0
+
+  if _ass_help_requested "${1:-}"; then
+    ass_help_discover
+    return 0
+  fi
+  _as_cli_parse_global_flags _ass_argv "$@" || return 1
+  for arg in "${_ass_argv[@]}"; do
+    case "$arg" in
+      --adopt) do_adopt=1 ;;
+      *) _ass_err "ass discover: unexpected argument: ${arg}"; return 1 ;;
+    esac
+  done
+
+  canonical=$(_ass_resolve_sync_target "") || return 1
+  canonical=$(readlink -f "$canonical")
+  repo_name=$(basename "$canonical")
+  origin=$(git -C "$canonical" remote get-url origin 2>/dev/null) || {
+    _ass_err "ass discover: canonical has no origin remote"; return 1
+  }
+
+  _ass_info "ass discover: ${repo_name} -- agent worktrees under: ${AGENT_SESSION_CLONE_PARENT}"
+  mapfile -t clones < <(agent_session_clones_list "$origin")
+  if [[ ${#clones[@]} -eq 0 ]]; then
+    _ass_info "ass discover: none found (grok/claude create worktrees under their own roots)"
+    return 0
+  fi
+  for clone in "${clones[@]}"; do
+    if [[ -f "${clone}/.agentstartstack.env" ]]; then
+      _ass_info "ass discover:   [adopted]   ${clone}"
+    else
+      n_unadopted=$((n_unadopted + 1))
+      _ass_warn "ass discover:   [unadopted] ${clone}"
+      if [[ "$do_adopt" == 1 ]]; then
+        ass_adopt "$clone" || _ass_err "ass discover:   adopt failed for ${clone}"
+      fi
+    fi
+  done
+  if [[ "$n_unadopted" -gt 0 && "$do_adopt" != 1 ]]; then
+    _ass_info "ass discover: adopt with 'ass adopt <path>' (or rerun: ass discover --adopt)"
+  fi
+  return 0
 }
 
 # ass up trim -- consolidate and prune stale agent session clones for a consumer.
@@ -2258,7 +2313,6 @@ _ass_up_trim_harness() {
     [[ -n "$base" ]] || continue
     if [[ "$clone" == "$base"/* ]]; then
       case "$base" in
-        */.ass/worktrees) printf 'ass'; return 0 ;;
         */.claude/worktrees) printf 'claude'; return 0 ;;
         */.grok/worktrees) printf 'grok'; return 0 ;;
         *claude*) printf 'claude'; return 0 ;;
