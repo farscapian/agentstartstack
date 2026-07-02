@@ -2194,12 +2194,25 @@ ass_adopt() {
       _ass_err "ass adopt: --canonical repo has no origin remote: ${canonical}"; return 1
     }
     # Guard against adopting a worktree into an unrelated canonical repo.
-    [[ "$canonical_origin" == "$origin" ]] || {
-      _ass_err "ass adopt: worktree origin does not match --canonical origin:"
-      _ass_err "ass adopt:   worktree:  ${origin}"
-      _ass_err "ass adopt:   canonical: ${canonical_origin} (${canonical})"
-      return 1
-    }
+    if [[ "$canonical_origin" != "$origin" ]]; then
+      # A worktree made with 'git clone <canonical-local-path>' has its origin set
+      # to that local path, not the shared origin URL -- so it fails this guard and
+      # would also be invisible to ass's origin-URL discovery. When the worktree
+      # origin resolves to the canonical repo itself, normalize it to the canonical
+      # origin URL so all downstream matching works, instead of erroring out.
+      local origin_resolved=""
+      [[ -e "$origin" ]] && origin_resolved=$(readlink -f "$origin" 2>/dev/null || echo "$origin")
+      if [[ -n "$origin_resolved" && "$origin_resolved" == "$canonical" ]]; then
+        git -C "$worktree" remote set-url origin "$canonical_origin"
+        origin="$canonical_origin"
+        _ass_info "ass adopt: normalized worktree origin to ${canonical_origin}"
+      else
+        _ass_err "ass adopt: worktree origin does not match --canonical origin:"
+        _ass_err "ass adopt:   worktree:  ${origin}"
+        _ass_err "ass adopt:   canonical: ${canonical_origin} (${canonical})"
+        return 1
+      fi
+    fi
   else
     canonical=$(_ass_sync_target_from_worktree "$worktree") || {
       _ass_err "ass adopt: cannot resolve the canonical local repo for origin ${origin}"

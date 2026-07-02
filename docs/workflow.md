@@ -387,25 +387,53 @@ Generic rules:
 
 ## End-to-end (quick reference)
 
-**Start any agent session (Grok or Claude)**
+**Start any agent session (Grok or Claude) -- PROVISION FIRST**
 
-Let the agent create its own worktree in its default location, then make it
-ass-aware and align it with **`ass adopt`**.
+An agent's very first action, before any edit, is to provision its own session
+clone and work there -- never in canonical. ass does not create worktrees; you
+create one, then `ass adopt` makes it ass-aware and aligns it. Two supported
+worktree kinds, spelled out so nothing has to be discovered:
+
+*Native worktree (recommended when your agent has the feature)* -- shares
+canonical's origin URL, so adopt matches with no origin surgery:
 
 ```bash
-# 1. Create a worktree the agent's own way (under ~/.grok/worktrees or
-#    ~/.claude/worktrees), e.g. grok --worktree / Claude Code's worktree feature.
+# 1. Create it the agent's own way, under the agent's default root:
+grok --worktree                        # -> ~/.grok/worktrees/<name>
+#   or use Claude Code's worktree feature -> ~/.claude/worktrees/<name>
 
-# 2. Adopt + align it (writes .agentstartstack.env, runs init) -- point at the worktree
-ass adopt ~/.claude/worktrees/<name>      # or --grok / --claude to force the agent
-#    (or: from <canonical>, run 'ass discover --adopt' to adopt all new worktrees)
+# 2. Adopt + align (writes .agentstartstack.env, runs init_*_session.sh):
+ass adopt ~/.claude/worktrees/<name>   # add --grok/--claude to force the agent
+#   or, from <canonical>: ass discover --adopt   (adopts every new worktree)
+```
 
-# 3. Work in that worktree with the agent (grok / claude).
+*Full clone of the canonical local path* (e.g. a template-repo session where the
+native feature is not available). Its origin points at the local path; pass
+`--canonical` and `ass adopt` normalizes the origin to the shared URL for you --
+you do NOT need to `git remote set-url` by hand:
+
+```bash
+# 1. Clone canonical into an agent worktree root:
+git clone <canonical> ~/.claude/worktrees/$(date +%s)   # <canonical> = CANONICAL_LOCAL_REPO
+
+# 2. Adopt + align, naming canonical explicitly:
+ass adopt --claude --canonical <canonical> ~/.claude/worktrees/<name>
+```
+
+Then, in every case:
+
+```bash
+# 3. Confirm you are in the worktree, and re-align before your first commit:
+cd ~/.claude/worktrees/<name>
+git fetch local-sync main && git merge --ff-only local-sync/main
+# 4. Work here with the agent (grok / claude). Never edit <canonical>.
 ```
 
 `AGENT_SESSION_CLONE_PARENT` (colon-separated search roots) defaults to
-`~/.claude/worktrees:~/.grok/worktrees` for discovery. ass does not create
-worktrees; `ass adopt` provisions an agent-created one, `ass discover` lists them.
+`~/.claude/worktrees:~/.grok/worktrees` for discovery. `ass adopt` provisions an
+agent-created worktree, `ass discover` lists them. Note: `ass sync` handoff is
+automated for full-clone worktrees; a native linked worktree is adopted the same
+way, but land its branch into canonical `main` manually for now.
 
 **Grok/Cursor after align:** paste the suggested first message from `init_grok_session.sh` (task + 1-3 guidance files).
 
