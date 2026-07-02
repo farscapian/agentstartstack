@@ -322,7 +322,7 @@ git add .agentstartstack-action-seen   # plus .agentstartstack and any host file
 
 If `$OLD..$NEW` is action-free, leave the watermark unchanged (the script is a no-op). Do not hand-edit the SHA except during the one-time stale-consumer catch-up below.
 
-**Init backstop.** `init_*_session.sh` calls `agentstartstack_pending_consumer_actions`: when the submodule pointer is already current but any `CONSUMER-ACTION` in `(watermark..HEAD]` remains unperformed, session align prints the pending range and points here. This catches consumers that advanced the pointer without reconciling (for example a pre-action-aware blind auto-bump).
+**Init backstop.** `init_*_session.sh` calls `agentstartstack_pending_consumer_actions`: when the submodule pointer is already current but any `CONSUMER-ACTION` in `(watermark..HEAD]` remains unperformed, session align prints the pending range and **drops the `.agentstartstack-bump` watch file** so the pre-commit guard refuses commits until the actions are performed and the watermark recorded. This catches consumers that advanced the pointer without reconciling (for example a pre-action-aware blind auto-bump) and blocks them rather than merely warning.
 
 **No watermark yet.** Pre-protocol consumers may lack the file. After you finish the [one-time stale catch-up](#remediating-a-stale-consumer-one-time), create `.agentstartstack-action-seen` at the latest historical `CONSUMER-ACTION` commit you applied (same commit command as above, using that catch-up delta's `$OLD`/`$NEW`).
 
@@ -348,7 +348,7 @@ Keep each line specific (exact command, exact follow-up). If a template change i
   - **action-free delta** -> safe to auto-commit the bump in the consumer canonical and push (the fast path).
   - **delta carries any `CONSUMER-ACTION:`** -> `ass publish` does **not** auto-commit. It restores the submodule to its committed SHA and reports the consumer under "need agent (actions)". The bump waits until an agent session reconciles it; auto-committing would silently skip the actions.
 
-**Init backstop.** Independently of any watch file, `init_*_session.sh` checks at align time whether the `.agentstartstack` submodule is behind its remote (`agentstartstack_pending_reconcile`). If so it prints the pending `OLD..NEW` range and the read-and-reconcile commands, so a deferred bump is caught on the next session even with no watch file present.
+**Init backstop (hard-blocks action-bearing deferrals).** Independently of any watch file, `init_*_session.sh` checks at align time whether the `.agentstartstack` submodule is behind its remote (`agentstartstack_pending_reconcile`). If so it prints the pending `OLD..NEW` range and the read-and-reconcile commands. When that pending delta **carries a `CONSUMER-ACTION:`** (`agentstartstack_range_has_consumer_action`), the backstop goes further than a warning: it **drops the `.agentstartstack-bump` watch file into this clone**, so the pre-commit guard **refuses every commit until the agent reconciles and removes it** -- the same hard guarantee an in-flight clone gets, now extended to the no-in-flight case where `ass publish` had no clone to flag at publish time. An action-free behind-remote delta stays a soft warning (no flag), since it needs no host action. This is why a deferred action-bearing bump cannot be silently skipped: the very next agent session for the consumer is blocked from committing until every `CONSUMER-ACTION` in the delta is performed.
 
 #### Remediating a stale consumer (one-time)
 

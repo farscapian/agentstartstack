@@ -124,15 +124,35 @@ esac
 # its remote (e.g. ass publish deferred an action-bearing bump), surface it anyway.
 if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
   warn "Pending agentstartstack bump: $(head -1 "${REPO_ROOT}/.agentstartstack-bump")"
-  warn "  Read the producer commits and reconcile this consumer before committing"
+  warn "  Commits are BLOCKED until you reconcile this consumer and remove the file"
   warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
 elif RECONCILE_RANGE=$(agentstartstack_pending_reconcile "$REPO_ROOT"); then
-  warn "agentstartstack is behind its remote -- reconcile pending (no watch file): ${RECONCILE_RANGE}"
-  warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then bump:"
-  warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
-  warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
+  if agentstartstack_range_has_consumer_action "$REPO_ROOT" "$RECONCILE_RANGE"; then
+    # Action-bearing bump deferred by ass publish with no in-flight clone to flag.
+    # Drop the watch file now so the pre-commit guard hard-blocks this agent until
+    # it reconciles -- same guarantee as the in-flight path.
+    agentstartstack_drop_bump_flag "$REPO_ROOT" \
+      "agentstartstack bump pending (deferred by ass publish): ${RECONCILE_RANGE}" \
+      "This delta carries CONSUMER-ACTION(s) -- perform each one during reconcile." || true
+    warn "Deferred agentstartstack bump carries CONSUMER-ACTION(s): ${RECONCILE_RANGE}"
+    warn "  Dropped .agentstartstack-bump -- commits are BLOCKED until you reconcile."
+    warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then bump:"
+    warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
+    warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
+  else
+    warn "agentstartstack is behind its remote -- reconcile pending (no watch file): ${RECONCILE_RANGE}"
+    warn "  Read the producer commits oldest-first, then bump:"
+    warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${RECONCILE_RANGE}"
+    warn "  (see docs/workflow.md: 'The .agentstartstack-bump watch file')."
+  fi
 elif ACTION_RANGE=$(agentstartstack_pending_consumer_actions "$REPO_ROOT"); then
+  # Pointer is current but CONSUMER-ACTION(s) after the watermark were never done.
+  # Hard-block until the actions are performed and the watermark recorded.
+  agentstartstack_drop_bump_flag "$REPO_ROOT" \
+    "Unapplied agentstartstack CONSUMER-ACTION(s): ${ACTION_RANGE}" \
+    "Pointer is current; the watermark lags. Run the actions, then .docs/scripts/record-consumer-action-seen.sh <OLD> <NEW> before removing this file." || true
   warn "Unapplied CONSUMER-ACTION(s) -- submodule pointer is current but watermark lags: ${ACTION_RANGE}"
+  warn "  Dropped .agentstartstack-bump -- commits are BLOCKED until you reconcile."
   warn "  Read the producer commits oldest-first, run each CONSUMER-ACTION, then update:"
   warn "    git -C .agentstartstack log --reverse --format='%H%n%B' ${ACTION_RANGE}"
   warn "    .docs/scripts/record-consumer-action-seen.sh <OLD> <NEW>"

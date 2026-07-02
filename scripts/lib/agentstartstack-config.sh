@@ -273,3 +273,49 @@ agentstartstack_pending_consumer_actions() {
   printf '%s\n' "$range"
   return 0
 }
+
+# True if any producer commit in range $2 (evaluated in the .agentstartstack
+# submodule under root $1) carries a CONSUMER-ACTION: line. Returns 1 otherwise
+# (including a missing submodule or unfetched range).
+agentstartstack_range_has_consumer_action() {
+  local root="$1" range="$2"
+  local sub="${root}/.agentstartstack"
+
+  [[ -n "$range" ]] || return 1
+  [[ -e "${sub}/.git" ]] || return 1
+  git -C "$sub" log --format='%B' "$range" 2>/dev/null \
+    | grep -q '^[[:space:]]*CONSUMER-ACTION:'
+}
+
+# Drop the .agentstartstack-bump watch file at repo root $1 so the pre-commit
+# guard hard-blocks commits until the agent reconciles and removes it. This is
+# the init-side backstop for a deferred action-bearing bump when there was no
+# in-flight clone for ass publish to flag at publish time. Mirrors the writer in
+# ass-aliases.sh (_ass_publish_flag_clone): excluded via .git/info/exclude so it
+# never shows in git status, is never committed, and survives reset --hard +
+# clean -fd. $2 is a one-line headline; $3 (optional) is extra guidance appended
+# before the footer. No-op returning 1 if a watch file already exists.
+agentstartstack_drop_bump_flag() {
+  local root="$1" headline="$2" extra="${3:-}"
+  local flag="${root}/.agentstartstack-bump"
+  local exclude="${root}/.git/info/exclude"
+
+  [[ -f "$flag" ]] && return 1
+  # Full-clone worktrees have a .git directory; skip the exclude quietly on the
+  # niche linked-worktree case (.git is a gitfile), where handoff is manual.
+  if [[ -d "${root}/.git" ]]; then
+    mkdir -p "${root}/.git/info"
+    grep -qxF '/.agentstartstack-bump' "$exclude" 2>/dev/null \
+      || printf '/.agentstartstack-bump\n' >> "$exclude"
+  fi
+  {
+    printf '%s\n\n' "$headline"
+    printf '%s\n' "Do NOT just bump the pointer. Read the producer commits you are adopting,"
+    printf '%s\n' "reconcile this consumer (wrappers, hooks, docs, config), run every"
+    printf '%s\n' "CONSUMER-ACTION in the delta, then commit and remove this file. Procedure:"
+    printf '%s\n' "  docs/workflow.md -> \"The .agentstartstack-bump watch file\""
+    [[ -n "$extra" ]] && printf '\n%s\n' "$extra"
+    printf '\n%s\n' "Dropped by init_*_session.sh backstop at $(date -Is)."
+  } > "$flag"
+  return 0
+}
