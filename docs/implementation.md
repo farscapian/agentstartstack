@@ -81,9 +81,9 @@ Keep inner heredoc delimiters unique (e.g. `TLS_EOF`, `META_EOF`).
 
 ### Agent session clone discovery
 
-All `ass` / `nut` commands that list session clones MUST call
+All `ass` commands that list session clones MUST call
 `agent_session_clones_list()` from `scripts/lib/session-clones.sh` (sourced by
-`ass-aliases.sh` and `nut-aliases.sh`). Do not duplicate find/glob logic elsewhere.
+`ass-aliases.sh`). Do not duplicate find/glob logic elsewhere.
 
 ```bash
 origin=$(git -C "$canonical" remote get-url origin)

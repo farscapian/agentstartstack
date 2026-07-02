@@ -100,4 +100,4 @@ Optional: keep project `scripts/init_*.sh` as one-line wrappers for backward com
 
 ## ass guard for new projects
 
-Add a case to `_nut_guard_active_sessions` in `~/.bash_aliases` (documented in `ass.md`). Use `PROJECT_NAME` / canonical local repo directory name for the case path.
+Add a case to `_ass_guard_active_sessions` in `~/.bash_aliases` (documented in `ass.md`). Use `PROJECT_NAME` / canonical local repo directory name for the case path.

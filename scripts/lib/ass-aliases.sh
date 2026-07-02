@@ -7,7 +7,7 @@
 # shellcheck shell=bash
 
 # Retired names -- clear if still loaded in this shell.
-unset -f land s2s s2ps s2is push nut nutup nutupyall nutup_trim dropit assup assupyall assitup 2>/dev/null
+unset -f land s2s s2ps s2is push dropit assup assupyall assitup 2>/dev/null
 
 #
 # Single source of truth for the human-side git-handoff aliases. Installed into
@@ -154,23 +154,21 @@ _agentstartstack_guard_project_roots() {
 
 _agentstartstack_guard_project_roots || true
 
-# ass / ass up -- Newest commit Until Transferred
+# ass -- local-sync handoff between agent session worktrees and the canonical repo.
 #
 # Usage:
-#   nut              # local-sync with canonical local repo
-#   nut -f           # local-sync from a session clone initialized after last ass
-#   nutup            # local-sync, then git push origin main
-#   nutup -f         # as nut -f, then push
-#   nutup iotstack   # explicit repo + local-sync + push
-#   ass_publish        # ass up agentstartstack, then refresh consumer submodules
+#   ass sync         # local-sync a session worktree's commits into canonical
+#   ass sync -f      # handoff only from a session worktree initialized after last ass
+#   ass sync all     # align every session worktree behind canonical
+#   ass_publish      # publish agentstartstack, then refresh consumer submodules
 #
 # Timestamp markers (machine-local, under .git/):
-#   canonical:  .git/agentstartstack-ass-last      (unix time; set after each nut)
+#   canonical:  .git/agentstartstack-ass-last      (unix time; set after each handoff)
 #   session:    .git/agentstartstack-session-init  (unix time; set by init_*_session.sh)
 
 # Locate a canonical repo named "$1" under any of AGENTSTARTSTACK_PROJECT_ROOTS
 # (colon-separated dirs that hold repo checkouts as <root>/<name>). No location
-# is assumed -- if the var is empty, name-based lookup fails (pwd-based nut still
+# is assumed -- if the var is empty, name-based lookup fails (pwd-based ass still
 # works). install-shell-aliases.sh seeds a default from the install location.
 _ass_sync_root() {
   local repo_name="$1"
@@ -1241,7 +1239,7 @@ _ass_print_handoff_report() {
 }
 
 
-# --- ass handoff reconcile + canonical WIP (injected by restore-ass-migration.py) ---
+# --- ass handoff reconcile + canonical WIP ---
 
 _ass_clone_has_dirty_worktree() {
   local clone="$1"
@@ -1521,20 +1519,20 @@ _ass_auto_sync_all_clones_behind_canonical() {
 # Pick the session clone farthest ahead of canonical (tie: newest commit on main).
 _ass_pick_handoff_clone() {
   local canonical="$1" origin="$2" repo_name="$3" force="${4:-0}"
-  local nut_last=0 init_time skipped=0
+  local ass_last=0 init_time skipped=0
   local candidate best_dir="" best_ahead=-1 best_time=0 ahead t
 
   if [[ -f "${canonical}/.git/agentstartstack-ass-last" ]]; then
-    nut_last=$(tr -d '[:space:]' < "${canonical}/.git/agentstartstack-ass-last")
-    [[ "$nut_last" =~ ^[0-9]+$ ]] || nut_last=0
+    ass_last=$(tr -d '[:space:]' < "${canonical}/.git/agentstartstack-ass-last")
+    [[ "$ass_last" =~ ^[0-9]+$ ]] || ass_last=0
   fi
 
   while IFS= read -r candidate; do
     [[ -n "$candidate" ]] || continue
 
-    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+    if [[ "$force" == 1 && "$ass_last" -gt 0 ]]; then
       init_time=$(_ass_session_init_time "$candidate")
-      if [[ "$init_time" -le "$nut_last" ]]; then
+      if [[ "$init_time" -le "$ass_last" ]]; then
         skipped=$((skipped + 1))
         continue
       fi
@@ -1552,9 +1550,9 @@ _ass_pick_handoff_clone() {
   done < <(agent_session_clones_list "$origin")
 
   if [[ -z "$best_dir" ]]; then
-    if [[ "$force" == 1 && "$nut_last" -gt 0 ]]; then
+    if [[ "$force" == 1 && "$ass_last" -gt 0 ]]; then
       echo "ass: --force: no session clone initialized after the last ass for ${repo_name}" >&2
-      echo "ass:   last ass: $(date -d "@${nut_last}" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -r "$nut_last" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "@${nut_last}")" >&2
+      echo "ass:   last ass: $(date -d "@${ass_last}" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -r "$ass_last" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "@${ass_last}")" >&2
       if [[ "$skipped" -gt 0 ]]; then
         echo "ass:   ignored ${skipped} older session clone(s); align a new session (init_*_session.sh) or omit --force" >&2
       fi

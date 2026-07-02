@@ -145,10 +145,10 @@ fi
 
 if awk -v b="$BEGIN_MARK" -v e="$END_MARK" '
     $0 == b { skip=1; next } $0 == e { skip=0; next }
-    skip != 1 && /(^|[^_[:alnum:]])(nut|nutup|assup|assitup)[[:space:]]*\(\)/ { found=1 }
+    skip != 1 && /(^|[^_[:alnum:]])(assup|assitup)[[:space:]]*\(\)/ { found=1 }
     END { exit(found ? 0 : 1) }
   ' "$ALIASES_FILE"; then
-  warn "Legacy nut/assup wrappers remain outside the managed block in ${ALIASES_FILE}"
+  warn "Legacy assup wrappers remain outside the managed block in ${ALIASES_FILE}"
   warn "  Delete them so only ass() is defined."
 fi
 

@@ -237,7 +237,7 @@ _as_cli_parse_global_flags_finalize() {
   return 0
 }
 
-# Rebuild global argv flags for nested command calls (e.g. nutupyall -> nutup).
+# Rebuild global argv flags for nested command calls (e.g. ass sync all -> ass sync).
 _as_cli_global_argv() {
   local -n _as_cli_glob=$1
   _as_cli_glob=()

@@ -6,7 +6,7 @@ Human-side helper for the AI git workflow step **local-sync** (session clone -> 
 
 ## Why "ass"
 
-Canonical backronym: **A**gent**S**tart**S**tack. Short, memorable, and deliberately cheeky (same spirit as the retired `nut` name).
+Canonical backronym: **A**gent**S**tart**S**tack. Short, memorable, and deliberately cheeky.
 
 Performs local-sync from the matching session clone (Claude or Grok) into the canonical local repo (`CANONICAL_LOCAL_REPO` in host `.agentstartstack.env`; defaults to the repo root). **Pwd-oriented:** `cd` to the canonical repo or a session clone, then run `ass sync` or `ass up` -- no repo-name argument.
 

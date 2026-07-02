@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # session-clones.sh -- single source for agent session clone discovery.
 #
-# All ass/nut commands that need session clones MUST call agent_session_clones_list().
+# All ass commands that need session clones MUST call agent_session_clones_list().
 # Same function, same order everywhere (newest commit on main first; ass status #1).
 # Clones are matched by git origin URL under AGENT_SESSION_CLONE_PARENT (any depth
 # up to 5 path segments below each parent; no directory-naming scheme assumed).

@@ -54,7 +54,7 @@ DISPLAY_NAME=${DISPLAY_NAME}
 CANONICAL_LOCAL_REPO=${CANONICAL_LOCAL_REPO}
 ORIGIN_URL=${ORIGIN_URL}
 
-# Optional: pgrep pattern while CLI is running (blocks nut)
+# Optional: pgrep pattern while CLI is running (blocks ass sync)
 # ACTIVE_GUARD_PGREP=wrtstack (build|flash)
 EOF
   ok "Created .agentstartstack.env"
