@@ -93,14 +93,14 @@ agent_session_clones_list "$origin"   # newest main first; ass status #1 = first
 `ass sync`, `ass status`, `ass list`, handoff pick, and trim all call this same function
 with the same sort order. Do not add alternate discovery or sort paths per command.
 
-`ass new` always creates clones at `~/.ass/worktrees/<repo-name>/<unix-timestamp>`
-(`ASS_NEW_SESSION_CLONE_ROOT` in `session-clones.sh`). Clones are matched by exact
-`origin` URL under `AGENT_SESSION_CLONE_PARENT` (default includes `~/.ass/worktrees`
-plus legacy `~/.grok/worktrees` and `~/.claude/worktrees` for older sessions).
-Only **full session clones** qualify: `.git` must be a directory at the clone root,
-and the path must sit under `.../<repo-name>/` (from the origin URL basename, e.g.
-`~/.grok/worktrees/agentstartstack/<session-id>`). Nested `.agentstartstack`
-submodule checkouts and reconcile/aux clones under consumer trees are excluded.
+ass does **not** create worktrees; grok/claude create their own under
+`~/.claude/worktrees` and `~/.grok/worktrees` (the default `AGENT_SESSION_CLONE_PARENT`).
+Worktrees are matched by exact `origin` URL under those parents -- no directory-naming
+scheme is assumed. Both kinds qualify: a **full clone** (`.git` is a directory) and a
+**linked git worktree** (`.git` is a gitfile resolving to `<canonical>/.git/worktrees/<name>`,
+via `_agent_session_gitdir`). Nested `.agentstartstack` submodule checkouts
+(git dir under `.git/modules/`) are excluded. Make a worktree ass-aware with
+`ass adopt`; list unrecognized ones with `ass discover`.
 
 Consumer-scoped callers resolve the canonical repo first, then call the same function
 (see `_ass_session_clones_for_consumer` in `ass-aliases.sh`).

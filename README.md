@@ -43,8 +43,8 @@ git clone --recurse-submodules git@github.com:farscapian/<your-project>.git
 
 ## Agent session workflow (summary)
 
-1. **New session** -- from the canonical local repo: `ass new` (infers grok/claude from PATH)
-2. **Work** -- agent edits only the session clone (`~/.ass/worktrees/<repo>/<timestamp>/`), never the canonical local repo
+1. **New session** -- grok/claude create a worktree under their own root (`~/.grok/worktrees`, `~/.claude/worktrees`); make it ass-aware with `ass adopt <path>` (or `ass discover --adopt`)
+2. **Work** -- agent edits only its session worktree, never the canonical local repo
 3. **Handoff** -- human runs `ass sync` (or `ass up`) from `~/.bash_aliases`; agents never `git push origin`
 
 Full details: [`docs/workflow.md`](docs/workflow.md) and [`docs/ass.md`](docs/ass.md).
@@ -70,10 +70,9 @@ Entry point: [`scripts/ass.sh`](scripts/ass.sh). After [`scripts/install-shell-a
 
 | Command | Description |
 |---------|-------------|
-| `ass new` | Clone + align a session (agent inferred from grok/claude on PATH) |
-| `ass new --grok` | Force Grok session |
-| `ass new --claude` | Force Claude Code session |
-| `ass list` | List session clones for this project (by origin URL) |
+| `ass adopt [PATH]` | Make an agent-created worktree ass-aware (write env + align); `--grok`/`--claude` force the agent |
+| `ass discover [--adopt]` | List agent worktrees for this repo + adopt status; `--adopt` provisions unadopted ones |
+| `ass list` | List session worktrees for this project (by origin URL) |
 | `ass status` | Ahead/behind `origin/main` for canonical and each session clone |
 | `ass info <n>` | Plain-language summary for session #n (from `ass status`; includes dirty-work analysis) |
 
@@ -108,18 +107,22 @@ ass help publish
 
 See [`docs/ass.md`](docs/ass.md) for guards, trim/archive rules, and the `ass publish` bump protocol.
 
-### Starting a Grok session (template or host project)
+### Starting a session (template or host project)
 
-From the **canonical** repo:
+Let the agent create its worktree in its own default location, then adopt it:
 
 ```bash
+# 1. Create a worktree the agent's way (under ~/.grok/worktrees or ~/.claude/worktrees)
+grok --worktree          # or Claude Code's worktree feature
+
+# 2. From the canonical repo, make it ass-aware:
 cd ~/Sync/mini_projects/agentstartstack   # or your host project canonical
-ass new                  # infers grok/claude from PATH
+ass discover --adopt     # or: ass adopt ~/.claude/worktrees/<name>
 ```
 
-On success, `ass new` prints the session clone path. `cd` there and run `grok` or `claude` in the terminal to start the session. The clone is aligned to canonical `main` and ready for agent work.
-
-Works for the agentstartstack template repo itself (no `.agentstartstack.env` at canonical -- `ass new` writes one into the session clone).
+`ass adopt` writes `.agentstartstack.env` (derived from canonical), aligns the
+worktree to canonical `main`, and readies it for agent work. Works for the
+agentstartstack template repo itself (no `.agentstartstack.env` at canonical).
 
 ## Branding
 

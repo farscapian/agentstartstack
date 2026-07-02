@@ -40,17 +40,17 @@ Substitute `<project>` = `PROJECT_NAME`, `<display>` = `DISPLAY_NAME`, and `<can
 | Role | Path |
 |------|------|
 | Canonical local repo (CLI + daily use) | `<canonical>` on branch `main` (`CANONICAL_LOCAL_REPO`; defaults to the repo root) |
-| Agent session clones (Grok + Claude) | `~/.ass/worktrees/<repo-name>/<unix-timestamp>/` (`ass new`; legacy paths still discovered) |
+| Agent session worktrees (Grok + Claude) | `~/.grok/worktrees/*`, `~/.claude/worktrees/*` (created by the agents; adopt with `ass adopt`) |
 | Generic agent guidance | `<repo>/docs/` |
 | Project agent guidance | `<repo>/docs/` |
 | CONSUMER-ACTION watermark | `<repo>/.agentstartstack-action-seen` (tracked; consumer only) |
 | Dropit ledger | `<repo>/.agentstartstack-dropits` (tracked; consumer only) |
 
-Session clones are isolated full git clones (not linked `git worktree` entries). They include the `agentstartstack` submodule when the host repo does. **`ass new` always creates clones under `~/.ass/worktrees/<repo-name>/<unix-timestamp>/`** regardless of agent (Grok or Claude). Grok and Claude share that layout; do not rely on `~/.grok/worktrees` or `~/.claude/worktrees` for `ass new`.
+**ass does not create worktrees.** Grok and Claude Code create their own session worktrees under their default roots (`~/.grok/worktrees`, `~/.claude/worktrees`). A worktree may be an independent full clone (`.git` is a directory) or a linked `git worktree` of canonical (`.git` is a gitfile); ass supports both. Make one ass-aware with **`ass adopt <path>`** (writes `.agentstartstack.env` + aligns it); list unrecognized ones with **`ass discover`**.
 
-**Session ID convention:** `ass new` uses a unix timestamp (`date +%s`) as the directory name. The folder name is only a human/agent handle -- `ass` matches a clone to its canonical repo by **git origin URL**, searching under `AGENT_SESSION_CLONE_PARENT`, so neither the parent path nor the session-id string is semantically significant to git handoff.
+**Matching:** `ass` matches a worktree to its canonical repo by **git origin URL**, searching under `AGENT_SESSION_CLONE_PARENT` (default `~/.claude/worktrees:~/.grok/worktrees`). The folder name carries no meaning -- no directory-naming scheme is assumed.
 
-**Legacy paths:** older clones under `~/.grok/worktrees/` or `~/.claude/worktrees/` remain discoverable via `AGENT_SESSION_CLONE_PARENT` (default includes all three parents, colon-separated). New sessions must use `ass new` (`~/.ass/worktrees/...`).
+**Note:** the old `ass new` command and the unified `~/.ass/worktrees/` location are retired. `ass sync` handoff currently supports full-clone worktrees; linked worktrees are discovered/adopted but their handoff is not yet automated (land their branch into canonical `main` manually).
 
 - **Before testing fixes on the canonical local repo:** `git pull origin main` -- stale trees produce confusing output
 - **Handoff between trees:** `origin/main` -- humans push to origin; new sessions align from the canonical local repo
@@ -367,22 +367,23 @@ Generic rules:
 
 **Start any agent session (Grok or Claude)**
 
-From the **canonical local repo** (`<canonical>`), create the clone, align it, then open the agent **inside the clone** -- not from canonical with a harness-owned worktree flag.
+Let the agent create its own worktree in its default location, then make it
+ass-aware and align it with **`ass adopt`**.
 
 ```bash
-# 1. Create + align (once per session) -- from <canonical>
-ass new              # or ass new --grok / ass new --claude
-# -> ~/.ass/worktrees/<repo-name>/<unix-timestamp>/
+# 1. Create a worktree the agent's own way (under ~/.grok/worktrees or
+#    ~/.claude/worktrees), e.g. grok --worktree / Claude Code's worktree feature.
 
-# 2. Open the agent in the clone (path printed by ass new)
-cd ~/.ass/worktrees/<repo-name>/<unix-timestamp>
-grok          # Grok/Cursor -- do NOT run grok --worktree from <canonical>
-claude        # Claude Code -- do NOT rely on claude --worktree from <canonical>
+# 2. Adopt + align it (writes .agentstartstack.env, runs init) -- point at the worktree
+ass adopt ~/.claude/worktrees/<name>      # or --grok / --claude to force the agent
+#    (or: from <canonical>, run 'ass discover --adopt' to adopt all new worktrees)
+
+# 3. Work in that worktree with the agent (grok / claude).
 ```
 
 `AGENT_SESSION_CLONE_PARENT` (colon-separated search roots) defaults to
-`~/.ass/worktrees`, `~/.grok/worktrees`, and `~/.claude/worktrees` for discovery.
-Only `ass new` creates clones; it always uses `~/.ass/worktrees/<repo>/<timestamp>/`.
+`~/.claude/worktrees:~/.grok/worktrees` for discovery. ass does not create
+worktrees; `ass adopt` provisions an agent-created one, `ass discover` lists them.
 
 **Grok/Cursor after align:** paste the suggested first message from `init_grok_session.sh` (task + 1-3 guidance files).
 
@@ -405,9 +406,9 @@ Only `ass new` creates clones; it always uses `~/.ass/worktrees/<repo>/<timestam
 
 ### Configuration
 
-`AGENT_SESSION_CLONE_PARENT` is the colon-separated list of directories `ass` searches for session clones (by git origin URL). It is read from `.agentstartstack.env` by the init scripts and from the environment (after `source ~/.bashrc`) by `ass` / `ass up trim`. Default: `~/.ass/worktrees:~/.grok/worktrees:~/.claude/worktrees`.
+`AGENT_SESSION_CLONE_PARENT` is the colon-separated list of directories `ass` searches for session worktrees (by git origin URL). It is read from `.agentstartstack.env` by the init scripts and from the environment (after `source ~/.bashrc`) by `ass` / `ass up trim`. Default: `~/.claude/worktrees:~/.grok/worktrees`.
 
-**`ass new` always creates** at `~/.ass/worktrees/<repo-name>/<unix-timestamp>/` (not under `~/.grok` or `~/.claude`). The init scripts **align** an existing clone; they do **not** create one -- use `ass new` from the canonical repo.
+**ass does not create worktrees.** Grok/Claude create them under their own roots; `ass adopt <path>` writes `.agentstartstack.env` and aligns an agent-created worktree, and the init scripts do the alignment. `ass discover` lists agent worktrees for the repo and their adopt status.
 
 ### Removing session clones (archive first)
 
@@ -438,35 +439,34 @@ ass list
 `ass` discovers clones by origin URL, not folder name. For ahead/behind vs GitHub, use
 `ass status`.
 
-Or list the parent directory directly:
+Or list the agent worktree roots directly:
 
 ```bash
-ls -la "${HOME}/.ass/worktrees/$(basename "$(pwd)")/"
+ls -la "${HOME}/.claude/worktrees/" "${HOME}/.grok/worktrees/"
 ```
 
-### Create a new session clone
+### Adopt an agent-created worktree
+
+ass does not create worktrees -- let the agent create one its own way, then adopt it:
 
 ```bash
-# from <canonical>
-SESSION_ID=$(date +%s)
-CLONE="${HOME}/.ass/worktrees/$(basename "$(pwd)")/$SESSION_ID"
+# 1. Create the worktree the agent's own way, e.g.:
+grok --worktree            # -> ~/.grok/worktrees/<name>
+# or use Claude Code's worktree feature -> ~/.claude/worktrees/<name>
 
-git clone --recurse-submodules <ORIGIN_URL> "$CLONE"
-<canonical>/scripts/init_grok_session.sh "$CLONE"
-# or init_claude_session.sh "$CLONE"
+# 2. From <canonical>, discover + adopt (writes .agentstartstack.env, runs init):
+ass discover --adopt
+#    or adopt a specific path (force the agent with --grok/--claude if needed):
+ass adopt ~/.claude/worktrees/<name>
 
-cd "$CLONE"
-grok    # or claude
+# 3. Work in that worktree with the agent (grok / claude).
 ```
 
-### Harness pitfalls (read before spawning from canonical)
-
-| Harness | Safe pattern | Avoid |
-|---------|--------------|-------|
-| **Grok** | `cd` into the session clone, then `grok` | `grok --worktree` from `<canonical>` -- spawns under `~/.grok/worktrees/`, bypassing `AGENT_SESSION_CLONE_PARENT` |
-| **Claude Code** | `cd` into the session clone, then `claude` | `claude --worktree` from `<canonical>` without a **WorktreeCreate** hook -- defaults to `~/.claude/worktrees/` |
-
-Optional: add a **WorktreeCreate** hook in the consumer's `.claude/settings.json` that clones into `AGENT_SESSION_CLONE_PARENT/$(date +%s)` and prints that path on stdout, so `claude --worktree` from canonical still lands in the unified parent. Grok has no equivalent hook today -- use explicit `git clone` + `cd` + `grok`.
+Both worktree kinds are supported: an independent full clone (`.git` is a
+directory) and a linked `git worktree` of canonical (`.git` is a gitfile). Note
+that `ass sync` handoff currently automates only full-clone worktrees; a linked
+worktree is discovered/adopted, but land its branch into canonical `main`
+manually for now (it shares canonical's object store, so no push handoff applies).
 
 ## Git hooks (shellcheck)
 

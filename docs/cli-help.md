@@ -20,11 +20,11 @@ How `ass` structures terminal help (iotstack-style). Help text lives in
 | `docs/help/ass.txt` | `ass`, `ass help` |
 | `docs/help/ass-sync.txt` | `ass sync help`, `ass help sync` |
 | `docs/help/ass-sync-all.txt` | `ass sync all help`, `ass help sync all` |
-| `docs/help/ass-new.txt` | `ass new help`, `ass help new` |
+| `docs/help/ass-adopt.txt` | `ass adopt help`, `ass help adopt` |
+| `docs/help/ass-discover.txt` | `ass discover help`, `ass help discover` |
 | `docs/help/ass-list.txt` | `ass list help`, `ass help list` |
 | `docs/help/ass-status.txt` | `ass status help`, `ass help status` |
 | `docs/help/ass-info.txt` | `ass info help`, `ass help info` |
-| `docs/help/ass-open.txt` | `ass open help`, `ass help open` |
 | `docs/help/ass-drop.txt` | `ass drop help`, `ass help drop` (collapse all, clone #n, upstream copy) |
 | `docs/help/ass-up.txt` | `ass up help`, `ass help up` |
 | `docs/help/ass-up-trim.txt` | `ass up trim help`, `ass help up trim` |

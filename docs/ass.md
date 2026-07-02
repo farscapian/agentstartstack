@@ -24,12 +24,13 @@ ass sync -f         # handoff only from a post-last-ass session clone
 ass sync --stashes  # opt in: prompt to move canonical stashes to session clone
 ass sync all        # align every session clone behind canonical
 ass sync all --dry-run
-ass new             # create + align a session clone (infers agent; see below)
-ass new --grok      # force Grok session clone
-ass new --claude    # force Claude Code session clone
-# Agent inference: grok/claude from PATH (both installed -> claude).
-# Both agents run in the terminal: ass new prints the clone path; cd there and run
-# 'grok' or 'claude' to start the session.
+ass adopt           # make an agent-created worktree ass-aware (write env + align)
+ass adopt --grok    # force Grok (overrides path/marker inference)
+ass adopt --claude  # force Claude Code
+ass discover        # list agent worktrees for this repo + adopt status
+ass discover --adopt  # adopt every unadopted worktree found
+# ass does NOT create worktrees. grok/claude create their own under
+# ~/.grok/worktrees and ~/.claude/worktrees; adopt/discover make them ass-aware.
 ass drop            # archive all session clones except #1 (collapse into one)
 ass drop <n>        # archive and remove session clone #n (see ass list)
 ass drop <src>      # from consumer clone: copy generic work upstream
@@ -240,7 +241,7 @@ ass info 2
 - **grok** -- `session_summary` from the newest `~/.grok/sessions/<clone>/<uuid>/summary.json`.
 - **claude** -- the latest `ai-title` from the Claude Code session that edited the clone
   (located by scanning `~/.claude/projects/*/*.jsonl` for the clone path; every
-  `ass new` claude session edits its clone by absolute path, so the match is exact).
+  the agent's claude session edits its worktree by absolute path, so the match is exact).
 
 The full title is shown, word-wrapped onto continuation lines (indented under the
 title column) when it is longer than the column. `ass status` does **not** show
@@ -285,8 +286,9 @@ into agentstartstack (see `docs/help/ass-drop.txt`).
 
 The functions and aliases live in the tracked canonical file
 [`scripts/lib/ass-aliases.sh`](../scripts/lib/ass-aliases.sh) -- `_ass_*` helpers and command
-functions (`ass`, `ass_up`, `ass_up_trim`, `ass_publish`, `ass_new`,
-`ass_status`, `ass_info`, `ass_list`, `ass_sync`, `ass_sync_all`, `ass_drop`).
+functions (`ass`, `ass_up`, `ass_up_trim`, `ass_publish`, `ass_adopt`,
+`ass_discover`, `ass_status`, `ass_info`, `ass_list`, `ass_sync`, `ass_sync_all`,
+`ass_drop`).
 [`scripts/ass.sh`](../scripts/ass.sh) is the subcommand router.
 
 Install / update the thin `ass()` wrapper in your shell:
