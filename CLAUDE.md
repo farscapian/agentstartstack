@@ -8,6 +8,7 @@ Host projects that include this repo as a submodule should use their own root `C
 
 ## Quick rules
 
+- **FIRST, before any edit:** an agent's first order of business after reading this index is to set up its own session worktree and work there -- never edit canonical. ass does not create worktrees; grok/claude create their own under `~/.grok/worktrees` / `~/.claude/worktrees`, then `ass adopt <path>` (or `ass discover --adopt`) makes it ass-aware and aligns it. Confirm you are in that worktree before your first edit. (See `docs/workflow.md`.)
 - Branding: always lowercase `agentstartstack`
 - Text: ASCII-only in docs, logs, help, and code comments
 - Agents work in session clones, NOT in the canonical local repo (see `docs/workflow.md`)
@@ -23,6 +24,7 @@ Host projects that include this repo as a submodule should use their own root `C
 | [docs/workflow.md](docs/workflow.md) | Repos, agent session clones, git sync, commit policy |
 | [docs/ass.md](docs/ass.md) | `ass` / `ass up` -- AgentStartStack handoff CLI |
 | [docs/cli-help.md](docs/cli-help.md) | `ass` help menu files (`docs/help/*.txt`) |
+| [docs/cli-conventions.md](docs/cli-conventions.md) | Requirements for a host project that ships its own CLI |
 | [docs/conventions.md](docs/conventions.md) | Naming, ASCII-only text, script output tags |
 | [docs/terminal.md](docs/terminal.md) | Copy/paste in Cursor/Codium integrated terminal |
 | [docs/security.md](docs/security.md) | Never print secrets; env file hygiene |

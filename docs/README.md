@@ -29,6 +29,7 @@ Agents load 1-3 files per task from **both** trees. Start with `workflow.md` for
 | New project / submodule wiring | `submodule-integration.md`, `workflow.md` |
 | Git / session clones / handoff | `workflow.md`, `ass.md` |
 | ass terminal help file layout | `cli-help.md`, `help/README.md` |
+| Host project ships its own CLI | `cli-conventions.md`, `cli-help.md`, `conventions.md` |
 | New shell script | `conventions.md`, `code-quality.md`, `implementation.md` |
 | Secrets / env files | `security.md`, `conventions.md` |
 | Cursor terminal / copy-paste | `terminal.md` |
