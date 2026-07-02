@@ -176,6 +176,28 @@ git merge --ff-only local-sync/main   # fast-forward the clone up to canonical
 
 If `--ff-only` fails, the clone and canonical have **diverged** (the clone holds commits canonical lacks, or both moved). STOP -- do not commit on top. Reconcile first (rebase your clone commits onto `local-sync/main`, or ask the human), then continue.
 
+#### Never amend a commit already handed off (canonical wins)
+
+**Canonical is authoritative for published history (HARD RULE 1).** Once a commit
+has been landed to canonical via `ass`, do **not** `git commit --amend` / rebase /
+reword it in the session clone -- that rewrites published history and makes the
+clone a *sibling* of canonical, not a descendant.
+
+- A pure reword (message-only amend, same tree) is harmless but pointless: `ass sync`
+  rebases the clone onto canonical, sees the patch is already applied, and **drops
+  the reworded commit** -- the clone realigns to canonical and canonical's original
+  message stays. You cannot change a published commit's message via handoff.
+- An amend that **adds/changes content** conflicts on rebase. `ass sync` aborts
+  (leaving the clone clean, commits intact) because canonical wins. Re-apply only
+  your **net-new** changes as a fresh commit on top of canonical:
+  ```bash
+  git reset --soft local-sync/main   # keep your tree, drop the rewritten sibling
+  git commit                          # net delta as a new commit on top of canonical
+  ```
+
+If you need to change something already in canonical, make a **follow-up commit** --
+never rewrite the synced one.
+
 ### 2. local-sync (when human asks)
 
 Perform local-sync from the session clone to the canonical local repo. The human reviews and pushes to origin. **Agents never push to origin.**

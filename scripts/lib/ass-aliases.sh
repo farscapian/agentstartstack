@@ -1611,11 +1611,22 @@ _ass_handoff_reconcile_clone() {
     _ass_handoff_reconcile_pop_stash "$clone" "$stashed"
     return 0
   fi
-  _ass_info "ass: session clone diverged from canonical -- rebasing onto local-sync/main"
+  _ass_info "ass: session clone diverged from canonical -- rebasing onto local-sync/main (canonical wins)"
   branch=$(git -C "$clone" branch --show-current 2>/dev/null || echo main)
+  # A pure reword of an already-synced commit is patch-identical and git rebase
+  # drops it silently -- the clone realigns to canonical (canonical's message
+  # stays authoritative). A conflict here means the clone rewrote a commit that
+  # canonical already has AND changed its content. Canonical is authoritative, so
+  # do not force the clone's version onto it: abort (clone left clean, commits
+  # intact) and have the agent re-apply only net-new work on top of canonical.
   if ! git -C "$clone" rebase local-sync/main; then
+    git -C "$clone" rebase --abort 2>/dev/null || true
     _ass_handoff_reconcile_pop_stash "$clone" "$stashed"
-    _ass_err "ass: rebase conflict -- resolve in session clone, then re-run ass"
+    _ass_err "ass: clone rewrote a commit already in canonical; canonical is authoritative."
+    _ass_err "ass:   rebase aborted -- clone left clean, your commits intact."
+    _ass_err "ass:   Do NOT amend/rewrite an already-synced commit. Re-apply only your"
+    _ass_err "ass:   NET-NEW changes as a fresh commit on top of canonical, then re-run ass:"
+    _ass_err "ass:     git -C '${clone}' reset --soft local-sync/main && git -C '${clone}' commit"
     return 1
   fi
   _ass_handoff_reconcile_pop_stash "$clone" "$stashed"
