@@ -18,6 +18,13 @@ ASS_CLI="${SCRIPT_DIR}/ass.sh"
 BEGIN_MARK="# >>> agentstartstack ass aliases >>>"
 END_MARK="# <<< agentstartstack ass aliases <<<"
 
+# Legacy marker from before the nut -> ass rename. A consumer that ran the old
+# installer carries this orphaned block (defining nut/nutup/nutupyall); the new
+# marker above differs, so a plain re-run would append the ass block and leave
+# the stale nut block behind. Strip it whenever we install.
+OLD_BEGIN_MARK="# >>> agentstartstack nut aliases >>>"
+OLD_END_MARK="# <<< agentstartstack nut aliases <<<"
+
 ALIASES_FILE="${HOME}/.bash_aliases"
 BASHRC="${HOME}/.bashrc"
 
@@ -126,6 +133,20 @@ trap 'rm -f "$tmp"' EXIT
   printf '%s\n' "$END_MARK"
 } > "$tmp"
 
+# Purge the orphaned pre-rename nut block if present (idempotent: no-op when absent).
+if [[ -f "$ALIASES_FILE" ]] && grep -qF "$OLD_BEGIN_MARK" "$ALIASES_FILE"; then
+  stripped="$(mktemp "${TMPDIR:-/tmp}/ass-cli-strip.XXXXXX")"
+  trap 'rm -f "$tmp" "$stripped"' EXIT
+  awk -v b="$OLD_BEGIN_MARK" -v e="$OLD_END_MARK" '
+    $0 == b { skip=1; next }
+    $0 == e { skip=0; next }
+    skip != 1 { print }
+  ' "$ALIASES_FILE" > "$stripped"
+  cat "$stripped" > "$ALIASES_FILE"
+  rm -f "$stripped"
+  ok "Removed legacy 'nut' alias block from ${ALIASES_FILE}"
+fi
+
 if [[ -f "$ALIASES_FILE" ]] && grep -qF "$BEGIN_MARK" "$ALIASES_FILE"; then
   merged="$(mktemp "${TMPDIR:-/tmp}/ass-cli-merged.XXXXXX")"
   trap 'rm -f "$tmp" "$merged"' EXIT
@@ -145,10 +166,10 @@ fi
 
 if awk -v b="$BEGIN_MARK" -v e="$END_MARK" '
     $0 == b { skip=1; next } $0 == e { skip=0; next }
-    skip != 1 && /(^|[^_[:alnum:]])(assup|assitup)[[:space:]]*\(\)/ { found=1 }
+    skip != 1 && /(^|[^_[:alnum:]])(nut|nutup|nutupyall|assup|assitup)[[:space:]]*\(\)/ { found=1 }
     END { exit(found ? 0 : 1) }
   ' "$ALIASES_FILE"; then
-  warn "Legacy assup wrappers remain outside the managed block in ${ALIASES_FILE}"
+  warn "Legacy nut/assup wrappers remain outside the managed block in ${ALIASES_FILE}"
   warn "  Delete them so only ass() is defined."
 fi
 
