@@ -2922,7 +2922,7 @@ ass_publish()
   fi
 
   if [[ -n "${1:-}" ]]; then
-    echo "ass publish: takes no arguments (try: ass publish help)" >&2
+    _ass_err "ass publish takes no arguments (try: ass publish help)"
     return 1
   fi
 
@@ -2931,9 +2931,9 @@ ass_publish()
   # Adopt any agent-created worktrees for this repo first, so their work is
   # ass-aware and picked up by the ass up handoff below. Best-effort: a discovery
   # hiccup must not block publishing.
-  echo "ass publish: adopting any unadopted agent worktrees (ass discover --adopt)"
+  _ass_info "publish: adopting any unadopted agent worktrees (ass discover --adopt)"
   ass_discover --adopt \
-    || echo "ass publish: WARN ass discover --adopt reported an error; continuing" >&2
+    || _ass_warn "publish: ass discover --adopt reported an error; continuing"
 
   ass_up || return 1
 
@@ -2948,6 +2948,7 @@ ass_publish()
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
     name=$(basename "$host")
+    _ass_info "${name}"
 
     busy=$(_ass_publish_busy_sessions "$name")
     if [[ -n "$busy" ]]; then
@@ -2958,19 +2959,20 @@ ass_publish()
         _ass_publish_flag_clone "$clone" "$sub_sha"
         n_flag=$((n_flag + 1))
       done < <(_ass_session_clones_for_consumer "$name")
-      echo "ass publish: ${name} -- in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}, rides along on next agent commit/ass" >&2
+      _ass_info "  in-flight session(s); flagged ${n_flag} clone(s) for bump -> ${sub_sha}"
+      _ass_info "  (rides along on the next agent commit/ass)"
       while IFS=$'\t' read -r iclone ireason; do
-        [[ -n "$iclone" ]] && echo "ass publish:   in-flight: ${iclone} (${ireason})" >&2
+        [[ -n "$iclone" ]] && _ass_info "    in-flight: ${iclone} (${ireason})"
       done <<< "$busy"
       flagged=$((flagged + 1))
     else
       old_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
-      echo "ass publish: ${name} -- submodule update --remote .agentstartstack"
+      _ass_info "  submodule update --remote .agentstartstack"
       if ! git -C "$host" submodule update --init --recursive --remote .agentstartstack; then
-        echo "ass publish:   ERROR updating submodule in ${name}" >&2
+        _ass_err "  submodule update failed"
         failed=$((failed + 1))
       elif [[ -z "$(git -C "$host" status --porcelain -- .agentstartstack 2>/dev/null)" ]]; then
-        echo "ass publish:   ${name} already current"
+        _ass_ok "  already current"
         current=$((current + 1))
       else
         new_sha=$(git -C "${host}/.agentstartstack" rev-parse HEAD 2>/dev/null)
@@ -2983,19 +2985,20 @@ ass_publish()
         if git -C "${host}/.agentstartstack" log --format='%B' "${old_sha}..${new_sha}" 2>/dev/null \
              | grep -q '^[[:space:]]*CONSUMER-ACTION:'; then
           git -C "$host" submodule update --init --recursive .agentstartstack >/dev/null 2>&1
-          echo "ass publish:   ${name} -- delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped." >&2
-          echo "ass publish:     start an agent session for ${name} so it reads the delta and reconciles." >&2
+          _ass_warn "  delta ${old_sha:0:7}..${new_sha:0:7} carries CONSUMER-ACTION(s); NOT auto-bumped"
+          _ass_warn "  start an agent session so it reads the delta and reconciles"
           needs_agent=$((needs_agent + 1))
         else
           sub_sha=$(git -C "${host}/.agentstartstack" rev-parse --short HEAD 2>/dev/null)
-          echo "ass publish:   committing bump to ${sub_sha} in ${name} (action-free delta)"
+          _ass_info "  committing bump to ${sub_sha} (action-free delta)"
           if ! git -C "$host" commit -m "Bump .agentstartstack to ${sub_sha}" -- .agentstartstack; then
-            echo "ass publish:   ERROR committing bump in ${name}" >&2
+            _ass_err "  commit of bump failed"
             failed=$((failed + 1))
           elif ! git -C "$host" push origin main; then
-            echo "ass publish:   WARN committed bump but origin push failed in ${name}" >&2
+            _ass_warn "  committed bump but origin push failed"
             failed=$((failed + 1))
           else
+            _ass_ok "  bumped -> ${sub_sha} and pushed"
             bumped=$((bumped + 1))
           fi
         fi
@@ -3006,19 +3009,24 @@ ass_publish()
       ass_up_trim "$name" --yes
       trim_rc=$?
       if [[ "$trim_rc" -eq 0 ]]; then
-        echo "ass publish: ${name} -- consolidated and pruned" >&2
+        _ass_info "  consolidated and pruned"
       elif [[ "$trim_rc" -eq 2 ]]; then
-        echo "ass publish: ${name} -- trim skipped (consumer CLI/session active)" >&2
+        _ass_warn "  trim skipped (consumer CLI/session active)"
         trim_skipped=$((trim_skipped + 1))
       else
-        echo "ass publish: ${name} -- trim failed (logged; continuing)" >&2
+        _ass_err "  trim failed (logged; continuing)"
         failed=$((failed + 1))
       fi
     else
-      echo "ass publish: ${name} -- autotrim disabled (ASS_PUBLISH_AUTOTRIM=0)" >&2
+      _ass_info "  autotrim disabled (ASS_PUBLISH_AUTOTRIM=0)"
     fi
   done < <(_ass_publish_consumer_roots | sort -u)
 
-  echo "ass publish: done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${trim_skipped} trim-skipped, ${failed} failed"
+  local summary="done -- ${bumped} bumped, ${current} already current, ${flagged} flagged (in-flight), ${needs_agent} need agent (actions), ${trim_skipped} trim-skipped, ${failed} failed"
+  if [[ "$failed" -eq 0 ]]; then
+    _ass_ok "publish: ${summary}"
+  else
+    _ass_warn "publish: ${summary}"
+  fi
   [[ "$failed" -eq 0 ]]
 }
