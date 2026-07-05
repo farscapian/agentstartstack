@@ -97,7 +97,9 @@ echo ""
 # .agentstartstack.env: ass adopt writes worktree-specific config into it, so a fresh
 # worktree is "dirty" by that file alone -- it is init-generated, not agent work,
 # and the reset below re-aligns it anyway. Any OTHER dirt is real work.
+WORKTREE_DIRTY=0
 if [[ -n "$(git status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.env')" ]]; then
+  WORKTREE_DIRTY=1
   warn "Session clone has uncommitted changes; re-aligning will HARD RESET and discard them:"
   git status --short >&2
   if [[ "$NONINTERACTIVE" == 1 ]]; then
@@ -110,7 +112,7 @@ if [[ -n "$(git status --porcelain 2>/dev/null -- . ':(exclude).agentstartstack.
   fi
 fi
 
-info "Session align: fetching local-sync/main and resetting..."
+info "Session align: fetching local-sync/main and aligning..."
 if git remote get-url local-sync &>/dev/null; then
   git remote set-url local-sync "$CANONICAL_LOCAL_REPO"
 else
@@ -118,8 +120,39 @@ else
 fi
 
 git fetch local-sync main
-git reset --hard local-sync/main
-git clean -fd
+
+# Unlanded-commit guard. The dirty-tree check above only covers UNCOMMITTED work; it
+# does not protect commits the agent made in the clone that are ahead of
+# local-sync/main but not yet landed on canonical. A hard reset to local-sync/main
+# would silently drop those from HEAD (recoverable only via reflog). Detect them and
+# -- matching the SessionStart bootstrap's fast-forward-only guarantee -- refuse
+# (non-interactive) or require explicit confirmation (interactive). Land them first:
+# commit in the clone -> ass sync -> only then re-align.
+AHEAD_COUNT=$(git rev-list --count local-sync/main..HEAD 2>/dev/null || echo 0)
+if [[ "$AHEAD_COUNT" -gt 0 ]]; then
+  warn "Session clone has ${AHEAD_COUNT} commit(s) ahead of local-sync/main not yet landed on canonical;"
+  warn "re-aligning will HARD RESET and drop them from HEAD (recoverable only via reflog):"
+  git log --oneline local-sync/main..HEAD >&2
+  if [[ "$NONINTERACTIVE" == 1 ]]; then
+    err "Refusing to discard unlanded commits in non-interactive mode; land them (ass sync) or align by hand."
+  fi
+  read -r -p "Discard ${AHEAD_COUNT} unlanded commit(s) and re-align? [y/N] " confirm </dev/tty
+  if [[ "${confirm,,}" != "y" && "${confirm,,}" != "yes" ]]; then
+    info "Aborted; clone left as-is."
+    exit 0
+  fi
+fi
+
+# Prefer a real fast-forward when the clone is clean and does not diverge -- the
+# common case then never needs a destructive reset. Fall back to a hard reset only
+# to discard work already confirmed above: unlanded commits (AHEAD_COUNT) or a dirty
+# tree (WORKTREE_DIRTY).
+if [[ "$AHEAD_COUNT" -eq 0 && "$WORKTREE_DIRTY" -eq 0 ]]; then
+  git merge --ff-only local-sync/main
+else
+  git reset --hard local-sync/main
+  git clean -fd
+fi
 if [[ -f .gitmodules ]]; then
   git submodule update --init --recursive
 fi
