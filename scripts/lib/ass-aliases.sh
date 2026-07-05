@@ -1608,6 +1608,10 @@ _ass_handoff_reconcile_clone() {
     _ass_info "ass: session clone behind canonical -- fast-forwarding to local-sync/main"
     git -C "$clone" merge --ff-only local-sync/main \
       || { _ass_handoff_reconcile_pop_stash "$clone" "$stashed"; _ass_err "ass: ff-only merge failed"; return 1; }
+    # merge/rebase advances the index but does not recurse into submodules; realign
+    # the .agentstartstack checkout so a bump does not linger as a "modified"
+    # (new commits) dirty state that the next sync would auto-commit as a revert.
+    git -C "$clone" submodule update --recursive >/dev/null 2>&1 || true
     _ass_handoff_reconcile_pop_stash "$clone" "$stashed"
     return 0
   fi
@@ -1629,6 +1633,7 @@ _ass_handoff_reconcile_clone() {
     _ass_err "ass:     git -C '${clone}' reset --soft local-sync/main && git -C '${clone}' commit"
     return 1
   fi
+  git -C "$clone" submodule update --recursive >/dev/null 2>&1 || true
   _ass_handoff_reconcile_pop_stash "$clone" "$stashed"
   return 0
 }
@@ -1700,6 +1705,15 @@ _ass_push() {
   echo "ass: ${best_dir} -> ${sync_target}"
   git -C "$best_dir" push local-sync main
   pushed=1
+
+  # The push lands in canonical's checked-out main via receive.denyCurrentBranch=
+  # updateInstead, which refreshes the SUPERPROJECT worktree/index but does NOT
+  # recurse into submodules. If the handoff advanced the .agentstartstack pointer,
+  # canonical's submodule checkout is left at the old commit -- surfacing as a
+  # spurious "modified: .agentstartstack (new commits)" that reverts the bump.
+  # Reconcile submodule worktrees with the freshly updated index. No --init, so
+  # only already-checked-out submodules are touched.
+  git -C "$sync_target" submodule update --recursive >/dev/null 2>&1 || true
 
   date +%s > "${sync_target}/.git/agentstartstack-ass-last"
 
