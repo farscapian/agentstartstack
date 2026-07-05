@@ -288,8 +288,9 @@ agentstartstack_range_has_consumer_action() {
 }
 
 # Drop the .agentstartstack-bump watch file at repo root $1 so the pre-commit
-# guard hard-blocks commits until the agent reconciles and removes it. This is
-# the init-side backstop for a deferred action-bearing bump when there was no
+# reminder keeps resurfacing on every commit until the agent reconciles and
+# removes it (it never blocks the commit). This is the init-side backstop for a
+# deferred action-bearing bump when there was no
 # in-flight clone for ass publish to flag at publish time. Mirrors the writer in
 # ass-aliases.sh (_ass_publish_flag_clone): excluded via .git/info/exclude so it
 # never shows in git status, is never committed, and survives reset --hard +

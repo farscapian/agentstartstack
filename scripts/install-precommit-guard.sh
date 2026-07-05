@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# install-precommit-guard.sh -- install the agentstartstack pre-commit guard.
+# install-precommit-guard.sh -- install the agentstartstack pre-commit reminder.
 #
-# The guard refuses commits while a .agentstartstack-bump watch file is pending
-# (see agentstartstack/workflow.md), then chains to the repo's tracked
+# When a .agentstartstack-bump watch file is pending (see
+# agentstartstack/workflow.md) the hook prints a reminder to reconcile the bump
+# but does NOT block the commit -- the bump is handled eventually, not treated as
+# a blocker to a consumer's own work. It then chains to the repo's tracked
 # .githooks/pre-commit so shellcheck and other checks still run. It lives under
 # .git/ so it survives reset --hard + clean -fd and never dirties the tree.
 #
@@ -24,10 +26,11 @@ cat > "${GUARD_DIR}/pre-commit" <<'HOOK'
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 if [[ -f "${ROOT}/.agentstartstack-bump" ]]; then
-  echo "pre-commit: .agentstartstack-bump is pending -- read the producer commits and" >&2
-  echo "reconcile this consumer, then commit and remove the flag. See workflow.md:" >&2
-  echo "the '.agentstartstack-bump watch file' section." >&2
-  exit 1
+  # Reminder only -- never block the commit. The bump is handled eventually, not
+  # a blocker to this consumer's own work.
+  echo "pre-commit: .agentstartstack-bump is still pending (commit not blocked) --" >&2
+  echo "read the producer commits and reconcile this consumer, then remove the flag." >&2
+  echo "See workflow.md: the '.agentstartstack-bump watch file' section." >&2
 fi
 # Chain to the repo's tracked hook (shellcheck etc.) if present.
 if [[ -x "${ROOT}/.githooks/pre-commit" ]]; then

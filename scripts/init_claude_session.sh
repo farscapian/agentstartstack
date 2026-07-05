@@ -185,8 +185,9 @@ if [[ -f "${REPO_ROOT}/.agentstartstack-bump" ]]; then
 elif RECONCILE_RANGE=$(agentstartstack_pending_reconcile "$REPO_ROOT"); then
   if agentstartstack_range_has_consumer_action "$REPO_ROOT" "$RECONCILE_RANGE"; then
     # Action-bearing bump deferred by ass publish with no in-flight clone to flag.
-    # Drop the watch file now so the pre-commit guard hard-blocks this agent until
-    # it reconciles -- same guarantee as the in-flight path.
+    # Drop the watch file now so the pre-commit reminder keeps resurfacing until
+    # this agent reconciles -- same persistent flag as the in-flight path. It does
+    # not block commits; the bump is handled eventually, not treated as a blocker.
     agentstartstack_drop_bump_flag "$REPO_ROOT" \
       "agentstartstack bump pending (deferred by ass publish): ${RECONCILE_RANGE}" \
       "This delta carries CONSUMER-ACTION(s) -- perform each one during reconcile." || true
@@ -215,11 +216,11 @@ elif ACTION_RANGE=$(agentstartstack_pending_consumer_actions "$REPO_ROOT"); then
   warn "  (see docs/workflow.md: 'CONSUMER-ACTION watermark')."
 fi
 
-# Install the pre-commit guard (blocks commits while .agentstartstack-bump is
-# pending; chains to shellcheck). Shared with install-githooks.sh so the two
-# converge -- running either installs the same guard.
+# Install the pre-commit reminder (warns but never blocks while
+# .agentstartstack-bump is pending; chains to shellcheck). Shared with
+# install-githooks.sh so the two converge -- running either installs the same hook.
 "${SCRIPT_DIR}/install-precommit-guard.sh" "$REPO_ROOT"
-info "Pre-commit guard active (blocks commits while .agentstartstack-bump pending; chains to shellcheck)."
+info "Pre-commit reminder active (warns but does not block while .agentstartstack-bump pending; chains to shellcheck)."
 
 # Auto-commit any session work left in the tree (see docs/workflow.md HARD RULES).
 "${SCRIPT_DIR}/auto-commit-session-work.sh" "$REPO_ROOT" || true

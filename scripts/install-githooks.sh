@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install git hooks (pre-commit: .agentstartstack-bump guard + shellcheck staged .sh files).
+# Install git hooks (pre-commit: .agentstartstack-bump reminder + shellcheck staged .sh files).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,9 +25,9 @@ else
     "${GIT_ROOT}/scripts/shellcheck-staged.sh"
 fi
 
-# Install the agentstartstack pre-commit guard. It points core.hooksPath at
+# Install the agentstartstack pre-commit reminder. It points core.hooksPath at
 # .git/agentstartstack-hooks and chains to .githooks/pre-commit (the shellcheck
-# hook chmod'd above), so the guard and shellcheck both run. Shared with the init
-# scripts so re-running either keeps the guard installed -- they cannot diverge.
+# hook chmod'd above), so the reminder and shellcheck both run. Shared with the
+# init scripts so re-running either keeps it installed -- they cannot diverge.
 "${SCRIPT_DIR}/install-precommit-guard.sh" "$GIT_ROOT"
-echo "Git hooks installed (pre-commit: .agentstartstack-bump guard + shellcheck staged .sh files)"
+echo "Git hooks installed (pre-commit: .agentstartstack-bump reminder + shellcheck staged .sh files)"
