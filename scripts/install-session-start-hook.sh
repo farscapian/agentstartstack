@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # install-session-start-hook.sh -- wire the Claude Code SessionStart bootstrap
-# hook into a consumer's .claude/settings.json (idempotent).
+# hook into a repo's .claude/settings.json (idempotent). Works for a consumer
+# repo (bootstrap under the .agentstartstack submodule) and for the agentstartstack
+# template repo itself (bootstrap under its own scripts/).
 #
 # The hook runs scripts/claude-session-bootstrap.sh at every session start, which
 # deterministically performs AI git workflow step 1 (create/reuse + align a
@@ -25,7 +27,16 @@ command -v jq >/dev/null 2>&1 || err "jq is required (install jq, then re-run)."
 ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 [[ -n "$ROOT" ]] || err "Not inside a git repo; pass the consumer repo root."
 ROOT="$(cd "$ROOT" && pwd)"
-[[ -d "${ROOT}/.agentstartstack" ]] || err "No .agentstartstack submodule at ${ROOT}; is this a consumer repo?"
+# Accept two layouts: a consumer repo (bootstrap under the .agentstartstack
+# submodule) or the agentstartstack template repo itself (bootstrap under its own
+# scripts/). Either is valid; only reject a repo that has neither.
+if [[ -x "${ROOT}/.agentstartstack/scripts/claude-session-bootstrap.sh" ]]; then
+  info "Consumer repo detected (.agentstartstack submodule)."
+elif [[ -x "${ROOT}/scripts/claude-session-bootstrap.sh" ]]; then
+  info "agentstartstack template repo detected (self-install)."
+else
+  err "No claude-session-bootstrap.sh under ${ROOT}/.agentstartstack/scripts or ${ROOT}/scripts; is this a consumer or the template repo?"
+fi
 
 SETTINGS_DIR="${ROOT}/.claude"
 SETTINGS="${SETTINGS_DIR}/settings.json"
@@ -33,8 +44,10 @@ mkdir -p "$SETTINGS_DIR"
 [[ -f "$SETTINGS" ]] || printf '{}\n' > "$SETTINGS"
 
 # Resolve the bootstrap via CLAUDE_PROJECT_DIR (set by the harness for hooks),
-# falling back to the git toplevel; no-op if the submodule is not initialized.
-CMD='f="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}/.agentstartstack/scripts/claude-session-bootstrap.sh"; [ -x "$f" ] && bash "$f" || true'
+# falling back to the git toplevel. Try the consumer path (.agentstartstack
+# submodule) first, then the template repo's own scripts/; no-op if neither is
+# present or executable, so a hook hiccup never fails the session.
+CMD='d="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"; for f in "$d/.agentstartstack/scripts/claude-session-bootstrap.sh" "$d/scripts/claude-session-bootstrap.sh"; do [ -x "$f" ] && { bash "$f"; break; }; done; true'
 
 if jq -e '[.hooks.SessionStart[]?.hooks[]?.command // empty] | any(test("claude-session-bootstrap\\.sh"))' \
      "$SETTINGS" >/dev/null 2>&1; then
