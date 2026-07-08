@@ -25,6 +25,7 @@ Host projects that include this repo as a submodule should use their own root `C
 | [docs/ass.md](docs/ass.md) | `ass` / `ass up` -- AgentStartStack handoff CLI |
 | [docs/cli-help.md](docs/cli-help.md) | `ass` help menu files (`docs/help/*.txt`) |
 | [docs/cli-conventions.md](docs/cli-conventions.md) | Requirements for a host project that ships its own CLI |
+| [docs/cli-preamble.md](docs/cli-preamble.md) | Per-invocation CLI preamble: dirty-tree auto-commit for reproducible HEAD (canonical only) |
 | [docs/conventions.md](docs/conventions.md) | Naming, ASCII-only text, script output tags |
 | [docs/terminal.md](docs/terminal.md) | Copy/paste in Cursor/Codium integrated terminal |
 | [docs/security.md](docs/security.md) | Never print secrets; env file hygiene |

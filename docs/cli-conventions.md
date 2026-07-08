@@ -105,6 +105,18 @@ requirements a conforming CLI SHALL meet:
 - A CLI that launches long or parallel operations SHOULD offer a way to list
   running invocations and stop them (iotstack `ps` / `kill`).
 
+## 12. Per-invocation preamble (SHALL)
+
+- Every consumer CLI SHALL invoke the shared preamble via a single static
+  `eval "$(.agentstartstack/scripts/cli-preamble.sh "$REPO_ROOT")"` at the top of
+  `main()`, before command dispatch, and record `$AGENTSTARTSTACK_CLI_HEAD` as run
+  provenance. On a dirty **canonical** repo the preamble auto-commits the working
+  tree so `GIT HEAD` documents the exact code that ran (a greppable, discardable
+  auto-commit; opt-in undo trap peels it back on completion, configured in
+  `.agentstartstack.env` not the CLI file). It is a strict no-op inside an agent
+  session clone, keeping the consumer stub permanently static. Full spec, wiring,
+  and toggles: **[cli-preamble.md](cli-preamble.md)**.
+
 ## Reconciling an existing project CLI
 
 When this guidance lands in a consumer, run the discovery helper from the
