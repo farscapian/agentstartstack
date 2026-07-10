@@ -65,16 +65,6 @@ main() {
     discover) shift; ass_discover "$@" ;;
     drop)  shift; ass_drop "$@" ;;
     publish) shift; ass_publish "$@" ;;
-    face)
-      shift
-      # Easter-egg mnemonic: "face down ass up" = ass up, then ass publish.
-      if [[ "${1:-}" == down && "${2:-}" == ass && "${3:-}" == up && $# -eq 3 ]]; then
-        ass_up && ass_publish
-      else
-        printf '[ERR]  face: usage: face down ass up  (ass up, then ass publish)\n' >&2
-        return 1
-      fi
-      ;;
     up)
       shift
       if [[ "${1:-}" == trim ]]; then

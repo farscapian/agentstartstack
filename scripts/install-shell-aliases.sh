@@ -128,8 +128,6 @@ trap 'rm -f "$tmp"' EXIT
   fi
   printf '%s\n' ": \"\${AGENTSTARTSTACK_ASS_CLI:=$ASS_CLI_PATH}\""
   printf '%s\n' "ass() { bash \"\${AGENTSTARTSTACK_ASS_CLI}\" \"\$@\"; }"
-  printf '%s\n' "# 'face down ass up' -> ass up, then ass publish (thin wrapper)."
-  printf '%s\n' "face() { bash \"\${AGENTSTARTSTACK_ASS_CLI}\" face \"\$@\"; }"
   printf '%s\n' "$END_MARK"
 } > "$tmp"
 

@@ -76,8 +76,6 @@ session clone (ahead/behind canonical), and which clone is selected.
 
 The loop is per-consumer resilient: one failure (update, commit, or push) is logged and counted but does not abort the rest. A summary line reports `bumped / already current / flagged (in-flight) / need agent (actions) / trim-skipped / failed`.
 
-**Shortcut:** `face down ass up` runs `ass up`, then `ass publish` (installed as a thin `face()` wrapper alongside `ass()` by `install-shell-aliases.sh`).
-
 **Conventions**
 
 | Item | Path |
