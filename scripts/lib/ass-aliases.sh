@@ -1214,7 +1214,7 @@ _ass_print_handoff_report() {
   echo "ass: pwd: ${pwd_here}"
   echo "ass: canonical (${repo_name}): ${sync_target}"
   if [[ "$pwd_here" == "$sync_target" ]]; then
-    echo "ass: pwd is canonical"
+    echo "pwd (${pwd_here}) is canonical"
   fi
 
   while IFS= read -r clone; do
