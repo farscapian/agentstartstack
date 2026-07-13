@@ -140,7 +140,6 @@ main() {
 
   # Canonical-only: strict no-op inside an agent session clone (see guard above).
   if is_agent_session_clone "$repo"; then
-    info "cli-preamble: agent session clone detected; skipping (canonical-only)"
     emit_head "$repo"; return 0
   fi
 
